@@ -1,7 +1,7 @@
 import axios from 'axios';
 import authService from './authService';
 
-const API_URL = 'http://localhost:5000/api/obras-sociales';
+const API_URL = `${import.meta.env.VITE_APP_API_URL}/obras-sociales`;
 
 const getHeaders = () => {
   const token = authService.getToken();
