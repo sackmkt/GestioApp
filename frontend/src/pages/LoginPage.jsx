@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link  } from 'react-router-dom';
+import { useNavigate, NavLink } from 'react-router-dom';
 import authService from '../services/authService';
 
 function LoginPage({ setIsAuthenticated }) {
@@ -64,7 +64,7 @@ function LoginPage({ setIsAuthenticated }) {
                 </button>
               </form>
               <p className="mt-3 text-center">
-                ¿No tienes una cuenta? <Link to="/register">Regístrate aquí</Link>
+                ¿No tienes una cuenta? <NavLink to="/register">Regístrate aquí</NavLink>
               </p>
             </div>
           </div>
