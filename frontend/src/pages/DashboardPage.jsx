@@ -8,7 +8,7 @@ import { FaMoneyBillWave, FaCheckCircle, FaTimesCircle, FaUsers, FaMedkit, FaCha
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
-function DashboardPage() {
+function DashboardPage({ currentUser }) {
   const [allFacturas, setAllFacturas] = useState([]);
   const [data, setData] = useState({
     totalFacturacion: 0,
@@ -17,7 +17,12 @@ function DashboardPage() {
     facturasPagadas: 0,
     facturasPendientes: 0,
     totalPacientes: 0,
+    pacientesParticulares: 0,
+    pacientesCentro: 0,
+    centrosActivos: 0,
     totalObrasSociales: 0,
+    retencionFiltrada: 0,
+    netoFiltrado: 0,
     pieChartData: {},
     monthlyBarChartData: {},
     obrasSocialesBarChartData: {},
@@ -41,6 +46,14 @@ function DashboardPage() {
       maximumFractionDigits: 0,
     }).format(number);
   };
+
+  const userDisplayName = (() => {
+    if (!currentUser) {
+      return 'Profesional';
+    }
+    const fullName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ').trim();
+    return fullName || currentUser.username || 'Profesional';
+  })();
   
   // Función de callback para procesar los datos
   const processAndSetData = useCallback((facturasToProcess) => {
@@ -97,6 +110,15 @@ function DashboardPage() {
       }],
     };
 
+    const retencionFiltrada = filteredFacturas.reduce((sum, factura) => {
+      return sum + (Number(factura.retencionCentroSobreTotal) || 0);
+    }, 0);
+
+    const netoFiltrado = filteredFacturas.reduce((sum, factura) => {
+      const montoNeto = Number(factura.montoTotalNeto ?? (factura.montoTotal || 0));
+      return sum + (Number.isFinite(montoNeto) ? montoNeto : 0);
+    }, 0);
+
     setData(prevData => ({
       ...prevData,
       totalFacturacion,
@@ -106,6 +128,8 @@ function DashboardPage() {
       facturasPendientes,
       pieChartData,
       monthlyBarChartData,
+      retencionFiltrada,
+      netoFiltrado,
     }));
   }, [dateRange]);
 
@@ -200,10 +224,21 @@ function DashboardPage() {
           obrasSocialesService.getObrasSociales(),
         ]);
         setAllFacturas(facturas);
+        const pacientesParticulares = pacientes.filter((paciente) => paciente.tipoAtencion !== 'centro').length;
+        const pacientesCentro = pacientes.filter((paciente) => paciente.tipoAtencion === 'centro').length;
+        const centrosActivos = new Set(
+          pacientes
+            .filter((paciente) => paciente.tipoAtencion === 'centro' && paciente.centroSalud?._id)
+            .map((paciente) => paciente.centroSalud._id)
+        ).size;
+
         // Los datos de pacientes y obras sociales no necesitan filtrarse por fecha
         setData(prevData => ({
           ...prevData,
           totalPacientes: pacientes.length,
+          pacientesParticulares,
+          pacientesCentro,
+          centrosActivos,
           totalObrasSociales: obrasSociales.length,
           obrasSocialesBarChartData: calculateObrasSocialesData(facturas),
           pacientesBarChartData: calculatePacientesData(facturas),
@@ -220,6 +255,26 @@ function DashboardPage() {
   useEffect(() => {
     processAndSetData(allFacturas);
   }, [allFacturas, processAndSetData]);
+
+  const centrosSummary = useMemo(() => {
+    let totalRetenciones = 0;
+    let netoCobrado = 0;
+    const centrosConFacturacion = new Set();
+
+    allFacturas.forEach((factura) => {
+      if (factura.centroSalud?._id) {
+        centrosConFacturacion.add(factura.centroSalud._id);
+      }
+      totalRetenciones += Number(factura.retencionCentroSobreCobrado) || 0;
+      netoCobrado += Number(factura.netoProfesionalCobrado ?? (factura.montoCobrado || 0));
+    });
+
+    return {
+      totalRetenciones,
+      netoCobrado,
+      centrosConFacturacion: centrosConFacturacion.size,
+    };
+  }, [allFacturas]);
 
   const handleDateChange = (e) => {
     setDateRange({
@@ -269,7 +324,40 @@ function DashboardPage() {
 
   return (
     <div className="container mt-4">
-      <h2 className="mb-4 text-center">Dashboard Financiero</h2>
+      <div className="mb-4 text-center text-md-start">
+        <h2 className="fw-bold">¡Hola, {userDisplayName}! 👋</h2>
+        <p className="text-muted mb-0">Organizamos tus indicadores clínicos y financieros para que tomes decisiones informadas.</p>
+      </div>
+      <div className="card shadow-sm border-0 mb-4">
+        <div className="card-body">
+          <div className="row gy-3 align-items-center">
+            <div className="col-md-6 text-center text-md-start">
+              <h3 className="mb-1">Resumen de tu actividad profesional</h3>
+              <p className="text-muted mb-0">Monitorea pacientes, centros de salud y cobranzas desde un único vistazo.</p>
+            </div>
+            <div className="col-md-6">
+              <div className="d-flex flex-wrap justify-content-center justify-content-md-end gap-4 text-center text-md-end">
+                <div>
+                  <div className="fw-bold fs-4">{data.totalPacientes}</div>
+                  <div className="text-muted small">Pacientes activos</div>
+                </div>
+                <div>
+                  <div className="fw-bold fs-4">{data.pacientesCentro}</div>
+                  <div className="text-muted small">Pacientes vía centros</div>
+                </div>
+                <div>
+                  <div className="fw-bold fs-5">{formatNumber(centrosSummary.netoCobrado)}</div>
+                  <div className="text-muted small">Ingresos netos cobrados</div>
+                </div>
+                <div>
+                  <div className="fw-bold fs-6 text-danger">{formatNumber(centrosSummary.totalRetenciones)}</div>
+                  <div className="text-muted small">Retenciones acumuladas</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       
       {/* Sección del selector de fechas */}
       <div className="card shadow-sm mb-4">
@@ -331,6 +419,14 @@ function DashboardPage() {
                   Monto Pendiente
                   <span className="fw-bold text-danger">{formatNumber(data.montoPendiente)}</span>
                 </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Retenciones de centros (período)
+                  <span className="fw-bold text-warning">{formatNumber(data.retencionFiltrada)}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Neto estimado para el profesional
+                  <span className="fw-bold text-primary">{formatNumber(data.netoFiltrado)}</span>
+                </li>
               </ul>
             </div>
           </div>
@@ -351,6 +447,10 @@ function DashboardPage() {
                 <li className="list-group-item d-flex justify-content-between align-items-center">
                   Total de Obras Sociales
                   <span className="badge bg-primary rounded-pill">{data.totalObrasSociales}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Centros con pacientes
+                  <span className="badge bg-secondary rounded-pill">{data.centrosActivos}</span>
                 </li>
                 <li className="list-group-item d-flex justify-content-between align-items-center">
                   Facturas Pagadas
