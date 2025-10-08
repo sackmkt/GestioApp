@@ -1,57 +1,160 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import PacientesService from '../services/PacientesService';
 import ObrasSocialesService from '../services/ObrasSocialesService';
+import CentrosSaludService from '../services/CentrosSaludService';
+
+const EMPTY_FORM = {
+  nombre: '',
+  apellido: '',
+  dni: '',
+  email: '',
+  telefono: '',
+  obraSocial: '',
+  tipoAtencion: 'particular',
+  centroSalud: '',
+};
+
+const ATENCION_LABELS = {
+  particular: 'Atención particular',
+  centro: 'Derivado por centro de salud',
+};
 
 function PacientesPage() {
   const [pacientes, setPacientes] = useState([]);
   const [obrasSociales, setObrasSociales] = useState([]);
-  const [formData, setFormData] = useState({
-    nombre: '',
-    apellido: '',
-    dni: '',
-    obraSocial: '',
-  });
+  const [centrosSalud, setCentrosSalud] = useState([]);
+  const [formData, setFormData] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchPacientes();
     fetchObrasSociales();
+    fetchCentrosSalud();
   }, []);
 
   const fetchPacientes = async () => {
-    const data = await PacientesService.getPacientes();
-    setPacientes(data);
+    try {
+      const data = await PacientesService.getPacientes();
+      setPacientes(data);
+    } catch (err) {
+      console.error('Error al obtener pacientes:', err);
+    }
   };
 
   const fetchObrasSociales = async () => {
-    const data = await ObrasSocialesService.getObrasSociales();
-    setObrasSociales(data);
+    try {
+      const data = await ObrasSocialesService.getObrasSociales();
+      setObrasSociales(data);
+    } catch (err) {
+      console.error('Error al obtener obras sociales:', err);
+    }
   };
 
+  const fetchCentrosSalud = async () => {
+    try {
+      const data = await CentrosSaludService.getCentros();
+      setCentrosSalud(data);
+    } catch (err) {
+      console.error('Error al obtener centros de salud:', err);
+    }
+  };
+
+  const resumenPacientes = useMemo(() => {
+    const particulares = pacientes.filter((p) => p.tipoAtencion === 'particular').length;
+    const porCentro = pacientes.filter((p) => p.tipoAtencion === 'centro').length;
+    const conContacto = pacientes.filter((p) => p.email || p.telefono).length;
+
+    const centrosVinculados = pacientes.reduce((acc, paciente) => {
+      const centroId = paciente.centroSalud?._id || paciente.centroSalud;
+      if (paciente.tipoAtencion === 'centro' && centroId) {
+        acc.add(centroId);
+      }
+      return acc;
+    }, new Set());
+
+    return {
+      total: pacientes.length,
+      particulares,
+      porCentro,
+      conContacto,
+      centrosActivos: centrosVinculados.size,
+    };
+  }, [pacientes]);
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prev) => {
+      if (name === 'tipoAtencion' && value !== 'centro') {
+        return { ...prev, tipoAtencion: value, centroSalud: '' };
+      }
+      return { ...prev, [name]: value };
+    });
+  };
+
+  const resetForm = () => {
+    setFormData(EMPTY_FORM);
+    setEditingId(null);
+    setError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingId) {
-      await PacientesService.updatePaciente(editingId, formData);
-      setEditingId(null);
-    } else {
-      await PacientesService.createPaciente(formData);
+    setError(null);
+
+    const payload = {
+      nombre: formData.nombre.trim(),
+      apellido: formData.apellido.trim(),
+      dni: formData.dni.trim(),
+      email: formData.email.trim(),
+      telefono: formData.telefono.trim(),
+      obraSocial: formData.obraSocial,
+      tipoAtencion: formData.tipoAtencion,
+      centroSalud: formData.tipoAtencion === 'centro' ? formData.centroSalud || null : null,
+    };
+
+    if (!payload.obraSocial) {
+      delete payload.obraSocial;
     }
-    setFormData({
-      nombre: '',
-      apellido: '',
-      dni: '',
-      obraSocial: '',
-    });
-    fetchPacientes();
+
+    if (!payload.nombre || !payload.apellido || !payload.dni) {
+      setError('Nombre, apellido y DNI son obligatorios.');
+      return;
+    }
+
+    if (payload.tipoAtencion === 'centro' && !payload.centroSalud) {
+      setError('Selecciona el centro de salud que deriva al paciente.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      if (editingId) {
+        await PacientesService.updatePaciente(editingId, payload);
+      } else {
+        await PacientesService.createPaciente(payload);
+      }
+      resetForm();
+      fetchPacientes();
+    } catch (err) {
+      const message = err.response?.data?.error || 'No se pudo guardar el paciente.';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (id) => {
-    await PacientesService.deletePaciente(id);
-    fetchPacientes();
+    if (!window.confirm('¿Deseas eliminar este paciente?')) {
+      return;
+    }
+    try {
+      await PacientesService.deletePaciente(id);
+      fetchPacientes();
+    } catch (err) {
+      console.error('Error al eliminar paciente:', err);
+    }
   };
 
   const handleEdit = (paciente) => {
@@ -60,27 +163,53 @@ function PacientesPage() {
       nombre: paciente.nombre,
       apellido: paciente.apellido,
       dni: paciente.dni,
+      email: paciente.email || '',
+      telefono: paciente.telefono || '',
       obraSocial: paciente.obraSocial?._id || '',
+      tipoAtencion: paciente.tipoAtencion || 'particular',
+      centroSalud: paciente.centroSalud?._id || '',
     });
   };
 
   const handleCancelEdit = () => {
-    setEditingId(null);
-    setFormData({
-      nombre: '',
-      apellido: '',
-      dni: '',
-      obraSocial: '',
-    });
+    resetForm();
   };
 
   return (
-    <div className="container mt-4">
+    <div className="container py-4">
+      <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4">
+        <div>
+          <h2 className="fw-bold mb-1">Pacientes</h2>
+          <p className="text-muted mb-0">Centraliza el seguimiento de tus pacientes y sus datos de contacto.</p>
+        </div>
+        <div className="mt-3 mt-md-0">
+          <div className="d-flex gap-3">
+            <div className="text-center">
+              <span className="text-muted small d-block">Total</span>
+              <strong className="fs-5">{resumenPacientes.total}</strong>
+            </div>
+            <div className="text-center">
+              <span className="text-muted small d-block">Particulares</span>
+              <strong className="fs-5 text-success">{resumenPacientes.particulares}</strong>
+            </div>
+            <div className="text-center">
+              <span className="text-muted small d-block">Por centros</span>
+              <strong className="fs-5 text-primary">{resumenPacientes.porCentro}</strong>
+            </div>
+            <div className="text-center">
+              <span className="text-muted small d-block">Con contacto</span>
+              <strong className="fs-5">{resumenPacientes.conContacto}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="card shadow-sm mb-4">
         <div className="card-header bg-primary text-white">
-          <h2 className="mb-0">Gestión de Pacientes</h2>
+          {editingId ? 'Editar paciente' : 'Agregar nuevo paciente'}
         </div>
         <div className="card-body">
+          {error && <div className="alert alert-danger">{error}</div>}
           <form onSubmit={handleSubmit}>
             <div className="row g-3">
               <div className="col-md-6 col-lg-3">
@@ -122,9 +251,8 @@ function PacientesPage() {
                   className="form-select"
                   value={formData.obraSocial}
                   onChange={handleChange}
-                  required
                 >
-                  <option value="">Seleccione Obra Social</option>
+                  <option value="">Sin obra social</option>
                   {obrasSociales.map((os) => (
                     <option key={os._id} value={os._id}>
                       {os.nombre}
@@ -132,14 +260,63 @@ function PacientesPage() {
                   ))}
                 </select>
               </div>
+              <div className="col-md-6 col-lg-3">
+                <input
+                  type="email"
+                  name="email"
+                  className="form-control"
+                  placeholder="Correo electrónico"
+                  value={formData.email}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="col-md-6 col-lg-3">
+                <input
+                  type="tel"
+                  name="telefono"
+                  className="form-control"
+                  placeholder="Teléfono"
+                  value={formData.telefono}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="col-md-6 col-lg-3">
+                <select
+                  name="tipoAtencion"
+                  className="form-select"
+                  value={formData.tipoAtencion}
+                  onChange={handleChange}
+                >
+                  <option value="particular">Atención particular</option>
+                  <option value="centro">Atención derivada por centro</option>
+                </select>
+              </div>
+              {formData.tipoAtencion === 'centro' && (
+                <div className="col-md-6 col-lg-3">
+                  <select
+                    name="centroSalud"
+                    className="form-select"
+                    value={formData.centroSalud}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Selecciona un centro</option>
+                    {centrosSalud.map((centro) => (
+                      <option key={centro._id} value={centro._id}>
+                        {centro.nombre} ({centro.porcentajeRetencion}% ret.)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="col-12 mt-3 d-flex justify-content-end">
                 {editingId && (
-                  <button type="button" className="btn btn-secondary me-2" onClick={handleCancelEdit}>
+                  <button type="button" className="btn btn-outline-secondary me-2" onClick={handleCancelEdit} disabled={loading}>
                     Cancelar
                   </button>
                 )}
-                <button type="submit" className="btn btn-primary">
-                  {editingId ? 'Actualizar Paciente' : 'Agregar Paciente'}
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {editingId ? 'Actualizar paciente' : 'Agregar paciente'}
                 </button>
               </div>
             </div>
@@ -147,29 +324,42 @@ function PacientesPage() {
         </div>
       </div>
 
-      {/* Tabla para dispositivos grandes (desktop) */}
       <div className="card shadow-sm d-none d-md-block">
-        <div className="card-body">
+        <div className="card-body p-0">
           <table className="table table-striped table-hover mb-0">
             <thead className="table-dark">
               <tr>
                 <th>Nombre</th>
-                <th>Apellido</th>
                 <th>DNI</th>
+                <th>Contacto</th>
                 <th>Obra Social</th>
-                <th>Acciones</th>
+                <th>Modalidad</th>
+                <th className="text-end">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {pacientes.map((paciente) => (
                 <tr key={paciente._id}>
-                  <td>{paciente.nombre}</td>
-                  <td>{paciente.apellido}</td>
+                  <td>{paciente.nombre} {paciente.apellido}</td>
                   <td>{paciente.dni}</td>
                   <td>
-                    {paciente.obraSocial ? paciente.obraSocial.nombre : 'Sin Obra Social'}
+                    <div className="small text-muted">
+                      {paciente.email ? <div><strong>Email:</strong> {paciente.email}</div> : <div className="text-muted">Sin email</div>}
+                      {paciente.telefono ? <div><strong>Tel.:</strong> {paciente.telefono}</div> : <div className="text-muted">Sin teléfono</div>}
+                    </div>
                   </td>
+                  <td>{paciente.obraSocial ? paciente.obraSocial.nombre : 'Sin obra social'}</td>
                   <td>
+                    <span className={`badge ${paciente.tipoAtencion === 'centro' ? 'bg-primary' : 'bg-success'}`}>
+                      {ATENCION_LABELS[paciente.tipoAtencion]}
+                    </span>
+                    {paciente.tipoAtencion === 'centro' && paciente.centroSalud && (
+                      <div className="small text-muted mt-1">
+                        {paciente.centroSalud.nombre} · Ret. {paciente.centroSalud.porcentajeRetencion}%
+                      </div>
+                    )}
+                  </td>
+                  <td className="text-end">
                     <button
                       className="btn btn-warning btn-sm me-2"
                       onClick={() => handleEdit(paciente)}
@@ -190,7 +380,6 @@ function PacientesPage() {
         </div>
       </div>
 
-      {/* Cards para dispositivos pequeños (móvil) */}
       <div className="d-md-none">
         <div className="row g-3">
           {pacientes.map((paciente) => (
@@ -199,18 +388,28 @@ function PacientesPage() {
                 <div className="card-body">
                   <h5 className="card-title">{paciente.nombre} {paciente.apellido}</h5>
                   <p className="card-text mb-1"><strong>DNI:</strong> {paciente.dni}</p>
-                  <p className="card-text"><strong>Obra Social:</strong> {paciente.obraSocial ? paciente.obraSocial.nombre : 'Sin Obra Social'}</p>
-                  <div className="d-flex justify-content-between mt-3">
-                    <button
-                      className="btn btn-warning btn-sm me-2"
-                      onClick={() => handleEdit(paciente)}
-                    >
+                  <p className="card-text mb-1">
+                    <strong>Contacto:</strong>{' '}
+                    {paciente.email || paciente.telefono
+                      ? [paciente.email, paciente.telefono].filter(Boolean).join(' · ')
+                      : 'No informado'}
+                  </p>
+                  <p className="card-text mb-1"><strong>Obra Social:</strong> {paciente.obraSocial ? paciente.obraSocial.nombre : 'Sin obra social'}</p>
+                  <p className="card-text">
+                    <span className={`badge ${paciente.tipoAtencion === 'centro' ? 'bg-primary' : 'bg-success'}`}>
+                      {ATENCION_LABELS[paciente.tipoAtencion]}
+                    </span>
+                    {paciente.tipoAtencion === 'centro' && paciente.centroSalud && (
+                      <span className="d-block mt-1 text-muted">
+                        {paciente.centroSalud.nombre} · Ret. {paciente.centroSalud.porcentajeRetencion}%
+                      </span>
+                    )}
+                  </p>
+                  <div className="d-flex justify-content-end gap-2 mt-3">
+                    <button className="btn btn-warning btn-sm" onClick={() => handleEdit(paciente)}>
                       Editar
                     </button>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleDelete(paciente._id)}
-                    >
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(paciente._id)}>
                       Eliminar
                     </button>
                   </div>

@@ -7,6 +7,7 @@ function ObrasSocialesPage() {
     nombre: '',
     telefono: '',
     email: '',
+    cuitCuil: '',
   });
   const [editingId, setEditingId] = useState(null);
 
@@ -31,7 +32,7 @@ function ObrasSocialesPage() {
     } else {
       await ObrasSocialesService.createObraSocial(formData);
     }
-    setFormData({ nombre: '', telefono: '', email: '' });
+    setFormData({ nombre: '', telefono: '', email: '', cuitCuil: '' });
     fetchObrasSociales();
   };
 
@@ -46,6 +47,7 @@ function ObrasSocialesPage() {
       nombre: os.nombre,
       telefono: os.telefono,
       email: os.email,
+      cuitCuil: os.cuitCuil || '',
     });
   };
 
@@ -55,6 +57,7 @@ function ObrasSocialesPage() {
       nombre: '',
       telefono: '',
       email: '',
+      cuitCuil: '',
     });
   };
 
@@ -67,7 +70,7 @@ function ObrasSocialesPage() {
         <div className="card-body">
           <form onSubmit={handleSubmit}>
             <div className="row g-3">
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <input
                   type="text"
                   name="nombre"
@@ -78,7 +81,7 @@ function ObrasSocialesPage() {
                   required
                 />
               </div>
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <input
                   type="text"
                   name="telefono"
@@ -88,13 +91,23 @@ function ObrasSocialesPage() {
                   onChange={handleChange}
                 />
               </div>
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <input
                   type="email"
                   name="email"
                   className="form-control"
                   placeholder="Email"
                   value={formData.email}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="col-md-3">
+                <input
+                  type="text"
+                  name="cuitCuil"
+                  className="form-control"
+                  placeholder="CUIT / CUIL"
+                  value={formData.cuitCuil}
                   onChange={handleChange}
                 />
               </div>
@@ -122,6 +135,7 @@ function ObrasSocialesPage() {
                 <th>Nombre</th>
                 <th>Teléfono</th>
                 <th>Email</th>
+                <th>CUIT / CUIL</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -131,6 +145,7 @@ function ObrasSocialesPage() {
                   <td>{os.nombre}</td>
                   <td>{os.telefono}</td>
                   <td>{os.email}</td>
+                  <td>{os.cuitCuil || '-'}</td>
                   <td>
                     <button
                       className="btn btn-warning btn-sm me-2"
@@ -161,7 +176,8 @@ function ObrasSocialesPage() {
                 <div className="card-body">
                   <h5 className="card-title">{os.nombre}</h5>
                   <p className="card-text mb-1"><strong>Teléfono:</strong> {os.telefono}</p>
-                  <p className="card-text"><strong>Email:</strong> {os.email}</p>
+                  <p className="card-text mb-1"><strong>Email:</strong> {os.email}</p>
+                  <p className="card-text"><strong>CUIT / CUIL:</strong> {os.cuitCuil || '-'}</p>
                   <div className="d-flex justify-content-between mt-3">
                     <button
                       className="btn btn-warning btn-sm me-2"

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import PacientesPage from './pages/PacientesPage';
 import ObrasSocialesPage from './pages/ObrasSocialesPage';
 import FacturasPage from './pages/FacturasPage';
 import DashboardPage from './pages/DashboardPage';
 import TurnosPage from './pages/TurnosPage';
+import CentrosSaludPage from './pages/CentrosSaludPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import CompleteProfilePage from './pages/CompleteProfilePage';
@@ -43,6 +44,8 @@ function App() {
     handleAuthChange(null);
   };
 
+  const appVersion = import.meta.env.VITE_APP_VERSION || '1.0.0';
+
   const NavContent = () => {
     const navigate = useNavigate();
     const onLogout = () => {
@@ -60,7 +63,7 @@ function App() {
       <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
         <div className="container">
           {/* Nombre de la aplicación y logo */}
-          <NavLink className="navbar-brand d-flex align-items-center" to="/dashboard" onClick={closeMenu}>
+          <NavLink className="navbar-brand d-flex align-items-center" to="/" onClick={closeMenu}>
             <img src={GestioLogo} alt="Gestio Logo" style={{ height: '40px', marginRight: '10px' }} />
             <span style={{ fontFamily: 'Barlow, sans-serif' }}>GESTIO</span>
           </NavLink>
@@ -86,6 +89,9 @@ function App() {
                     <NavLink className="nav-link" to="/pacientes" onClick={closeMenu}>Pacientes</NavLink>
                   </li>
                   <li className="nav-item">
+                    <NavLink className="nav-link" to="/centros-salud" onClick={closeMenu}>Centros de Salud</NavLink>
+                  </li>
+                  <li className="nav-item">
                     <NavLink className="nav-link" to="/turnos" onClick={closeMenu}>Agenda</NavLink>
                   </li>
                   <li className="nav-item">
@@ -93,9 +99,6 @@ function App() {
                   </li>
                   <li className="nav-item">
                     <NavLink className="nav-link" to="/facturas" onClick={closeMenu}>Facturación</NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className="nav-link" to="/dashboard" onClick={closeMenu}>Dashboard</NavLink>
                   </li>
                 </>
               )}
@@ -138,9 +141,11 @@ function App() {
 
   return (
     <BrowserRouter>
-      <NavContent />
-      <div className="container mt-4">
-        <Routes>
+      <div className="d-flex flex-column min-vh-100">
+        <NavContent />
+        <main className="flex-grow-1 py-4">
+          <div className="container">
+            <Routes>
           {!isAuthenticated && (
             <>
               <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />
@@ -175,13 +180,22 @@ function App() {
               <Route path="/pacientes" element={<PacientesPage />} />
               <Route path="/obras-sociales" element={<ObrasSocialesPage />} />
               <Route path="/turnos" element={<TurnosPage />} />
+              <Route path="/centros-salud" element={<CentrosSaludPage />} />
               <Route path="/facturas" element={<FacturasPage />} />
-              <Route path="/dashboard" element={<DashboardPage currentUser={currentUser} />} />
+              <Route path="/dashboard" element={<Navigate to="/" replace />} />
               <Route path="/" element={<DashboardPage currentUser={currentUser} />} />
               <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
             </>
           )}
-        </Routes>
+            </Routes>
+          </div>
+        </main>
+        <footer className="bg-dark text-white-50 py-3 mt-auto">
+          <div className="container d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+            <span>© {new Date().getFullYear()} Gestio. Todos los derechos reservados.</span>
+            <span>Versión {appVersion}</span>
+          </div>
+        </footer>
       </div>
     </BrowserRouter>
   );

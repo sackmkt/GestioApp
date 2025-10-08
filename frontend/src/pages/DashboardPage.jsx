@@ -4,12 +4,14 @@ import { Pie, Bar } from 'react-chartjs-2';
 import facturasService from '../services/FacturasService';
 import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
-import { FaMoneyBillWave, FaCheckCircle, FaTimesCircle, FaUsers, FaMedkit, FaChartBar, FaUserFriends, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown } from 'react-icons/fa';
+import centrosSaludService from '../services/CentrosSaludService';
+import { FaMoneyBillWave, FaCheckCircle, FaTimesCircle, FaUsers, FaMedkit, FaChartBar, FaUserFriends, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital } from 'react-icons/fa';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 function DashboardPage({ currentUser }) {
   const [allFacturas, setAllFacturas] = useState([]);
+  const [centros, setCentros] = useState([]);
   const [data, setData] = useState({
     totalFacturacion: 0,
     montoPagado: 0,
@@ -18,6 +20,13 @@ function DashboardPage({ currentUser }) {
     facturasPendientes: 0,
     totalPacientes: 0,
     totalObrasSociales: 0,
+    totalCentros: 0,
+    centrosActivos: 0,
+    totalRetencionCentros: 0,
+    ingresoParticulares: 0,
+    ingresoCentrosNetos: 0,
+    pacientesByTipo: { particulares: 0, centro: 0 },
+    centrosResumen: [],
     pieChartData: {},
     monthlyBarChartData: {},
     obrasSocialesBarChartData: {},
@@ -105,6 +114,14 @@ function DashboardPage({ currentUser }) {
       }],
     };
 
+    const {
+      centrosResumen,
+      totalRetencionCentros,
+      ingresoCentrosNetos,
+      ingresoParticulares,
+    } = summarizeFinancials(filteredFacturas, centros);
+    const centrosActivos = centrosResumen.filter((centro) => centro.totalFacturado > 0).length;
+
     setData(prevData => ({
       ...prevData,
       totalFacturacion,
@@ -114,8 +131,13 @@ function DashboardPage({ currentUser }) {
       facturasPendientes,
       pieChartData,
       monthlyBarChartData,
+      centrosResumen,
+      totalRetencionCentros,
+      centrosActivos,
+      ingresoCentrosNetos,
+      ingresoParticulares,
     }));
-  }, [dateRange]);
+  }, [dateRange, centros]);
 
   const calculateGrowthMetrics = (facturas) => {
     const currentYear = new Date().getFullYear();
@@ -198,21 +220,106 @@ function DashboardPage({ currentUser }) {
     };
   };
 
+  const calculateCentrosResumen = (facturas, centros) => {
+    const centrosArray = Array.isArray(centros) ? centros : [];
+
+    const centrosMap = centrosArray.reduce((acc, centro) => {
+      acc[centro._id] = {
+        _id: centro._id,
+        nombre: centro.nombre,
+        porcentajeRetencion: centro.porcentajeRetencion || 0,
+        totalFacturado: 0,
+        totalRetencion: 0,
+        netoProfesional: 0,
+      };
+      return acc;
+    }, {});
+
+    facturas.forEach((factura) => {
+      const centroId = factura.centroSalud?._id || factura.centroSalud;
+      if (!centroId) {
+        return;
+      }
+
+      if (!centrosMap[centroId]) {
+        centrosMap[centroId] = {
+          _id: centroId,
+          nombre: factura.centroSalud?.nombre || 'Centro no registrado',
+          porcentajeRetencion: factura.centroSalud?.porcentajeRetencion || 0,
+          totalFacturado: 0,
+          totalRetencion: 0,
+        };
+      }
+
+      const referencia = centrosMap[centroId];
+      const porcentaje = referencia.porcentajeRetencion || 0;
+      const monto = factura.montoTotal || 0;
+      referencia.totalFacturado += monto;
+      referencia.totalRetencion += monto * (porcentaje / 100);
+      referencia.netoProfesional = referencia.totalFacturado - referencia.totalRetencion;
+    });
+
+    return Object.values(centrosMap).sort((a, b) => b.totalRetencion - a.totalRetencion);
+  };
+
+  const summarizeFinancials = (facturas, centrosList) => {
+    const facturasArray = Array.isArray(facturas) ? facturas : [];
+    const centrosResumen = calculateCentrosResumen(facturasArray, centrosList);
+    const totalRetencionCentros = centrosResumen.reduce((sum, centro) => sum + centro.totalRetencion, 0);
+    const ingresoCentrosNetos = centrosResumen.reduce((sum, centro) => sum + centro.netoProfesional, 0);
+
+    const ingresoParticulares = facturasArray.reduce((sum, factura) => {
+      const tipoAtencion = factura.paciente?.tipoAtencion;
+      const asociadoACentro = Boolean(factura.centroSalud || factura.paciente?.centroSalud);
+      if (tipoAtencion === 'centro' || asociadoACentro) {
+        return sum;
+      }
+      return sum + (factura.montoTotal || 0);
+    }, 0);
+
+    return {
+      centrosResumen,
+      totalRetencionCentros,
+      ingresoCentrosNetos,
+      ingresoParticulares,
+    };
+  };
+
   // useEffect para la carga inicial de datos
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [facturas, pacientes, obrasSociales] = await Promise.all([
+        const [facturas, pacientes, obrasSociales, centros] = await Promise.all([
           facturasService.getFacturas(),
           pacientesService.getPacientes(),
           obrasSocialesService.getObrasSociales(),
+          centrosSaludService.getCentros(),
         ]);
+        const pacientesByTipo = {
+          particulares: pacientes.filter((p) => p.tipoAtencion !== 'centro').length,
+          centro: pacientes.filter((p) => p.tipoAtencion === 'centro').length,
+        };
+        const {
+          centrosResumen,
+          totalRetencionCentros,
+          ingresoCentrosNetos,
+          ingresoParticulares,
+        } = summarizeFinancials(facturas, centros);
+        const centrosActivos = centrosResumen.filter((centro) => centro.totalFacturado > 0).length;
         setAllFacturas(facturas);
+        setCentros(centros);
         // Los datos de pacientes y obras sociales no necesitan filtrarse por fecha
         setData(prevData => ({
           ...prevData,
           totalPacientes: pacientes.length,
           totalObrasSociales: obrasSociales.length,
+          totalCentros: centros.length,
+          centrosActivos,
+          totalRetencionCentros,
+          ingresoCentrosNetos,
+          ingresoParticulares,
+          pacientesByTipo,
+          centrosResumen,
           obrasSocialesBarChartData: calculateObrasSocialesData(facturas),
           pacientesBarChartData: calculatePacientesData(facturas),
           growthMetrics: calculateGrowthMetrics(facturas),
@@ -278,11 +385,48 @@ function DashboardPage({ currentUser }) {
   return (
     <div className="container mt-4">
       <div className="mb-4 text-center text-md-start">
-        <h2 className="fw-bold">¡Hola, {userDisplayName}! 👋</h2>
-        <p className="text-muted mb-0">Bienvenido/a a tu panel principal.</p>
+        <h2 className="fw-bold">Hola, {userDisplayName} 👋</h2>
+        <p className="text-muted mb-0">Este resumen ejecutivo reúne tus principales indicadores asistenciales y financieros.</p>
       </div>
-      <h3 className="mb-4 text-center">Dashboard Financiero</h3>
-      
+      <div className="row g-3 mb-4 row-cols-1 row-cols-md-2 row-cols-xl-4">
+        <div className="col">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <p className="text-muted mb-1">Facturación acumulada</p>
+              <h4 className="fw-bold mb-1">{formatNumber(data.totalFacturacion)}</h4>
+              <small className="text-muted">Incluye montos cobrados y pendientes del período seleccionado.</small>
+            </div>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <p className="text-muted mb-1">Ingreso neto - Particulares</p>
+              <h4 className="fw-bold mb-1">{formatNumber(data.ingresoParticulares)}</h4>
+              <small className="text-muted">Corresponde a la facturación directa sin intermediarios.</small>
+            </div>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <p className="text-muted mb-1">Ingreso neto - Centros de salud</p>
+              <h4 className="fw-bold mb-1">{formatNumber(data.ingresoCentrosNetos)}</h4>
+              <small className="text-muted">Monto disponible luego de aplicar retenciones vigentes.</small>
+            </div>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <p className="text-muted mb-1">Retención estimada a centros</p>
+              <h4 className="fw-bold mb-1">{formatNumber(data.totalRetencionCentros)}</h4>
+              <small className="text-muted">Centros con actividad: {data.centrosActivos}/{data.totalCentros}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Sección del selector de fechas */}
       <div className="card shadow-sm mb-4">
         <div className="card-body">
@@ -343,6 +487,18 @@ function DashboardPage({ currentUser }) {
                   Monto Pendiente
                   <span className="fw-bold text-danger">{formatNumber(data.montoPendiente)}</span>
                 </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Ingreso neto particulares
+                  <span className="fw-bold text-primary">{formatNumber(data.ingresoParticulares)}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Ingreso neto centros de salud
+                  <span className="fw-bold text-info">{formatNumber(data.ingresoCentrosNetos)}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Total retenido por centros
+                  <span className="fw-bold text-warning">{formatNumber(data.totalRetencionCentros)}</span>
+                </li>
               </ul>
             </div>
           </div>
@@ -357,12 +513,24 @@ function DashboardPage({ currentUser }) {
             <div className="card-body">
               <ul className="list-group list-group-flush">
                 <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Total de Pacientes
+                  Pacientes totales
                   <span className="badge bg-primary rounded-pill">{data.totalPacientes}</span>
                 </li>
                 <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Total de Obras Sociales
-                  <span className="badge bg-primary rounded-pill">{data.totalObrasSociales}</span>
+                  Atendidos de forma particular
+                  <span className="badge bg-success rounded-pill">{data.pacientesByTipo.particulares}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Gestionados vía centros de salud
+                  <span className="badge bg-info text-dark rounded-pill">{data.pacientesByTipo.centro}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Obras sociales activas
+                  <span className="badge bg-secondary rounded-pill">{data.totalObrasSociales}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Centros con facturación
+                  <span className="badge bg-warning text-dark rounded-pill">{data.centrosActivos}/{data.totalCentros}</span>
                 </li>
                 <li className="list-group-item d-flex justify-content-between align-items-center">
                   Facturas Pagadas
@@ -390,6 +558,38 @@ function DashboardPage({ currentUser }) {
                 </div>
               ) : (
                 <p className="text-center text-muted">No hay datos de facturas para mostrar.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Resumen de Centros de Salud */}
+        <div className="col-lg-4 col-md-6">
+          <div className="card shadow-sm h-100">
+            <div className="card-header bg-warning text-dark">
+              <FaHospital className="me-2" /> Convenios con Centros
+            </div>
+            <div className="card-body p-0">
+              {data.centrosResumen.length > 0 ? (
+                <ul className="list-group list-group-flush">
+                  {data.centrosResumen.slice(0, 3).map((centro) => (
+                    <li key={centro._id} className="list-group-item">
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div>
+                          <strong>{centro.nombre}</strong>
+                          <div className="small text-muted">Ret. {centro.porcentajeRetencion}%</div>
+                        </div>
+                        <div className="text-end">
+                          <div className="fw-bold text-success">{formatNumber(centro.netoProfesional)}</div>
+                          <small className="text-muted d-block">Retenido: {formatNumber(centro.totalRetencion)}</small>
+                          <small className="text-muted">Facturado: {formatNumber(centro.totalFacturado)}</small>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted text-center py-4 mb-0">Aún no registraste centros con actividad.</p>
               )}
             </div>
           </div>

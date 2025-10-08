@@ -5,6 +5,7 @@ const ESTADOS_FACTURA = ['pendiente', 'presentada', 'observada', 'pagada_parcial
 const facturaSchema = new mongoose.Schema({
   paciente: { type: mongoose.Schema.Types.ObjectId, ref: 'Paciente', required: true },
   obraSocial: { type: mongoose.Schema.Types.ObjectId, ref: 'ObraSocial' },
+  centroSalud: { type: mongoose.Schema.Types.ObjectId, ref: 'CentroSalud' },
   numeroFactura: { type: Number, required: true, unique: true },
   montoTotal: { type: Number, required: true, min: 0 },
   fechaEmision: { type: Date, required: true },
