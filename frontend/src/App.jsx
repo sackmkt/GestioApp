@@ -4,6 +4,7 @@ import PacientesPage from './pages/PacientesPage';
 import ObrasSocialesPage from './pages/ObrasSocialesPage';
 import FacturasPage from './pages/FacturasPage';
 import DashboardPage from './pages/DashboardPage';
+import TurnosPage from './pages/TurnosPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import GestioLogo from './assets/GestioLogo.png';
@@ -68,6 +69,9 @@ function App() {
                     <NavLink className="nav-link" to="/pacientes" onClick={closeMenu}>Pacientes</NavLink>
                   </li>
                   <li className="nav-item">
+                    <NavLink className="nav-link" to="/turnos" onClick={closeMenu}>Agenda</NavLink>
+                  </li>
+                  <li className="nav-item">
                     <NavLink className="nav-link" to="/obras-sociales" onClick={closeMenu}>Obras Sociales</NavLink>
                   </li>
                   <li className="nav-item">
@@ -115,6 +119,7 @@ function App() {
             <>
               <Route path="/pacientes" element={<PacientesPage />} />
               <Route path="/obras-sociales" element={<ObrasSocialesPage />} />
+              <Route path="/turnos" element={<TurnosPage />} />
               <Route path="/facturas" element={<FacturasPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/" element={<DashboardPage />} />
