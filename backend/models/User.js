@@ -1,8 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const ROLES = ['admin', 'professional', 'assistant'];
-
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
@@ -55,11 +53,6 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
-  role: {
-    type: String,
-    enum: ROLES,
-    default: 'professional',
-  },
 }, {
   timestamps: true,
 });
@@ -78,4 +71,3 @@ userSchema.methods.matchPassword = async function(enteredPassword) {
 };
 
 module.exports = mongoose.model('User', userSchema);
-module.exports.ROLES = ROLES;

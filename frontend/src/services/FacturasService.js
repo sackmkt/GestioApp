@@ -12,6 +12,26 @@ const getHeaders = () => {
   };
 };
 
+const getHeadersWithConfig = (config = {}) => {
+  const base = getHeaders();
+  return {
+    ...base,
+    ...config,
+    headers: {
+      ...base.headers,
+      ...(config.headers || {}),
+    },
+  };
+};
+
+const extractFilename = (disposition, fallback = 'documento.pdf') => {
+  if (!disposition) {
+    return fallback;
+  }
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  return match ? decodeURIComponent(match[1]) : fallback;
+};
+
 const getFacturas = async () => {
   try {
     const response = await axios.get(API_URL, getHeaders());
@@ -71,6 +91,44 @@ const eliminarPago = async (facturaId, pagoId) => {
   }
 };
 
+const uploadDocumento = async (facturaId, payload) => {
+  try {
+    const response = await axios.post(`${API_URL}/${facturaId}/documentos`, payload, getHeaders());
+    return response.data;
+  } catch (error) {
+    console.error('Error al adjuntar documento de factura:', error);
+    throw error;
+  }
+};
+
+const deleteDocumento = async (facturaId, documentoId) => {
+  try {
+    await axios.delete(`${API_URL}/${facturaId}/documentos/${documentoId}`, getHeaders());
+  } catch (error) {
+    console.error('Error al eliminar documento de factura:', error);
+    throw error;
+  }
+};
+
+const downloadDocumento = async (facturaId, documentoId) => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/${facturaId}/documentos/${documentoId}/descargar`,
+      getHeadersWithConfig({ responseType: 'blob' }),
+    );
+
+    const filename = extractFilename(response.headers['content-disposition'], 'comprobante.pdf');
+    return {
+      blob: response.data,
+      filename,
+      contentType: response.headers['content-type'],
+    };
+  } catch (error) {
+    console.error('Error al descargar documento de factura:', error);
+    throw error;
+  }
+};
+
 export default {
   getFacturas,
   createFactura,
@@ -78,4 +136,7 @@ export default {
   deleteFactura,
   registrarPago,
   eliminarPago,
+  uploadDocumento,
+  deleteDocumento,
+  downloadDocumento,
 };

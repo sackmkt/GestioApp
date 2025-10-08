@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PacientesService from '../services/PacientesService';
 import ObrasSocialesService from '../services/ObrasSocialesService';
 import CentrosSaludService from '../services/CentrosSaludService';
@@ -20,6 +20,44 @@ const ATENCION_LABELS = {
   centro: 'Derivado por centro de salud',
 };
 
+const toBase64 = (file) => new Promise((resolve, reject) => {
+  if (!file) {
+    resolve(null);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(new Error('No se pudo leer el archivo seleccionado.'));
+  reader.readAsDataURL(file);
+});
+
+const formatFileSize = (bytes) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '—';
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const formatDateTime = (value) => {
+  if (!value) {
+    return 'Sin fecha';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Sin fecha';
+  }
+  return date.toLocaleString('es-AR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+};
+
 function PacientesPage() {
   const { showError, showSuccess, showInfo } = useFeedback();
   const [pacientes, setPacientes] = useState([]);
@@ -31,6 +69,12 @@ function PacientesPage() {
   const [listLoading, setListLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [deleteLoadingId, setDeleteLoadingId] = useState(null);
+  const [documentForm, setDocumentForm] = useState({ nombre: '', descripcion: '', archivo: null });
+  const [documentError, setDocumentError] = useState(null);
+  const [documentUploadLoading, setDocumentUploadLoading] = useState(false);
+  const [documentDeleteLoadingId, setDocumentDeleteLoadingId] = useState(null);
+  const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
+  const documentFileInputRef = useRef(null);
 
   const fetchPacientes = useCallback(async () => {
     try {
@@ -90,6 +134,11 @@ function PacientesPage() {
     };
   }, [pacientes]);
 
+  const pacienteSeleccionado = useMemo(
+    () => pacientes.find((paciente) => paciente._id === editingId),
+    [pacientes, editingId],
+  );
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => {
@@ -104,6 +153,11 @@ function PacientesPage() {
     setFormData(EMPTY_FORM);
     setEditingId(null);
     setError(null);
+    setDocumentForm({ nombre: '', descripcion: '', archivo: null });
+    setDocumentError(null);
+    if (documentFileInputRef.current) {
+      documentFileInputRef.current.value = '';
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -187,10 +241,128 @@ function PacientesPage() {
       tipoAtencion: paciente.tipoAtencion || 'particular',
       centroSalud: paciente.centroSalud?._id || '',
     });
+    setDocumentForm({ nombre: '', descripcion: '', archivo: null });
+    setDocumentError(null);
+    if (documentFileInputRef.current) {
+      documentFileInputRef.current.value = '';
+    }
   };
 
   const handleCancelEdit = () => {
     resetForm();
+  };
+
+  const handleDocumentFieldChange = (field, value) => {
+    setDocumentForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleDocumentFileChange = (event) => {
+    const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+    setDocumentForm((prev) => ({ ...prev, archivo: file }));
+  };
+
+  const handleDocumentUpload = async (event) => {
+    event.preventDefault();
+    setDocumentError(null);
+
+    if (!editingId) {
+      setDocumentError('Selecciona un paciente antes de adjuntar documentos.');
+      return;
+    }
+
+    const nombre = documentForm.nombre.trim();
+    if (!nombre) {
+      setDocumentError('Asigna un nombre descriptivo al documento.');
+      return;
+    }
+
+    if (!documentForm.archivo) {
+      setDocumentError('Selecciona un archivo para adjuntar.');
+      return;
+    }
+
+    try {
+      setDocumentUploadLoading(true);
+      const base64 = await toBase64(documentForm.archivo);
+      if (!base64) {
+        throw new Error('No se pudo preparar el archivo para subirlo.');
+      }
+
+      const payload = {
+        nombre,
+        descripcion: documentForm.descripcion.trim(),
+        archivo: {
+          nombre: documentForm.archivo.name,
+          tipo: documentForm.archivo.type,
+          base64,
+        },
+      };
+
+      const nuevoDocumento = await PacientesService.uploadDocumento(editingId, payload);
+      setPacientes((prev) => prev.map((paciente) => (
+        paciente._id === editingId
+          ? { ...paciente, documentos: [...(paciente.documentos || []), nuevoDocumento] }
+          : paciente
+      )));
+      setDocumentForm({ nombre: '', descripcion: '', archivo: null });
+      if (documentFileInputRef.current) {
+        documentFileInputRef.current.value = '';
+      }
+      showSuccess('Documento adjuntado correctamente.');
+    } catch (err) {
+      const message = err.response?.data?.error || err.message || 'No se pudo adjuntar el documento.';
+      setDocumentError(message);
+      showError(message);
+    } finally {
+      setDocumentUploadLoading(false);
+    }
+  };
+
+  const handleDocumentDelete = async (documentId) => {
+    if (!editingId || !documentId) {
+      return;
+    }
+    if (!window.confirm('¿Deseas eliminar este documento?')) {
+      return;
+    }
+    try {
+      setDocumentDeleteLoadingId(documentId);
+      await PacientesService.deleteDocumento(editingId, documentId);
+      setPacientes((prev) => prev.map((paciente) => (
+        paciente._id === editingId
+          ? { ...paciente, documentos: (paciente.documentos || []).filter((doc) => doc._id !== documentId) }
+          : paciente
+      )));
+      showInfo('Documento eliminado correctamente.');
+    } catch (err) {
+      const message = err.response?.data?.error || 'No se pudo eliminar el documento.';
+      showError(message);
+    } finally {
+      setDocumentDeleteLoadingId(null);
+    }
+  };
+
+  const handleDocumentDownload = async (documentId) => {
+    if (!editingId || !documentId) {
+      return;
+    }
+    try {
+      setDocumentDownloadLoadingId(documentId);
+      const { blob, filename } = await PacientesService.downloadDocumento(editingId, documentId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      const message = err.response?.data?.error || 'No se pudo descargar el documento.';
+      showError(message);
+    } finally {
+      setDocumentDownloadLoadingId(null);
+    }
   };
 
   return (
@@ -352,8 +524,114 @@ function PacientesPage() {
               </div>
             </fieldset>
           </form>
-        </div>
       </div>
+    </div>
+
+      {editingId && (
+        <div className="card shadow-sm mb-4">
+          <div className="card-header bg-light">
+            Documentación del paciente
+          </div>
+          <div className="card-body">
+            {documentError && <div className="alert alert-danger">{documentError}</div>}
+            <form onSubmit={handleDocumentUpload} className="row g-3 align-items-end">
+              <div className="col-lg-4">
+                <label htmlFor="documentoNombre" className="form-label">Nombre del documento</label>
+                <input
+                  type="text"
+                  id="documentoNombre"
+                  className="form-control"
+                  value={documentForm.nombre}
+                  onChange={(e) => handleDocumentFieldChange('nombre', e.target.value)}
+                  placeholder="Ej: Derivación clínica"
+                  required
+                />
+              </div>
+              <div className="col-lg-4">
+                <label htmlFor="documentoDescripcion" className="form-label">Descripción (opcional)</label>
+                <input
+                  type="text"
+                  id="documentoDescripcion"
+                  className="form-control"
+                  value={documentForm.descripcion}
+                  onChange={(e) => handleDocumentFieldChange('descripcion', e.target.value)}
+                  placeholder="Notas internas"
+                />
+              </div>
+              <div className="col-lg-4">
+                <label htmlFor="documentoArchivo" className="form-label">Archivo</label>
+                <input
+                  type="file"
+                  id="documentoArchivo"
+                  className="form-control"
+                  onChange={handleDocumentFileChange}
+                  ref={documentFileInputRef}
+                  accept=".pdf,image/*,.doc,.docx,.xls,.xlsx"
+                  required
+                />
+              </div>
+              <div className="col-12 text-end">
+                <button type="submit" className="btn btn-secondary" disabled={documentUploadLoading}>
+                  {documentUploadLoading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Subiendo...
+                    </>
+                  ) : (
+                    'Adjuntar documento'
+                  )}
+                </button>
+              </div>
+            </form>
+
+            <hr className="my-4" />
+            <h6 className="text-uppercase text-muted">Archivos adjuntos</h6>
+            {pacienteSeleccionado?.documentos?.length ? (
+              <ul className="list-group list-group-flush">
+                {pacienteSeleccionado.documentos.map((documento) => (
+                  <li key={documento._id} className="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                    <div>
+                      <strong>{documento.nombre}</strong>
+                      <div className="small text-muted">{formatDateTime(documento.createdAt)} · {formatFileSize(documento.size)}</div>
+                      {documento.descripcion && (
+                        <div className="small text-muted fst-italic">{documento.descripcion}</div>
+                      )}
+                    </div>
+                    <div className="d-flex gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm"
+                        onClick={() => handleDocumentDownload(documento._id)}
+                        disabled={documentDownloadLoadingId === documento._id}
+                      >
+                        {documentDownloadLoadingId === documento._id ? (
+                          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        ) : (
+                          'Descargar'
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger btn-sm"
+                        onClick={() => handleDocumentDelete(documento._id)}
+                        disabled={documentDeleteLoadingId === documento._id}
+                      >
+                        {documentDeleteLoadingId === documento._id ? (
+                          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        ) : (
+                          'Eliminar'
+                        )}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted mb-0">Aún no hay documentos adjuntos para este paciente.</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="card shadow-sm d-none d-md-block">
         <div className="card-body p-0">

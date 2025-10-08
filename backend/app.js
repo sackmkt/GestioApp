@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const activityLogger = require('./middleware/activityLogger');
-const { protect, authorizeRoles } = require('./middleware/authMiddleware');
+const { protect } = require('./middleware/authMiddleware');
 
 const pacientesRoutes = require('./Routes/pacientes');
 const obrasSocialesRoutes = require('./Routes/obrasSociales');
@@ -43,7 +43,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(activityLogger);
 
 app.use('/api/pacientes', pacientesRoutes);
@@ -62,10 +63,6 @@ if (process.env.NODE_ENV === 'test') {
 
   testRouter.get('/protected', protect, (req, res) => {
     res.json({ message: 'ok' });
-  });
-
-  testRouter.post('/restricted', protect, authorizeRoles('admin', 'professional'), (req, res) => {
-    res.status(201).json({ message: 'authorized' });
   });
 
   app.use('/__test__', testRouter);

@@ -9,6 +9,17 @@ const pacienteSchema = new mongoose.Schema({
   tipoAtencion: { type: String, enum: ['particular', 'centro'], default: 'particular' },
   centroSalud: { type: mongoose.Schema.Types.ObjectId, ref: 'CentroSalud' },
   obraSocial: { type: mongoose.Schema.Types.ObjectId, ref: 'ObraSocial' },
+  documentos: [{
+    nombre: { type: String, required: true },
+    descripcion: { type: String, trim: true },
+    storage: { type: String, enum: ['local', 's3'], required: true },
+    key: { type: String, required: true },
+    bucket: { type: String },
+    contentType: { type: String },
+    size: { type: Number, min: 0 },
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    createdAt: { type: Date, default: Date.now },
+  }],
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

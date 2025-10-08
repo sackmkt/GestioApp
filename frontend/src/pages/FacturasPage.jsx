@@ -66,6 +66,41 @@ const formatDate = (value) => {
   return date.toLocaleDateString();
 };
 
+const formatDateTime = (value) => {
+  if (!value) {
+    return 'Sin fecha';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Sin fecha';
+  }
+  return date.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+};
+
+const formatFileSize = (bytes) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '—';
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const toBase64 = (file) => new Promise((resolve, reject) => {
+  if (!file) {
+    resolve(null);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(new Error('No se pudo leer el archivo seleccionado.'));
+  reader.readAsDataURL(file);
+});
+
 const normalizeEstado = (factura) => {
   if (!factura) {
     return 'pendiente';
@@ -104,6 +139,11 @@ function FacturasPage() {
   const [expandedFacturaId, setExpandedFacturaId] = useState(null);
   const [paymentForms, setPaymentForms] = useState({});
   const [paymentErrors, setPaymentErrors] = useState({});
+  const [documentForms, setDocumentForms] = useState({});
+  const [documentInputKeys, setDocumentInputKeys] = useState({});
+  const [documentUploadLoadingId, setDocumentUploadLoadingId] = useState(null);
+  const [documentDeleteLoadingId, setDocumentDeleteLoadingId] = useState(null);
+  const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
 
   useEffect(() => {
     fetchFacturas();
@@ -477,6 +517,127 @@ function FacturasPage() {
   };
 
   const getPaymentForm = (facturaId) => paymentForms[facturaId] || EMPTY_PAYMENT_FORM;
+  const getDocumentForm = (facturaId) => documentForms[facturaId] || { nombre: '', descripcion: '', archivo: null };
+
+  const handleDocumentFormChange = (facturaId, field, value) => {
+    setDocumentForms((prev) => ({
+      ...prev,
+      [facturaId]: {
+        ...getDocumentForm(facturaId),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleDocumentFileChange = (facturaId, file) => {
+    setDocumentForms((prev) => ({
+      ...prev,
+      [facturaId]: {
+        ...getDocumentForm(facturaId),
+        archivo: file,
+      },
+    }));
+  };
+
+  const resetDocumentForm = (facturaId) => {
+    setDocumentForms((prev) => ({
+      ...prev,
+      [facturaId]: { nombre: '', descripcion: '', archivo: null },
+    }));
+    setDocumentInputKeys((prev) => ({
+      ...prev,
+      [facturaId]: (prev[facturaId] || 0) + 1,
+    }));
+  };
+
+  const handleDocumentoSubmit = async (event, facturaId) => {
+    event.preventDefault();
+    const form = getDocumentForm(facturaId);
+    const nombre = form.nombre?.trim();
+
+    if (!nombre) {
+      showError('Ingresa un nombre para identificar el documento.');
+      return;
+    }
+
+    if (!form.archivo) {
+      showError('Selecciona un archivo para adjuntar.');
+      return;
+    }
+
+    try {
+      setDocumentUploadLoadingId(facturaId);
+      const base64 = await toBase64(form.archivo);
+      if (!base64) {
+        throw new Error('No se pudo procesar el archivo seleccionado.');
+      }
+
+      const payload = {
+        nombre,
+        descripcion: form.descripcion?.trim() || '',
+        archivo: {
+          nombre: form.archivo.name,
+          tipo: form.archivo.type,
+          base64,
+        },
+      };
+
+      const nuevoDocumento = await facturasService.uploadDocumento(facturaId, payload);
+      setFacturas((prev) => prev.map((factura) => (
+        factura._id === facturaId
+          ? { ...factura, documentos: [...(factura.documentos || []), nuevoDocumento] }
+          : factura
+      )));
+      resetDocumentForm(facturaId);
+      showSuccess('Documento adjuntado a la factura.');
+    } catch (err) {
+      const message = err.response?.data?.error || err.message || 'No se pudo adjuntar el documento.';
+      showError(message);
+    } finally {
+      setDocumentUploadLoadingId(null);
+    }
+  };
+
+  const handleDocumentoDelete = async (facturaId, documentoId) => {
+    if (!window.confirm('¿Eliminar este documento?')) {
+      return;
+    }
+    try {
+      setDocumentDeleteLoadingId(documentoId);
+      await facturasService.deleteDocumento(facturaId, documentoId);
+      setFacturas((prev) => prev.map((factura) => (
+        factura._id === facturaId
+          ? { ...factura, documentos: (factura.documentos || []).filter((doc) => doc._id !== documentoId) }
+          : factura
+      )));
+      showInfo('Documento eliminado correctamente.');
+    } catch (err) {
+      const message = err.response?.data?.error || 'No se pudo eliminar el documento.';
+      showError(message);
+    } finally {
+      setDocumentDeleteLoadingId(null);
+    }
+  };
+
+  const handleDocumentoDownload = async (facturaId, documentoId) => {
+    try {
+      setDocumentDownloadLoadingId(documentoId);
+      const { blob, filename } = await facturasService.downloadDocumento(facturaId, documentoId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      const message = err.response?.data?.error || 'No se pudo descargar el documento.';
+      showError(message);
+    } finally {
+      setDocumentDownloadLoadingId(null);
+    }
+  };
 
   return (
     <div className="container mt-4">
@@ -901,6 +1062,108 @@ function FacturasPage() {
                                       </div>
                                     </div>
                                   </div>
+
+                                  <div className="mt-5">
+                                    <h6 className="text-uppercase text-muted">Documentos adjuntos</h6>
+                                    {factura.documentos && factura.documentos.length > 0 ? (
+                                      <ul className="list-group mb-3">
+                                        {factura.documentos.map((documento) => (
+                                          <li
+                                            key={documento._id}
+                                            className="list-group-item d-flex flex-column flex-lg-row gap-2 justify-content-between align-items-lg-center"
+                                          >
+                                            <div className="me-lg-3">
+                                              <div className="fw-semibold">{documento.nombre}</div>
+                                              <div className="small text-muted">
+                                                {formatDateTime(documento.createdAt)} · {formatFileSize(documento.size)}
+                                              </div>
+                                              {documento.descripcion && (
+                                                <div className="small text-muted fst-italic">{documento.descripcion}</div>
+                                              )}
+                                            </div>
+                                            <div className="d-flex gap-2">
+                                              <button
+                                                type="button"
+                                                className="btn btn-outline-primary btn-sm"
+                                                onClick={() => handleDocumentoDownload(factura._id, documento._id)}
+                                                disabled={documentDownloadLoadingId === documento._id}
+                                              >
+                                                {documentDownloadLoadingId === documento._id ? 'Descargando…' : 'Descargar'}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="btn btn-outline-danger btn-sm"
+                                                onClick={() => handleDocumentoDelete(factura._id, documento._id)}
+                                                disabled={documentDeleteLoadingId === documento._id}
+                                              >
+                                                {documentDeleteLoadingId === documento._id ? 'Eliminando…' : 'Eliminar'}
+                                              </button>
+                                            </div>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <p className="text-muted">Aún no se cargaron documentos para esta factura.</p>
+                                    )}
+
+                                    <form className="row g-2 align-items-end" onSubmit={(event) => handleDocumentoSubmit(event, factura._id)}>
+                                      <div className="col-md-4">
+                                        <label className="form-label" htmlFor={`documentoNombre-${factura._id}`}>
+                                          Nombre del documento
+                                        </label>
+                                        <input
+                                          id={`documentoNombre-${factura._id}`}
+                                          type="text"
+                                          className="form-control"
+                                          value={getDocumentForm(factura._id).nombre || ''}
+                                          onChange={(e) => handleDocumentFormChange(factura._id, 'nombre', e.target.value)}
+                                          placeholder="Ej. Comprobante"
+                                        />
+                                      </div>
+                                      <div className="col-md-4">
+                                        <label className="form-label" htmlFor={`documentoDescripcion-${factura._id}`}>
+                                          Descripción (opcional)
+                                        </label>
+                                        <input
+                                          id={`documentoDescripcion-${factura._id}`}
+                                          type="text"
+                                          className="form-control"
+                                          value={getDocumentForm(factura._id).descripcion || ''}
+                                          onChange={(e) => handleDocumentFormChange(factura._id, 'descripcion', e.target.value)}
+                                          placeholder="Observaciones"
+                                        />
+                                      </div>
+                                      <div className="col-md-4">
+                                        <label className="form-label" htmlFor={`documentoArchivo-${factura._id}`}>
+                                          Archivo
+                                        </label>
+                                        <input
+                                          key={documentInputKeys[factura._id] || 0}
+                                          id={`documentoArchivo-${factura._id}`}
+                                          type="file"
+                                          className="form-control"
+                                          onChange={(e) => handleDocumentFileChange(factura._id, e.target.files?.[0] || null)}
+                                        />
+                                      </div>
+                                      <div className="col-12 d-flex justify-content-end gap-2">
+                                        <button
+                                          type="button"
+                                          className="btn btn-outline-secondary btn-sm"
+                                          onClick={() => resetDocumentForm(factura._id)}
+                                          disabled={documentUploadLoadingId === factura._id}
+                                        >
+                                          Limpiar
+                                        </button>
+                                        <button
+                                          type="submit"
+                                          className="btn btn-secondary btn-sm"
+                                          disabled={documentUploadLoadingId === factura._id}
+                                        >
+                                          {documentUploadLoadingId === factura._id ? 'Adjuntando…' : 'Adjuntar documento'}
+                                        </button>
+                                      </div>
+                                    </form>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -997,6 +1260,101 @@ function FacturasPage() {
                           ) : (
                             <p className="text-muted">Sin pagos registrados.</p>
                           )}
+                        </div>
+
+                        <div className="mb-3">
+                          <h6 className="text-uppercase text-muted">Documentos</h6>
+                          {factura.documentos && factura.documentos.length > 0 ? (
+                            <ul className="list-group mb-3">
+                              {factura.documentos.map((documento) => (
+                                <li key={documento._id} className="list-group-item">
+                                  <div className="fw-semibold">{documento.nombre}</div>
+                                  <div className="small text-muted">
+                                    {formatDateTime(documento.createdAt)} · {formatFileSize(documento.size)}
+                                  </div>
+                                  {documento.descripcion && (
+                                    <div className="small text-muted fst-italic">{documento.descripcion}</div>
+                                  )}
+                                  <div className="d-flex flex-wrap gap-2 mt-2">
+                                    <button
+                                      className="btn btn-outline-primary btn-sm"
+                                      type="button"
+                                      onClick={() => handleDocumentoDownload(factura._id, documento._id)}
+                                      disabled={documentDownloadLoadingId === documento._id}
+                                    >
+                                      {documentDownloadLoadingId === documento._id ? 'Descargando…' : 'Descargar'}
+                                    </button>
+                                    <button
+                                      className="btn btn-outline-danger btn-sm"
+                                      type="button"
+                                      onClick={() => handleDocumentoDelete(factura._id, documento._id)}
+                                      disabled={documentDeleteLoadingId === documento._id}
+                                    >
+                                      {documentDeleteLoadingId === documento._id ? 'Eliminando…' : 'Eliminar'}
+                                    </button>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-muted">Sin documentos adjuntos.</p>
+                          )}
+
+                          <form onSubmit={(event) => handleDocumentoSubmit(event, factura._id)}>
+                            <div className="mb-2">
+                              <label className="form-label" htmlFor={`documentoNombre-mobile-${factura._id}`}>
+                                Nombre del documento
+                              </label>
+                              <input
+                                id={`documentoNombre-mobile-${factura._id}`}
+                                type="text"
+                                className="form-control"
+                                value={getDocumentForm(factura._id).nombre || ''}
+                                onChange={(e) => handleDocumentFormChange(factura._id, 'nombre', e.target.value)}
+                              />
+                            </div>
+                            <div className="mb-2">
+                              <label className="form-label" htmlFor={`documentoDescripcion-mobile-${factura._id}`}>
+                                Descripción (opcional)
+                              </label>
+                              <input
+                                id={`documentoDescripcion-mobile-${factura._id}`}
+                                type="text"
+                                className="form-control"
+                                value={getDocumentForm(factura._id).descripcion || ''}
+                                onChange={(e) => handleDocumentFormChange(factura._id, 'descripcion', e.target.value)}
+                              />
+                            </div>
+                            <div className="mb-3">
+                              <label className="form-label" htmlFor={`documentoArchivo-mobile-${factura._id}`}>
+                                Archivo
+                              </label>
+                              <input
+                                key={`${documentInputKeys[factura._id] || 0}-mobile`}
+                                id={`documentoArchivo-mobile-${factura._id}`}
+                                type="file"
+                                className="form-control"
+                                onChange={(e) => handleDocumentFileChange(factura._id, e.target.files?.[0] || null)}
+                              />
+                            </div>
+                            <div className="d-flex flex-wrap justify-content-end gap-2">
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                type="button"
+                                onClick={() => resetDocumentForm(factura._id)}
+                                disabled={documentUploadLoadingId === factura._id}
+                              >
+                                Limpiar
+                              </button>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                type="submit"
+                                disabled={documentUploadLoadingId === factura._id}
+                              >
+                                {documentUploadLoadingId === factura._id ? 'Adjuntando…' : 'Adjuntar documento'}
+                              </button>
+                            </div>
+                          </form>
                         </div>
 
                         <div className="mb-3">

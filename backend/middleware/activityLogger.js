@@ -10,8 +10,7 @@ module.exports = (req, res, next) => {
 
     const duration = Date.now() - startTime;
     const userId = req.user?._id ? req.user._id.toString() : 'anónimo';
-    const role = req.user?.role || 'sin-rol';
-    const message = `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} | usuario=${userId} rol=${role} status=${res.statusCode} ${duration}ms`;
+    const message = `[${new Date().toISOString()}] ${req.method} ${req.originalUrl} | usuario=${userId} status=${res.statusCode} ${duration}ms`;
 
     const RED = '\u001b[31m';
     const YELLOW = '\u001b[33m';

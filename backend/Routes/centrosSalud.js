@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const CentroSalud = require('../models/CentroSalud');
-const { protect, authorizeRoles } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/authMiddleware');
 
 // Crear un centro de salud
-router.post('/', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
+router.post('/', protect, async (req, res) => {
   try {
     const { nombre, porcentajeRetencion } = req.body;
 
@@ -32,7 +32,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // Actualizar un centro de salud
-router.put('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
+router.put('/:id', protect, async (req, res) => {
   try {
     const { nombre, porcentajeRetencion } = req.body;
 
@@ -53,7 +53,7 @@ router.put('/:id', protect, authorizeRoles('admin', 'professional'), async (req,
 });
 
 // Eliminar un centro de salud
-router.delete('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
+router.delete('/:id', protect, async (req, res) => {
   try {
     const eliminado = await CentroSalud.findOneAndDelete({ _id: req.params.id, user: req.user._id });
     if (!eliminado) {

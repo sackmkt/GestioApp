@@ -70,7 +70,6 @@ function App() {
   );
 
   const isAuthenticated = Boolean(currentUser?.token);
-  const userRole = currentUser?.role || 'professional';
   const userDisplayName = useMemo(() => {
     if (!currentUser) {
       return 'Profesional';
@@ -155,9 +154,6 @@ function App() {
             <ul className="navbar-nav ms-auto align-items-lg-center gap-lg-3">
               {isAuthenticated ? (
                 <>
-                  <li className="nav-item d-lg-flex align-items-center">
-                    <span className="gestio-pill">Rol: {userRole}</span>
-                  </li>
                   <li className="nav-item">
                     <NavLink className={navLinkClassName} to="/profile" onClick={closeMenu}>
                       Perfil
