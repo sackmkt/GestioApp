@@ -13,6 +13,8 @@ import ProfilePage from './pages/ProfilePage';
 import GestioLogo from './assets/GestioLogo.png';
 import authService from './services/authService';
 
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'v1.0.0';
+
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     const storedUser = localStorage.getItem('user');
@@ -61,7 +63,7 @@ function App() {
       <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
         <div className="container">
           {/* Nombre de la aplicación y logo */}
-          <NavLink className="navbar-brand d-flex align-items-center" to="/dashboard" onClick={closeMenu}>
+          <NavLink className="navbar-brand d-flex align-items-center" to="/" onClick={closeMenu}>
             <img src={GestioLogo} alt="Gestio Logo" style={{ height: '40px', marginRight: '10px' }} />
             <span style={{ fontFamily: 'Barlow, sans-serif' }}>GESTIO</span>
           </NavLink>
@@ -97,9 +99,6 @@ function App() {
                   </li>
                   <li className="nav-item">
                     <NavLink className="nav-link" to="/facturas" onClick={closeMenu}>Facturación</NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className="nav-link" to="/dashboard" onClick={closeMenu}>Dashboard</NavLink>
                   </li>
                 </>
               )}
@@ -142,9 +141,11 @@ function App() {
 
   return (
     <BrowserRouter>
-      <NavContent />
-      <div className="container mt-4">
-        <Routes>
+      <div className="d-flex flex-column min-vh-100">
+        <NavContent />
+        <main className="flex-grow-1">
+          <div className="container mt-4">
+            <Routes>
           {!isAuthenticated && (
             <>
               <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />
@@ -186,7 +187,15 @@ function App() {
               <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
             </>
           )}
-        </Routes>
+            </Routes>
+          </div>
+        </main>
+        <footer className="bg-dark text-white py-3 mt-auto">
+          <div className="container d-flex flex-column flex-md-row align-items-center justify-content-between">
+            <span>© {new Date().getFullYear()} Gestio. Todos los derechos reservados.</span>
+            <span>Versión {APP_VERSION}</span>
+          </div>
+        </footer>
       </div>
     </BrowserRouter>
   );

@@ -23,6 +23,8 @@ function DashboardPage({ currentUser }) {
     totalCentros: 0,
     centrosActivos: 0,
     totalRetencionCentros: 0,
+    netoParticulares: 0,
+    netoCentros: 0,
     pacientesByTipo: { particulares: 0, centro: 0 },
     centrosResumen: [],
     pieChartData: {},
@@ -112,8 +114,13 @@ function DashboardPage({ currentUser }) {
       }],
     };
 
+    const totalParticulares = filteredFacturas
+      .filter((factura) => !factura.centroSalud)
+      .reduce((sum, factura) => sum + (factura.montoTotal || 0), 0);
+
     const centrosResumen = calculateCentrosResumen(filteredFacturas, centros);
     const totalRetencionCentros = centrosResumen.reduce((sum, centro) => sum + centro.totalRetencion, 0);
+    const totalNetoCentros = centrosResumen.reduce((sum, centro) => sum + centro.totalNeto, 0);
     const centrosActivos = centrosResumen.filter((centro) => centro.totalFacturado > 0).length;
 
     setData(prevData => ({
@@ -128,6 +135,8 @@ function DashboardPage({ currentUser }) {
       centrosResumen,
       totalRetencionCentros,
       centrosActivos,
+      netoParticulares: totalParticulares,
+      netoCentros: totalNetoCentros,
     }));
   }, [dateRange, centros]);
 
@@ -222,6 +231,7 @@ function DashboardPage({ currentUser }) {
         porcentajeRetencion: centro.porcentajeRetencion || 0,
         totalFacturado: 0,
         totalRetencion: 0,
+        totalNeto: 0,
       };
       return acc;
     }, {});
@@ -239,6 +249,7 @@ function DashboardPage({ currentUser }) {
           porcentajeRetencion: factura.centroSalud?.porcentajeRetencion || 0,
           totalFacturado: 0,
           totalRetencion: 0,
+          totalNeto: 0,
         };
       }
 
@@ -246,7 +257,9 @@ function DashboardPage({ currentUser }) {
       const porcentaje = referencia.porcentajeRetencion || 0;
       const monto = factura.montoTotal || 0;
       referencia.totalFacturado += monto;
-      referencia.totalRetencion += monto * (porcentaje / 100);
+      const retencion = monto * (porcentaje / 100);
+      referencia.totalRetencion += retencion;
+      referencia.totalNeto += monto - retencion;
     });
 
     return Object.values(centrosMap).sort((a, b) => b.totalRetencion - a.totalRetencion);
@@ -438,6 +451,18 @@ function DashboardPage({ currentUser }) {
                 <li className="list-group-item d-flex justify-content-between align-items-center">
                   Monto Pendiente
                   <span className="fw-bold text-danger">{formatNumber(data.montoPendiente)}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Ingresos netos de pacientes particulares
+                  <span className="fw-bold text-primary">{formatNumber(data.netoParticulares)}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Ingresos netos de centros de salud
+                  <span className="fw-bold text-info">{formatNumber(data.netoCentros)}</span>
+                </li>
+                <li className="list-group-item d-flex justify-content-between align-items-center">
+                  Total retenido por centros
+                  <span className="fw-bold text-warning">{formatNumber(data.totalRetencionCentros)}</span>
                 </li>
               </ul>
             </div>
