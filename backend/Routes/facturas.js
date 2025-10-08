@@ -3,7 +3,7 @@ const router = express.Router();
 const Factura = require('../models/Factura');
 const Paciente = require('../models/Paciente');
 const CentroSalud = require('../models/CentroSalud');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
 const buildFacturaResponse = (facturaDoc) => {
   if (!facturaDoc) {
@@ -93,7 +93,7 @@ const resolveCentroSaludId = async ({ centroSaludId, pacienteId, userId }) => {
 };
 
 // Crea una nueva factura para el usuario autenticado
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const centroSaludId = await resolveCentroSaludId({
       centroSaludId: req.body.centroSalud,
@@ -199,7 +199,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // Actualiza una factura existente
-router.put('/:id', protect, async (req, res) => {
+router.put('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id });
     if (!factura) {
@@ -313,7 +313,7 @@ router.put('/:id', protect, async (req, res) => {
 });
 
 // Registra un pago parcial o total de la factura
-router.post('/:id/pagos', protect, async (req, res) => {
+router.post('/:id/pagos', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const { monto, fecha, metodo, nota } = req.body;
     if (typeof monto !== 'number' || Number.isNaN(monto) || monto <= 0) {
@@ -350,7 +350,7 @@ router.post('/:id/pagos', protect, async (req, res) => {
 });
 
 // Elimina un pago registrado
-router.delete('/:id/pagos/:pagoId', protect, async (req, res) => {
+router.delete('/:id/pagos/:pagoId', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id });
     if (!factura) {
@@ -374,7 +374,7 @@ router.delete('/:id/pagos/:pagoId', protect, async (req, res) => {
 });
 
 // Elimina una factura por su ID (del usuario autenticado)
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const facturaEliminada = await Factura.findOneAndDelete({ _id: req.params.id, user: req.user._id });
     if (!facturaEliminada) return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });

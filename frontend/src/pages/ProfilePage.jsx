@@ -159,8 +159,8 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
     <div className="container mt-5">
       <div className="row justify-content-center">
         <div className="col-lg-8 col-xl-7">
-          <div className="card shadow-sm">
-            <div className="card-header bg-dark text-white">
+          <div className="card gestio-card border-0">
+            <div className="card-header gestio-card-header">
               <h4 className="mb-0">Mi Perfil</h4>
             </div>
             <div className="card-body">
