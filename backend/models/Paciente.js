@@ -1,5 +1,23 @@
 const mongoose = require('mongoose');
 
+const documentoSchema = new mongoose.Schema({
+  nombreOriginal: { type: String, required: true, trim: true },
+  descripcion: { type: String, trim: true },
+  mimeType: { type: String, required: true },
+  size: { type: Number, required: true, min: 0 },
+  storageKey: { type: String, required: true },
+  publicUrl: { type: String, default: '' },
+  uploadedAt: { type: Date, default: Date.now },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+}, { _id: true });
+
+documentoSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    delete ret.storageKey;
+    return ret;
+  },
+});
+
 const pacienteSchema = new mongoose.Schema({
   nombre: { type: String, required: true },
   apellido: { type: String, required: true },
@@ -13,7 +31,8 @@ const pacienteSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-  }
+  },
+  documentos: [documentoSchema],
 }, {
   timestamps: true,
 });

@@ -71,6 +71,39 @@ const eliminarPago = async (facturaId, pagoId) => {
   }
 };
 
+const uploadComprobante = async (facturaId, comprobanteData) => {
+  try {
+    const response = await axios.post(`${API_URL}/${facturaId}/comprobantes`, comprobanteData, getHeaders());
+    return response.data;
+  } catch (error) {
+    console.error('Error al subir comprobante:', error);
+    throw error;
+  }
+};
+
+const deleteComprobante = async (facturaId, comprobanteId) => {
+  try {
+    await axios.delete(`${API_URL}/${facturaId}/comprobantes/${comprobanteId}`, getHeaders());
+  } catch (error) {
+    console.error('Error al eliminar comprobante:', error);
+    throw error;
+  }
+};
+
+const downloadComprobante = async (facturaId, comprobanteId) => {
+  try {
+    const headers = getHeaders().headers;
+    const response = await axios.get(`${API_URL}/${facturaId}/comprobantes/${comprobanteId}/descarga`, {
+      headers,
+      responseType: 'blob',
+    });
+    return response;
+  } catch (error) {
+    console.error('Error al descargar comprobante:', error);
+    throw error;
+  }
+};
+
 export default {
   getFacturas,
   createFactura,
@@ -78,4 +111,7 @@ export default {
   deleteFactura,
   registrarPago,
   eliminarPago,
+  uploadComprobante,
+  deleteComprobante,
+  downloadComprobante,
 };

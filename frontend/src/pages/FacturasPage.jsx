@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import facturasService from '../services/FacturasService';
 import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
 import centrosSaludService from '../services/CentrosSaludService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
+import DocumentManager from '../components/DocumentManager.jsx';
 
 const ESTADO_OPTIONS = [
   { value: 'pendiente', label: 'Pendiente' },
@@ -104,6 +105,37 @@ function FacturasPage() {
   const [expandedFacturaId, setExpandedFacturaId] = useState(null);
   const [paymentForms, setPaymentForms] = useState({});
   const [paymentErrors, setPaymentErrors] = useState({});
+  const [documentModal, setDocumentModal] = useState({ open: false, factura: null });
+  const [documentBusy, setDocumentBusy] = useState(false);
+
+  const updateFacturaComprobantes = useCallback((facturaId, updater) => {
+    setFacturas((prev) =>
+      prev.map((factura) => {
+        if (factura._id !== facturaId) {
+          return factura;
+        }
+        const comprobantesActuales = factura.comprobantes || [];
+        return {
+          ...factura,
+          comprobantes: updater(comprobantesActuales),
+        };
+      }),
+    );
+
+    setDocumentModal((prev) => {
+      if (!prev.open || !prev.factura || prev.factura._id !== facturaId) {
+        return prev;
+      }
+      const comprobantesActuales = prev.factura.comprobantes || [];
+      return {
+        ...prev,
+        factura: {
+          ...prev.factura,
+          comprobantes: updater(comprobantesActuales),
+        },
+      };
+    });
+  }, []);
 
   useEffect(() => {
     fetchFacturas();
@@ -269,6 +301,82 @@ function FacturasPage() {
 
   const handleCancelEdit = () => {
     resetForm();
+  };
+
+  const handleOpenComprobantes = (factura) => {
+    setDocumentModal({ open: true, factura });
+  };
+
+  const handleCloseComprobantes = () => {
+    setDocumentModal({ open: false, factura: null });
+    setDocumentBusy(false);
+  };
+
+  const handleUploadComprobante = async ({ fileName, mimeType, base64Data, descripcion }) => {
+    if (!documentModal.factura) {
+      return;
+    }
+
+    setDocumentBusy(true);
+    try {
+      const nuevo = await facturasService.uploadComprobante(documentModal.factura._id, {
+        fileName,
+        mimeType,
+        base64Data,
+        descripcion,
+      });
+      updateFacturaComprobantes(documentModal.factura._id, (docs) => [...docs, nuevo]);
+      showSuccess('Adjuntamos el comprobante correctamente.');
+    } catch (uploadError) {
+      const message = uploadError.response?.data?.error || uploadError.message || 'No pudimos adjuntar el comprobante.';
+      showError(message);
+      throw new Error(message);
+    } finally {
+      setDocumentBusy(false);
+    }
+  };
+
+  const handleDeleteComprobante = async (comprobante) => {
+    if (!documentModal.factura) {
+      return;
+    }
+
+    setDocumentBusy(true);
+    try {
+      await facturasService.deleteComprobante(documentModal.factura._id, comprobante._id);
+      updateFacturaComprobantes(documentModal.factura._id, (docs) => docs.filter((item) => item._id !== comprobante._id));
+      showInfo('El comprobante se eliminó correctamente.');
+    } catch (deleteError) {
+      const message = deleteError.response?.data?.error || deleteError.message || 'No pudimos eliminar el comprobante.';
+      showError(message);
+      throw new Error(message);
+    } finally {
+      setDocumentBusy(false);
+    }
+  };
+
+  const handleDownloadComprobante = async (comprobante) => {
+    if (!documentModal.factura) {
+      return;
+    }
+
+    try {
+      setDocumentBusy(true);
+      const response = await facturasService.downloadComprobante(documentModal.factura._id, comprobante._id);
+      const blobUrl = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = comprobante.nombreOriginal || 'comprobante';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (downloadError) {
+      const message = downloadError.response?.data?.error || downloadError.message || 'No pudimos descargar el comprobante.';
+      showError(message);
+    } finally {
+      setDocumentBusy(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -743,6 +851,13 @@ function FacturasPage() {
                         <td>
                           <div className="d-flex flex-column gap-2">
                             <button
+                              className="btn btn-outline-secondary btn-sm"
+                              type="button"
+                              onClick={() => handleOpenComprobantes(factura)}
+                            >
+                              Comprobantes
+                            </button>
+                            <button
                               className="btn btn-outline-primary btn-sm"
                               type="button"
                               onClick={() => toggleExpandFactura(factura._id)}
@@ -958,6 +1073,13 @@ function FacturasPage() {
                         </div>
 
                         <div className="d-flex flex-wrap gap-2 mb-3">
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            type="button"
+                            onClick={() => handleOpenComprobantes(factura)}
+                          >
+                            Comprobantes
+                          </button>
                           <button className="btn btn-warning btn-sm" type="button" onClick={() => handleEdit(factura)}>
                             Editar
                           </button>
@@ -1071,6 +1193,17 @@ function FacturasPage() {
           </div>
         </div>
       </div>
+      <DocumentManager
+        isOpen={documentModal.open}
+        onClose={handleCloseComprobantes}
+        title={`Comprobantes de ${documentModal.factura ? `Factura ${documentModal.factura.puntoVenta ?? '—'}-${documentModal.factura.numeroFactura ?? '—'}` : ''}`}
+        description="Subí recibos, notas de crédito y respaldos de gestión para esta factura."
+        items={documentModal.factura?.comprobantes || []}
+        onUpload={handleUploadComprobante}
+        onDelete={handleDeleteComprobante}
+        onDownload={handleDownloadComprobante}
+        busy={documentBusy}
+      />
     </div>
   );
 }

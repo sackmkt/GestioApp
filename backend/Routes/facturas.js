@@ -4,6 +4,32 @@ const Factura = require('../models/Factura');
 const Paciente = require('../models/Paciente');
 const CentroSalud = require('../models/CentroSalud');
 const { protect } = require('../middleware/authMiddleware');
+const storageService = require('../services/storageService');
+
+const MAX_DOCUMENT_SIZE_BYTES = Number(process.env.MAX_DOCUMENT_SIZE_BYTES || 5 * 1024 * 1024);
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+]);
+
+const decodeBase64 = (input) => {
+  if (!input) {
+    throw new Error('El archivo recibido está vacío.');
+  }
+
+  const matches = input.match(/^data:(.+);base64,(.+)$/);
+  const base64String = matches ? matches[2] : input;
+
+  try {
+    return Buffer.from(base64String, 'base64');
+  } catch (error) {
+    throw new Error('No se pudo decodificar el archivo enviado.');
+  }
+};
 
 const buildFacturaResponse = (facturaDoc) => {
   if (!facturaDoc) {
@@ -378,9 +404,115 @@ router.delete('/:id', protect, async (req, res) => {
   try {
     const facturaEliminada = await Factura.findOneAndDelete({ _id: req.params.id, user: req.user._id });
     if (!facturaEliminada) return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
+
+    if (Array.isArray(facturaEliminada.comprobantes)) {
+      await Promise.all(facturaEliminada.comprobantes.map((doc) => storageService.deleteDocument(doc.storageKey).catch(() => null)));
+    }
     res.json({ message: 'Factura eliminada correctamente' });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:id/comprobantes', protect, async (req, res) => {
+  const { fileName, mimeType, base64Data, descripcion } = req.body || {};
+
+  if (!fileName || !mimeType || !base64Data) {
+    return res.status(400).json({ error: 'Debes enviar nombre, tipo y contenido del archivo.' });
+  }
+
+  if (!ALLOWED_MIME_TYPES.has(mimeType)) {
+    return res.status(400).json({ error: 'El tipo de archivo no está permitido.' });
+  }
+
+  try {
+    const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id });
+    if (!factura) {
+      return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
+    }
+
+    const buffer = decodeBase64(base64Data);
+    if (buffer.length > MAX_DOCUMENT_SIZE_BYTES) {
+      return res.status(400).json({ error: 'El archivo supera el tamaño máximo permitido (5 MB).' });
+    }
+
+    const saved = await storageService.saveDocument({
+      buffer,
+      filename: fileName,
+      mimeType,
+    });
+
+    const nuevoComprobante = factura.comprobantes.create({
+      nombreOriginal: fileName,
+      descripcion: descripcion ? descripcion.trim() : '',
+      mimeType,
+      size: buffer.length,
+      storageKey: saved.storageKey,
+      uploadedBy: req.user._id,
+    });
+    nuevoComprobante.publicUrl = `/api/facturas/${factura._id}/comprobantes/${nuevoComprobante._id}/descarga`;
+
+    factura.comprobantes.push(nuevoComprobante);
+    await factura.save();
+
+    res.status(201).json(nuevoComprobante);
+  } catch (error) {
+    console.error('Error subiendo comprobante de factura:', error);
+    res.status(500).json({ error: 'No pudimos guardar el archivo. Intenta nuevamente.' });
+  }
+});
+
+router.delete('/:id/comprobantes/:comprobanteId', protect, async (req, res) => {
+  try {
+    const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id });
+    if (!factura) {
+      return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
+    }
+
+    const comprobante = factura.comprobantes.id(req.params.comprobanteId);
+    if (!comprobante) {
+      return res.status(404).json({ error: 'Comprobante no encontrado' });
+    }
+
+    await storageService.deleteDocument(comprobante.storageKey);
+    comprobante.deleteOne();
+    await factura.save();
+
+    res.json({ message: 'Comprobante eliminado correctamente' });
+  } catch (error) {
+    console.error('Error eliminando comprobante de factura:', error);
+    res.status(500).json({ error: 'No pudimos eliminar el archivo.' });
+  }
+});
+
+router.get('/:id/comprobantes/:comprobanteId/descarga', protect, async (req, res) => {
+  try {
+    const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id });
+    if (!factura) {
+      return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
+    }
+
+    const comprobante = factura.comprobantes.id(req.params.comprobanteId);
+    if (!comprobante) {
+      return res.status(404).json({ error: 'Comprobante no encontrado' });
+    }
+
+    res.setHeader('Content-Type', comprobante.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(comprobante.nombreOriginal)}"`);
+
+    const stream = storageService.getDownloadStream(comprobante.storageKey);
+    stream.on('error', (streamError) => {
+      console.error('Error descargando comprobante de factura:', streamError);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'No pudimos descargar el archivo.' });
+      } else {
+        res.end();
+      }
+    });
+    stream.pipe(res);
+  } catch (error) {
+    console.error('Error obteniendo comprobante de factura:', error);
+    res.status(500).json({ error: 'No pudimos procesar la descarga.' });
   }
 });
 

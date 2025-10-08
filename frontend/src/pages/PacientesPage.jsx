@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PacientesService from '../services/PacientesService';
 import ObrasSocialesService from '../services/ObrasSocialesService';
 import CentrosSaludService from '../services/CentrosSaludService';
+import DocumentManager from '../components/DocumentManager.jsx';
 import { useFeedback } from '../context/FeedbackContext.jsx';
 
 const EMPTY_FORM = {
@@ -31,6 +32,8 @@ function PacientesPage() {
   const [listLoading, setListLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [deleteLoadingId, setDeleteLoadingId] = useState(null);
+  const [documentsState, setDocumentsState] = useState({ open: false, paciente: null });
+  const [documentBusy, setDocumentBusy] = useState(false);
 
   const fetchPacientes = useCallback(async () => {
     try {
@@ -61,6 +64,35 @@ function PacientesPage() {
       showError('No se pudieron cargar los centros de salud.');
     }
   }, [showError]);
+
+  const updatePacienteDocumentos = useCallback((pacienteId, updater) => {
+    setPacientes((prev) =>
+      prev.map((paciente) => {
+        if (paciente._id !== pacienteId) {
+          return paciente;
+        }
+        const documentosActuales = paciente.documentos || [];
+        return {
+          ...paciente,
+          documentos: updater(documentosActuales),
+        };
+      }),
+    );
+
+    setDocumentsState((prev) => {
+      if (!prev.open || !prev.paciente || prev.paciente._id !== pacienteId) {
+        return prev;
+      }
+      const documentosActuales = prev.paciente.documentos || [];
+      return {
+        ...prev,
+        paciente: {
+          ...prev.paciente,
+          documentos: updater(documentosActuales),
+        },
+      };
+    });
+  }, []);
 
   useEffect(() => {
     fetchPacientes();
@@ -191,6 +223,82 @@ function PacientesPage() {
 
   const handleCancelEdit = () => {
     resetForm();
+  };
+
+  const handleOpenDocuments = (paciente) => {
+    setDocumentsState({ open: true, paciente });
+  };
+
+  const handleCloseDocuments = () => {
+    setDocumentsState({ open: false, paciente: null });
+    setDocumentBusy(false);
+  };
+
+  const handleUploadDocumento = async ({ fileName, mimeType, base64Data, descripcion }) => {
+    if (!documentsState.paciente) {
+      return;
+    }
+
+    setDocumentBusy(true);
+    try {
+      const nuevo = await PacientesService.uploadDocumento(documentsState.paciente._id, {
+        fileName,
+        mimeType,
+        base64Data,
+        descripcion,
+      });
+      updatePacienteDocumentos(documentsState.paciente._id, (docs) => [...docs, nuevo]);
+      showSuccess('Documento adjuntado correctamente.');
+    } catch (uploadError) {
+      const message = uploadError.response?.data?.error || uploadError.message || 'No pudimos adjuntar el archivo.';
+      showError(message);
+      throw new Error(message);
+    } finally {
+      setDocumentBusy(false);
+    }
+  };
+
+  const handleDeleteDocumento = async (doc) => {
+    if (!documentsState.paciente) {
+      return;
+    }
+
+    setDocumentBusy(true);
+    try {
+      await PacientesService.deleteDocumento(documentsState.paciente._id, doc._id);
+      updatePacienteDocumentos(documentsState.paciente._id, (docs) => docs.filter((item) => item._id !== doc._id));
+      showInfo('El archivo se eliminó correctamente.');
+    } catch (deleteError) {
+      const message = deleteError.response?.data?.error || deleteError.message || 'No pudimos eliminar el archivo.';
+      showError(message);
+      throw new Error(message);
+    } finally {
+      setDocumentBusy(false);
+    }
+  };
+
+  const handleDownloadDocumento = async (doc) => {
+    if (!documentsState.paciente) {
+      return;
+    }
+
+    try {
+      setDocumentBusy(true);
+      const response = await PacientesService.downloadDocumento(documentsState.paciente._id, doc._id);
+      const blobUrl = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = doc.nombreOriginal || 'archivo';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (downloadError) {
+      const message = downloadError.response?.data?.error || downloadError.message || 'No pudimos descargar el archivo.';
+      showError(message);
+    } finally {
+      setDocumentBusy(false);
+    }
   };
 
   return (
@@ -408,6 +516,13 @@ function PacientesPage() {
                   </td>
                   <td className="text-end">
                     <button
+                      className="btn btn-outline-secondary btn-sm me-2"
+                      onClick={() => handleOpenDocuments(paciente)}
+                      disabled={formLoading || Boolean(deleteLoadingId)}
+                    >
+                      Archivos
+                    </button>
+                    <button
                       className="btn btn-warning btn-sm me-2"
                       onClick={() => handleEdit(paciente)}
                       disabled={formLoading || Boolean(deleteLoadingId)}
@@ -482,6 +597,13 @@ function PacientesPage() {
                   </p>
                     <div className="d-flex justify-content-end gap-2 mt-3">
                       <button
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => handleOpenDocuments(paciente)}
+                        disabled={formLoading || Boolean(deleteLoadingId)}
+                      >
+                        Archivos
+                      </button>
+                      <button
                         className="btn btn-warning btn-sm"
                         onClick={() => handleEdit(paciente)}
                         disabled={formLoading || Boolean(deleteLoadingId)}
@@ -513,6 +635,17 @@ function PacientesPage() {
             ))}
         </div>
       </div>
+      <DocumentManager
+        isOpen={documentsState.open}
+        onClose={handleCloseDocuments}
+        title={`Archivos de ${documentsState.paciente ? `${documentsState.paciente.nombre} ${documentsState.paciente.apellido || ''}`.trim() : ''}`}
+        description="Subí estudios, consentimientos y documentación respaldatoria de tus pacientes."
+        items={documentsState.paciente?.documentos || []}
+        onUpload={handleUploadDocumento}
+        onDelete={handleDeleteDocumento}
+        onDownload={handleDownloadDocumento}
+        busy={documentBusy}
+      />
     </div>
   );
 }

@@ -51,11 +51,47 @@ const deletePaciente = async (id) => {
   }
 };
 
+const uploadDocumento = async (pacienteId, documentoData) => {
+  try {
+    const response = await axios.post(`${API_URL}/${pacienteId}/documentos`, documentoData, getHeaders());
+    return response.data;
+  } catch (error) {
+    console.error('Error al subir documento de paciente:', error);
+    throw error;
+  }
+};
+
+const deleteDocumento = async (pacienteId, documentoId) => {
+  try {
+    await axios.delete(`${API_URL}/${pacienteId}/documentos/${documentoId}`, getHeaders());
+  } catch (error) {
+    console.error('Error al eliminar documento de paciente:', error);
+    throw error;
+  }
+};
+
+const downloadDocumento = async (pacienteId, documentoId) => {
+  try {
+    const headers = getHeaders().headers;
+    const response = await axios.get(`${API_URL}/${pacienteId}/documentos/${documentoId}/descarga`, {
+      headers,
+      responseType: 'blob',
+    });
+    return response;
+  } catch (error) {
+    console.error('Error al descargar documento de paciente:', error);
+    throw error;
+  }
+};
+
 const pacientesService = {
   getPacientes,
   createPaciente,
   updatePaciente,
   deletePaciente,
+  uploadDocumento,
+  deleteDocumento,
+  downloadDocumento,
 };
 
 export default pacientesService;

@@ -2,6 +2,24 @@ const mongoose = require('mongoose');
 
 const ESTADOS_FACTURA = ['pendiente', 'presentada', 'observada', 'pagada_parcial', 'pagada'];
 
+const comprobanteSchema = new mongoose.Schema({
+  nombreOriginal: { type: String, required: true, trim: true },
+  descripcion: { type: String, trim: true },
+  mimeType: { type: String, required: true },
+  size: { type: Number, required: true, min: 0 },
+  storageKey: { type: String, required: true },
+  publicUrl: { type: String, default: '' },
+  uploadedAt: { type: Date, default: Date.now },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+}, { _id: true });
+
+comprobanteSchema.set('toJSON', {
+  transform: (_doc, ret) => {
+    delete ret.storageKey;
+    return ret;
+  },
+});
+
 const facturaSchema = new mongoose.Schema({
   paciente: { type: mongoose.Schema.Types.ObjectId, ref: 'Paciente', required: true },
   obraSocial: { type: mongoose.Schema.Types.ObjectId, ref: 'ObraSocial' },
@@ -25,7 +43,8 @@ const facturaSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
-  }
+  },
+  comprobantes: [comprobanteSchema],
 }, { timestamps: true });
 
 facturaSchema.index(
