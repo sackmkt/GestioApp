@@ -4,12 +4,12 @@ const mongoose = require('mongoose');
 const cors = require('cors'); // ✅ Ya tienes esta línea
 const dotenv = require('dotenv');
 
-const pacientesRoutes = require('./Routes/pacientes');
-const obrasSocialesRoutes = require('./Routes/obrasSociales');
-const facturasRoutes = require('./Routes/facturas');
-const turnosRoutes = require('./Routes/turnos');
-const centrosSaludRoutes = require('./Routes/centrosSalud');
-const userRoutes = require('./Routes/userRoutes');
+const pacientesRoutes = require('./Rutas/pacientes');
+const obrasSocialesRoutes = require('./Rutas/obrasSociales');
+const facturasRoutes = require('./Rutas/facturas');
+const turnosRoutes = require('./Rutas/turnos');
+const centrosSaludRoutes = require('./Rutas/centrosSalud');
+const userRoutes = require('./Rutas/userRoutes');
 
 // Cargamos las variables de entorno desde el archivo .env
 dotenv.config();
