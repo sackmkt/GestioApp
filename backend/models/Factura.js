@@ -6,7 +6,8 @@ const facturaSchema = new mongoose.Schema({
   paciente: { type: mongoose.Schema.Types.ObjectId, ref: 'Paciente', required: true },
   obraSocial: { type: mongoose.Schema.Types.ObjectId, ref: 'ObraSocial' },
   centroSalud: { type: mongoose.Schema.Types.ObjectId, ref: 'CentroSalud' },
-  numeroFactura: { type: Number, required: true, unique: true },
+  puntoVenta: { type: Number, min: 0 },
+  numeroFactura: { type: Number, required: true, min: 0 },
   montoTotal: { type: Number, required: true, min: 0 },
   fechaEmision: { type: Date, required: true },
   fechaVencimiento: { type: Date },
@@ -26,6 +27,17 @@ const facturaSchema = new mongoose.Schema({
     required: true,
   }
 }, { timestamps: true });
+
+facturaSchema.index(
+  { user: 1, puntoVenta: 1, numeroFactura: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      puntoVenta: { $exists: true },
+      numeroFactura: { $exists: true },
+    },
+  },
+);
 
 facturaSchema.virtual('montoCobrado').get(function montoCobrado() {
   if (!Array.isArray(this.pagos)) {

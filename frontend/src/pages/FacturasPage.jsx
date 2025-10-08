@@ -29,6 +29,7 @@ const ESTADO_BADGES = {
 const EMPTY_FORM = {
   paciente: '',
   obraSocial: '',
+  puntoVenta: '',
   numeroFactura: '',
   montoTotal: '',
   fechaEmision: '',
@@ -180,6 +181,7 @@ function FacturasPage() {
 
     const payload = {
       ...formData,
+      puntoVenta: Number(formData.puntoVenta),
       numeroFactura: Number(formData.numeroFactura),
       montoTotal: Number(formData.montoTotal),
       interes: formData.interes === '' ? 0 : Number(formData.interes),
@@ -190,8 +192,13 @@ function FacturasPage() {
     payload.obraSocial = payload.obraSocial || null;
     payload.centroSalud = payload.centroSalud || null;
 
-    if (!Number.isFinite(payload.numeroFactura) || !Number.isFinite(payload.montoTotal)) {
-      setError('El número de factura y el monto deben ser valores numéricos.');
+    if (!Number.isFinite(payload.puntoVenta) || !Number.isFinite(payload.numeroFactura) || !Number.isFinite(payload.montoTotal)) {
+      setError('El punto de venta, el número de factura y el monto deben ser valores numéricos.');
+      return;
+    }
+
+    if (payload.puntoVenta < 0 || payload.numeroFactura < 0) {
+      setError('El punto de venta y el número de factura no pueden ser negativos.');
       return;
     }
 
@@ -214,7 +221,7 @@ function FacturasPage() {
     } catch (submitError) {
       if (submitError.response && submitError.response.status === 400) {
         const message = submitError.response.data?.error
-          || 'El número de factura ya existe. Por favor, elige uno diferente.';
+          || 'Ya existe una factura con el mismo punto de venta y número. Verifique los datos ingresados.';
         setError(message);
         showError(message);
       } else {
@@ -248,6 +255,7 @@ function FacturasPage() {
     setFormData({
       paciente: factura.paciente?._id || '',
       obraSocial: factura.obraSocial?._id || '',
+      puntoVenta: factura.puntoVenta ?? '',
       numeroFactura: factura.numeroFactura,
       montoTotal: factura.montoTotal,
       fechaEmision: factura.fechaEmision ? new Date(factura.fechaEmision).toISOString().substring(0, 10) : '',
@@ -399,13 +407,22 @@ function FacturasPage() {
         ? String(factura.numeroFactura)
         : '';
 
+      const puntoVenta = factura.puntoVenta !== null && factura.puntoVenta !== undefined
+        ? String(factura.puntoVenta)
+        : '';
+
+      const comprobante = puntoVenta && numeroFactura
+        ? `${puntoVenta}-${numeroFactura}`
+        : numeroFactura;
+
       const pacienteNombre = factura.paciente
         ? `${factura.paciente?.nombre || ''} ${factura.paciente?.apellido || ''}`.trim()
         : '';
 
       const obraSocialNombre = factura.obraSocial?.nombre || '';
 
-      const valuesToSearch = [numeroFactura, pacienteNombre, obraSocialNombre].map((value) => value.toLowerCase());
+      const valuesToSearch = [numeroFactura, puntoVenta, comprobante, pacienteNombre, obraSocialNombre]
+        .map((value) => value.toLowerCase());
       return valuesToSearch.some((value) => value.includes(appliedSearch));
     });
   }, [facturas, statusFilter, appliedSearch]);
@@ -525,6 +542,20 @@ function FacturasPage() {
                 <small className="text-muted">Se completa automáticamente si el paciente proviene de un centro.</small>
               </div>
               <div className="col-md-6 col-lg-4">
+                <label htmlFor="puntoVenta" className="form-label">Punto de Venta</label>
+                <input
+                  type="number"
+                  id="puntoVenta"
+                  name="puntoVenta"
+                  className="form-control"
+                  placeholder="Ej. 1"
+                  value={formData.puntoVenta}
+                  onChange={handleChange}
+                  min="0"
+                  required
+                />
+              </div>
+              <div className="col-md-6 col-lg-4">
                 <label htmlFor="numeroFactura" className="form-label">Número de Factura</label>
                 <input
                   type="number"
@@ -638,7 +669,7 @@ function FacturasPage() {
               <input
                 type="text"
                 className="form-control"
-                placeholder="Buscar por paciente, factura u obra social"
+                placeholder="Buscar por paciente, punto de venta, factura u obra social"
                 value={searchTerm}
                 onChange={handleInputChange}
               />
@@ -654,6 +685,7 @@ function FacturasPage() {
             <table className="table table-striped table-hover mb-0 align-middle">
               <thead className="table-dark">
                 <tr>
+                  <th>Punto de Venta</th>
                   <th>N° Factura</th>
                   <th>Paciente</th>
                   <th>Obra Social</th>
@@ -672,10 +704,13 @@ function FacturasPage() {
                   const estado = normalizeEstado(factura);
                   const badgeClass = ESTADO_BADGES[estado] || 'bg-secondary';
                   const isVencida = esFacturaVencida(factura);
+                  const puntoVentaDisplay = factura.puntoVenta !== null && factura.puntoVenta !== undefined ? factura.puntoVenta : '—';
+                  const numeroFacturaDisplay = factura.numeroFactura !== null && factura.numeroFactura !== undefined ? factura.numeroFactura : '—';
                   return (
                     <React.Fragment key={factura._id}>
                       <tr className={factura.pagado ? 'table-success' : ''}>
-                        <td>{factura.numeroFactura}</td>
+                        <td>{puntoVentaDisplay}</td>
+                        <td>{numeroFacturaDisplay}</td>
                         <td>{factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</td>
                         <td>{factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</td>
                         <td>{factura.centroSalud ? factura.centroSalud.nombre : 'Sin centro'}</td>
@@ -733,7 +768,7 @@ function FacturasPage() {
                       </tr>
                       {expandedFacturaId === factura._id && (
                         <tr>
-                          <td colSpan="11">
+                          <td colSpan="12">
                             <div className="p-3 bg-light border rounded">
                               <div className="row g-3">
                                 <div className="col-md-4">
@@ -743,6 +778,8 @@ function FacturasPage() {
                                   <p className="mb-1"><strong>Obra Social:</strong> {factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</p>
                                   <p className="mb-1"><strong>Centro:</strong> {factura.centroSalud ? `${factura.centroSalud.nombre} · Ret. ${factura.centroSalud.porcentajeRetencion}%` : 'Sin centro asociado'}</p>
                                   <p className="mb-1"><strong>Observaciones:</strong> {factura.observaciones || '—'}</p>
+                                  <p className="mb-1"><strong>Punto de venta:</strong> {puntoVentaDisplay}</p>
+                                  <p className="mb-1"><strong>Número de factura:</strong> {numeroFacturaDisplay}</p>
                                   <p className="mb-1"><strong>Saldo Pendiente:</strong> {formatCurrency(factura.saldoPendiente || 0)}</p>
                                   <div className="d-flex gap-2 mt-3">
                                     <button
@@ -883,14 +920,18 @@ function FacturasPage() {
                 const estado = normalizeEstado(factura);
                 const badgeClass = ESTADO_BADGES[estado] || 'bg-secondary';
                 const paymentForm = getPaymentForm(factura._id);
+                const puntoVentaDisplay = factura.puntoVenta !== null && factura.puntoVenta !== undefined ? factura.puntoVenta : '—';
+                const numeroFacturaDisplay = factura.numeroFactura !== null && factura.numeroFactura !== undefined ? factura.numeroFactura : '—';
                 return (
                   <div className="col-12" key={factura._id}>
                     <div className="card shadow-sm">
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start">
                           <div>
-                            <h5 className="card-title mb-1">Factura N° {factura.numeroFactura}</h5>
+                            <h5 className="card-title mb-1">Factura PV {puntoVentaDisplay} · N° {numeroFacturaDisplay}</h5>
                             <p className="mb-1"><strong>Paciente:</strong> {factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</p>
+                            <p className="mb-1"><strong>Punto de venta:</strong> {puntoVentaDisplay}</p>
+                            <p className="mb-1"><strong>Número de factura:</strong> {numeroFacturaDisplay}</p>
                             <p className="mb-1"><strong>Obra Social:</strong> {factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</p>
                             <p className="mb-1"><strong>Centro:</strong> {factura.centroSalud ? `${factura.centroSalud.nombre} · Ret. ${factura.centroSalud.porcentajeRetencion}%` : 'Sin centro asociado'}</p>
                             <p className="mb-1"><strong>Monto:</strong> {formatCurrency(factura.montoTotal)}</p>

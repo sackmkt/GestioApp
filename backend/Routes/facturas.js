@@ -62,7 +62,7 @@ const syncEstadoDesdePagos = (factura) => {
   }
 };
 
-const allowedUpdateFields = ['paciente', 'obraSocial', 'numeroFactura', 'montoTotal', 'fechaEmision', 'fechaVencimiento', 'interes', 'observaciones', 'centroSalud'];
+const allowedUpdateFields = ['paciente', 'obraSocial', 'puntoVenta', 'numeroFactura', 'montoTotal', 'fechaEmision', 'fechaVencimiento', 'interes', 'observaciones', 'centroSalud'];
 
 const resolveCentroSaludId = async ({ centroSaludId, pacienteId, userId }) => {
   if (centroSaludId === null || centroSaludId === '') {
@@ -101,11 +101,67 @@ router.post('/', protect, async (req, res) => {
       userId: req.user._id,
     });
 
-    const nuevaFactura = new Factura({
-      ...req.body,
+    if (req.body.puntoVenta === undefined || req.body.puntoVenta === null || req.body.puntoVenta === '') {
+      return res.status(400).json({ error: 'El punto de venta es obligatorio.' });
+    }
+
+    const puntoVentaValor = Number(req.body.puntoVenta);
+    if (!Number.isFinite(puntoVentaValor) || puntoVentaValor < 0) {
+      return res.status(400).json({ error: 'El punto de venta debe ser un número válido y no negativo.' });
+    }
+
+    if (req.body.numeroFactura === undefined || req.body.numeroFactura === null || req.body.numeroFactura === '') {
+      return res.status(400).json({ error: 'El número de factura es obligatorio.' });
+    }
+
+    const numeroFacturaValor = Number(req.body.numeroFactura);
+    if (!Number.isFinite(numeroFacturaValor) || numeroFacturaValor < 0) {
+      return res.status(400).json({ error: 'El número de factura debe ser un número válido y no negativo.' });
+    }
+
+    if (req.body.montoTotal === undefined || req.body.montoTotal === null || req.body.montoTotal === '') {
+      return res.status(400).json({ error: 'El monto total es obligatorio.' });
+    }
+
+    const montoTotalValor = Number(req.body.montoTotal);
+    if (!Number.isFinite(montoTotalValor) || montoTotalValor < 0) {
+      return res.status(400).json({ error: 'El monto total debe ser un número válido y no negativo.' });
+    }
+
+    const interesValor = req.body.interes === undefined || req.body.interes === null || req.body.interes === ''
+      ? 0
+      : Number(req.body.interes);
+    if (!Number.isFinite(interesValor) || interesValor < 0) {
+      return res.status(400).json({ error: 'El interés no puede ser negativo.' });
+    }
+
+    const facturaData = {
+      paciente: req.body.paciente,
+      obraSocial: req.body.obraSocial || null,
+      puntoVenta: puntoVentaValor,
+      numeroFactura: numeroFacturaValor,
+      montoTotal: montoTotalValor,
+      fechaEmision: req.body.fechaEmision,
+      fechaVencimiento: req.body.fechaVencimiento || null,
+      interes: interesValor,
+      observaciones: typeof req.body.observaciones === 'string' ? req.body.observaciones.trim() : '',
       centroSalud: centroSaludId || null,
       user: req.user._id,
-    });
+    };
+
+    if (req.body.estado) {
+      facturaData.estado = req.body.estado;
+    }
+
+    if (Array.isArray(req.body.pagos)) {
+      facturaData.pagos = req.body.pagos;
+    }
+
+    if (typeof req.body.pagado === 'boolean') {
+      facturaData.pagado = req.body.pagado;
+    }
+
+    const nuevaFactura = new Factura(facturaData);
 
     if (!Factura.ESTADOS_FACTURA.includes(nuevaFactura.estado)) {
       return res.status(400).json({ error: 'Estado de factura inválido.' });
@@ -117,7 +173,7 @@ router.post('/', protect, async (req, res) => {
     res.status(201).json(buildFacturaResponse(facturaGuardada));
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ error: 'El número de factura ya existe.' });
+      return res.status(400).json({ error: 'Ya existe una factura con ese punto de venta y número para este profesional.' });
     }
     res.status(500).json({ error: error.message });
   }
@@ -150,11 +206,68 @@ router.put('/:id', protect, async (req, res) => {
       return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
     }
 
-    allowedUpdateFields.forEach((field) => {
-      if (Object.prototype.hasOwnProperty.call(req.body, field) && field !== 'centroSalud') {
-        factura[field] = req.body[field];
+    for (const field of allowedUpdateFields) {
+      if (!Object.prototype.hasOwnProperty.call(req.body, field) || field === 'centroSalud') {
+        continue;
       }
-    });
+
+      if (field === 'puntoVenta') {
+        if (req.body.puntoVenta === '' || req.body.puntoVenta === null || req.body.puntoVenta === undefined) {
+          return res.status(400).json({ error: 'El punto de venta es obligatorio.' });
+        }
+        const puntoVentaValor = Number(req.body.puntoVenta);
+        if (!Number.isFinite(puntoVentaValor) || puntoVentaValor < 0) {
+          return res.status(400).json({ error: 'El punto de venta debe ser un número válido y no negativo.' });
+        }
+        factura.puntoVenta = puntoVentaValor;
+        continue;
+      }
+
+      if (field === 'numeroFactura') {
+        if (req.body.numeroFactura === '' || req.body.numeroFactura === null || req.body.numeroFactura === undefined) {
+          return res.status(400).json({ error: 'El número de factura es obligatorio.' });
+        }
+        const numeroFacturaValor = Number(req.body.numeroFactura);
+        if (!Number.isFinite(numeroFacturaValor) || numeroFacturaValor < 0) {
+          return res.status(400).json({ error: 'El número de factura debe ser un número válido y no negativo.' });
+        }
+        factura.numeroFactura = numeroFacturaValor;
+        continue;
+      }
+
+      if (field === 'montoTotal') {
+        if (req.body.montoTotal === '' || req.body.montoTotal === null || req.body.montoTotal === undefined) {
+          return res.status(400).json({ error: 'El monto total es obligatorio.' });
+        }
+        const montoTotalValor = Number(req.body.montoTotal);
+        if (!Number.isFinite(montoTotalValor) || montoTotalValor < 0) {
+          return res.status(400).json({ error: 'El monto total debe ser un número válido y no negativo.' });
+        }
+        factura.montoTotal = montoTotalValor;
+        continue;
+      }
+
+      if (field === 'interes') {
+        const interesValor = Number(req.body.interes);
+        if (!Number.isFinite(interesValor) || interesValor < 0) {
+          return res.status(400).json({ error: 'El interés no puede ser negativo.' });
+        }
+        factura.interes = interesValor;
+        continue;
+      }
+
+      if (field === 'observaciones') {
+        factura.observaciones = typeof req.body.observaciones === 'string' ? req.body.observaciones.trim() : '';
+        continue;
+      }
+
+      if (field === 'obraSocial') {
+        factura.obraSocial = req.body.obraSocial || null;
+        continue;
+      }
+
+      factura[field] = req.body[field];
+    }
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'centroSalud')) {
       factura.centroSalud = await resolveCentroSaludId({
@@ -193,7 +306,7 @@ router.put('/:id', protect, async (req, res) => {
     res.json(buildFacturaResponse(factura));
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ error: 'El número de factura ya existe.' });
+      return res.status(400).json({ error: 'Ya existe una factura con ese punto de venta y número para este profesional.' });
     }
     res.status(500).json({ error: error.message });
   }
