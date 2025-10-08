@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import facturasService from '../services/FacturasService';
 import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
+import centrosSaludService from '../services/CentrosSaludService';
 
 const ESTADO_OPTIONS = [
   { value: 'pendiente', label: 'Pendiente' },
@@ -34,6 +35,7 @@ const EMPTY_FORM = {
   estado: 'pendiente',
   interes: '',
   observaciones: '',
+  centroSalud: '',
 };
 
 const EMPTY_PAYMENT_FORM = {
@@ -89,6 +91,7 @@ function FacturasPage() {
   const [facturas, setFacturas] = useState([]);
   const [pacientes, setPacientes] = useState([]);
   const [obrasSociales, setObrasSociales] = useState([]);
+  const [centrosSalud, setCentrosSalud] = useState([]);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [statusFilter, setStatusFilter] = useState('all');
   const [error, setError] = useState(null);
@@ -103,6 +106,7 @@ function FacturasPage() {
     fetchFacturas();
     fetchPacientes();
     fetchObrasSociales();
+    fetchCentrosSalud();
   }, []);
 
   const fetchFacturas = async () => {
@@ -132,6 +136,15 @@ function FacturasPage() {
     }
   };
 
+  const fetchCentrosSalud = async () => {
+    try {
+      const data = await centrosSaludService.getCentros();
+      setCentrosSalud(data);
+    } catch (fetchError) {
+      console.error('Error fetching centros de salud:', fetchError);
+    }
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -140,19 +153,18 @@ function FacturasPage() {
     const pacienteId = e.target.value;
     const pacienteSeleccionado = pacientes.find((p) => p._id === pacienteId);
 
-    if (pacienteSeleccionado && pacienteSeleccionado.obraSocial) {
-      setFormData({
-        ...formData,
-        paciente: pacienteId,
-        obraSocial: pacienteSeleccionado.obraSocial._id,
-      });
-    } else {
-      setFormData({
-        ...formData,
-        paciente: pacienteId,
-        obraSocial: '',
-      });
-    }
+    const obraSocialId = pacienteSeleccionado?.obraSocial?._id || '';
+    const centroId =
+      pacienteSeleccionado?.tipoAtencion === 'centro'
+        ? pacienteSeleccionado?.centroSalud?._id || ''
+        : '';
+
+    setFormData({
+      ...formData,
+      paciente: pacienteId,
+      obraSocial: obraSocialId,
+      centroSalud: centroId,
+    });
   };
 
   const resetForm = () => {
@@ -173,6 +185,8 @@ function FacturasPage() {
 
     payload.fechaVencimiento = payload.fechaVencimiento || null;
     payload.observaciones = payload.observaciones ? payload.observaciones.trim() : '';
+    payload.obraSocial = payload.obraSocial || null;
+    payload.centroSalud = payload.centroSalud || null;
 
     if (!Number.isFinite(payload.numeroFactura) || !Number.isFinite(payload.montoTotal)) {
       setError('El número de factura y el monto deben ser valores numéricos.');
@@ -230,6 +244,7 @@ function FacturasPage() {
       estado,
       interes: factura.interes ?? '',
       observaciones: factura.observaciones || '',
+      centroSalud: factura.centroSalud?._id || '',
     });
   };
 
@@ -469,13 +484,30 @@ function FacturasPage() {
                   className="form-select"
                   value={formData.obraSocial}
                   onChange={handleChange}
-                  required
                 >
-                  <option value="">Seleccione Obra Social</option>
+                  <option value="">Sin obra social</option>
                   {obrasSociales.map((os) => (
                     <option key={os._id} value={os._id}>{os.nombre}</option>
                   ))}
                 </select>
+              </div>
+              <div className="col-md-6 col-lg-4">
+                <label htmlFor="centroSalud" className="form-label">Centro de Salud</label>
+                <select
+                  id="centroSalud"
+                  name="centroSalud"
+                  className="form-select"
+                  value={formData.centroSalud}
+                  onChange={handleChange}
+                >
+                  <option value="">Sin centro asociado</option>
+                  {centrosSalud.map((centro) => (
+                    <option key={centro._id} value={centro._id}>
+                      {centro.nombre} ({centro.porcentajeRetencion}% ret.)
+                    </option>
+                  ))}
+                </select>
+                <small className="text-muted">Se completa automáticamente si el paciente proviene de un centro.</small>
               </div>
               <div className="col-md-6 col-lg-4">
                 <label htmlFor="numeroFactura" className="form-label">Número de Factura</label>
@@ -610,6 +642,7 @@ function FacturasPage() {
                   <th>N° Factura</th>
                   <th>Paciente</th>
                   <th>Obra Social</th>
+                  <th>Centro</th>
                   <th>Monto</th>
                   <th>Emitida</th>
                   <th>Vence</th>
@@ -629,7 +662,8 @@ function FacturasPage() {
                       <tr className={factura.pagado ? 'table-success' : ''}>
                         <td>{factura.numeroFactura}</td>
                         <td>{factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</td>
-                        <td>{factura.obraSocial ? factura.obraSocial.nombre : 'N/A'}</td>
+                        <td>{factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</td>
+                        <td>{factura.centroSalud ? factura.centroSalud.nombre : 'Sin centro'}</td>
                         <td>{formatCurrency(factura.montoTotal)}</td>
                         <td>{formatDate(factura.fechaEmision)}</td>
                         <td>
@@ -684,13 +718,15 @@ function FacturasPage() {
                       </tr>
                       {expandedFacturaId === factura._id && (
                         <tr>
-                          <td colSpan="10">
+                          <td colSpan="11">
                             <div className="p-3 bg-light border rounded">
                               <div className="row g-3">
                                 <div className="col-md-4">
                                   <h6 className="text-uppercase text-muted">Detalle</h6>
                                   <p className="mb-1"><strong>Monto Total:</strong> {formatCurrency(factura.montoTotal)}</p>
                                   <p className="mb-1"><strong>Interés:</strong> {factura.interes ? `${factura.interes}%` : '0%'}</p>
+                                  <p className="mb-1"><strong>Obra Social:</strong> {factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</p>
+                                  <p className="mb-1"><strong>Centro:</strong> {factura.centroSalud ? `${factura.centroSalud.nombre} · Ret. ${factura.centroSalud.porcentajeRetencion}%` : 'Sin centro asociado'}</p>
                                   <p className="mb-1"><strong>Observaciones:</strong> {factura.observaciones || '—'}</p>
                                   <p className="mb-1"><strong>Saldo Pendiente:</strong> {formatCurrency(factura.saldoPendiente || 0)}</p>
                                   <div className="d-flex gap-2 mt-3">
@@ -840,6 +876,8 @@ function FacturasPage() {
                           <div>
                             <h5 className="card-title mb-1">Factura N° {factura.numeroFactura}</h5>
                             <p className="mb-1"><strong>Paciente:</strong> {factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</p>
+                            <p className="mb-1"><strong>Obra Social:</strong> {factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</p>
+                            <p className="mb-1"><strong>Centro:</strong> {factura.centroSalud ? `${factura.centroSalud.nombre} · Ret. ${factura.centroSalud.porcentajeRetencion}%` : 'Sin centro asociado'}</p>
                             <p className="mb-1"><strong>Monto:</strong> {formatCurrency(factura.montoTotal)}</p>
                             <p className="mb-1"><strong>Emitida:</strong> {formatDate(factura.fechaEmision)}</p>
                             <p className="mb-1"><strong>Vence:</strong> {formatDate(factura.fechaVencimiento)}</p>
