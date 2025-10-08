@@ -3,6 +3,7 @@ import facturasService from '../services/FacturasService';
 import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
 import centrosSaludService from '../services/CentrosSaludService';
+import { useFeedback } from '../context/FeedbackContext.jsx';
 
 const ESTADO_OPTIONS = [
   { value: 'pendiente', label: 'Pendiente' },
@@ -88,6 +89,7 @@ const esFacturaVencida = (factura) => {
 };
 
 function FacturasPage() {
+  const { showError, showSuccess, showInfo } = useFeedback();
   const [facturas, setFacturas] = useState([]);
   const [pacientes, setPacientes] = useState([]);
   const [obrasSociales, setObrasSociales] = useState([]);
@@ -114,7 +116,7 @@ function FacturasPage() {
       const data = await facturasService.getFacturas();
       setFacturas(data);
     } catch (fetchError) {
-      console.error('Error fetching facturas:', fetchError);
+      showError('No se pudieron cargar las facturas. Intenta nuevamente.');
     }
   };
 
@@ -123,7 +125,7 @@ function FacturasPage() {
       const data = await pacientesService.getPacientes();
       setPacientes(data);
     } catch (fetchError) {
-      console.error('Error fetching pacientes:', fetchError);
+      showError('No se pudieron cargar los pacientes.');
     }
   };
 
@@ -132,7 +134,7 @@ function FacturasPage() {
       const data = await obrasSocialesService.getObrasSociales();
       setObrasSociales(data);
     } catch (fetchError) {
-      console.error('Error fetching obras sociales:', fetchError);
+      showError('No se pudieron cargar las obras sociales.');
     }
   };
 
@@ -141,7 +143,7 @@ function FacturasPage() {
       const data = await centrosSaludService.getCentros();
       setCentrosSalud(data);
     } catch (fetchError) {
-      console.error('Error fetching centros de salud:', fetchError);
+      showError('No se pudieron cargar los centros de salud.');
     }
   };
 
@@ -201,33 +203,42 @@ function FacturasPage() {
     try {
       if (editingId) {
         await facturasService.updateFactura(editingId, payload);
+        showSuccess('Factura actualizada correctamente.');
       } else {
         await facturasService.createFactura(payload);
+        showSuccess('Factura creada correctamente.');
       }
 
       resetForm();
-      fetchFacturas();
+      await fetchFacturas();
     } catch (submitError) {
       if (submitError.response && submitError.response.status === 400) {
         const message = submitError.response.data?.error
           || 'El número de factura ya existe. Por favor, elige uno diferente.';
         setError(message);
+        showError(message);
       } else {
-        setError('Ocurrió un error al intentar crear o actualizar la factura.');
-        console.error('Error al procesar la factura:', submitError);
+        const message = 'Ocurrió un error al intentar crear o actualizar la factura.';
+        setError(message);
+        showError(message);
       }
     }
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm('¿Deseas eliminar esta factura?')) {
+      return;
+    }
     try {
       await facturasService.deleteFactura(id);
       if (expandedFacturaId === id) {
         setExpandedFacturaId(null);
       }
-      fetchFacturas();
+      await fetchFacturas();
+      showInfo('La factura se eliminó correctamente.');
     } catch (deleteError) {
-      console.error('Error deleting factura:', deleteError);
+      const message = deleteError.response?.data?.error || 'No se pudo eliminar la factura.';
+      showError(message);
     }
   };
 
@@ -268,9 +279,10 @@ function FacturasPage() {
   const handleEstadoUpdate = async (facturaId, nuevoEstado) => {
     try {
       await facturasService.updateFactura(facturaId, { estado: nuevoEstado });
-      fetchFacturas();
+      await fetchFacturas();
+      showSuccess('Estado de la factura actualizado.');
     } catch (estadoError) {
-      console.error('Error al actualizar estado:', estadoError);
+      showError('No se pudo actualizar el estado de la factura.');
     }
   };
 
@@ -312,28 +324,30 @@ function FacturasPage() {
       });
       resetPaymentForm(facturaId);
       setPaymentErrors((prev) => ({ ...prev, [facturaId]: null }));
-      fetchFacturas();
+      await fetchFacturas();
+      showSuccess('Pago registrado correctamente.');
     } catch (paymentError) {
       const message = paymentError.response?.data?.error || 'Error al registrar el pago.';
       setPaymentErrors((prev) => ({
         ...prev,
         [facturaId]: message,
       }));
-      console.error('Error al registrar pago:', paymentError);
+      showError(message);
     }
   };
 
   const handleDeletePayment = async (facturaId, pagoId) => {
     try {
       await facturasService.eliminarPago(facturaId, pagoId);
-      fetchFacturas();
+      await fetchFacturas();
+      showInfo('El pago se eliminó correctamente.');
     } catch (paymentError) {
       const message = paymentError.response?.data?.error || 'Error al eliminar el pago.';
       setPaymentErrors((prev) => ({
         ...prev,
         [facturaId]: message,
       }));
-      console.error('Error al eliminar pago:', paymentError);
+      showError(message);
     }
   };
 
@@ -350,14 +364,15 @@ function FacturasPage() {
         metodo: 'Liquidación',
         nota: 'Liquidación rápida del saldo pendiente',
       });
-      fetchFacturas();
+      await fetchFacturas();
+      showSuccess('Se registró la liquidación completa del saldo pendiente.');
     } catch (paymentError) {
       const message = paymentError.response?.data?.error || 'Error al liquidar la factura.';
       setPaymentErrors((prev) => ({
         ...prev,
         [factura._id]: message,
       }));
-      console.error('Error al liquidar saldo:', paymentError);
+      showError(message);
     }
   };
 

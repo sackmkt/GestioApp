@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import centrosSaludService from '../services/CentrosSaludService';
 import facturasService from '../services/FacturasService';
+import { useFeedback } from '../context/FeedbackContext.jsx';
 
 const EMPTY_FORM = {
   nombre: '',
@@ -12,6 +13,7 @@ const formatCurrency = (value) => {
 };
 
 function CentrosSaludPage() {
+  const { showError, showSuccess, showInfo } = useFeedback();
   const [centros, setCentros] = useState([]);
   const [facturas, setFacturas] = useState([]);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -29,7 +31,7 @@ function CentrosSaludPage() {
       const data = await centrosSaludService.getCentros();
       setCentros(data);
     } catch (err) {
-      console.error('Error al obtener centros de salud:', err);
+      showError('No se pudieron cargar los centros de salud.');
     }
   };
 
@@ -38,7 +40,7 @@ function CentrosSaludPage() {
       const data = await facturasService.getFacturas();
       setFacturas(data);
     } catch (err) {
-      console.error('Error al obtener facturas:', err);
+      showError('No se pudo obtener la facturación vinculada a los centros.');
     }
   };
 
@@ -103,16 +105,19 @@ function CentrosSaludPage() {
 
     try {
       setLoading(true);
-      if (editingId) {
+      const isEditing = Boolean(editingId);
+      if (isEditing) {
         await centrosSaludService.updateCentro(editingId, payload);
       } else {
         await centrosSaludService.createCentro(payload);
       }
       resetForm();
       fetchCentros();
+      showSuccess(isEditing ? 'Centro de salud actualizado correctamente.' : 'Centro de salud creado correctamente.');
     } catch (err) {
       const message = err.response?.data?.error || 'No se pudo guardar el centro de salud.';
       setError(message);
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -137,8 +142,9 @@ function CentrosSaludPage() {
         resetForm();
       }
       fetchCentros();
+      showInfo('El centro de salud se eliminó correctamente.');
     } catch (err) {
-      console.error('Error al eliminar centro de salud:', err);
+      showError('No se pudo eliminar el centro de salud.');
     } finally {
       setLoading(false);
     }

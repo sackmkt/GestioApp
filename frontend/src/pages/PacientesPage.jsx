@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PacientesService from '../services/PacientesService';
 import ObrasSocialesService from '../services/ObrasSocialesService';
 import CentrosSaludService from '../services/CentrosSaludService';
+import { useFeedback } from '../context/FeedbackContext.jsx';
 
 const EMPTY_FORM = {
   nombre: '',
@@ -20,46 +21,52 @@ const ATENCION_LABELS = {
 };
 
 function PacientesPage() {
+  const { showError, showSuccess, showInfo } = useFeedback();
   const [pacientes, setPacientes] = useState([]);
   const [obrasSociales, setObrasSociales] = useState([]);
   const [centrosSalud, setCentrosSalud] = useState([]);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+  const [deleteLoadingId, setDeleteLoadingId] = useState(null);
+
+  const fetchPacientes = useCallback(async () => {
+    try {
+      setListLoading(true);
+      const data = await PacientesService.getPacientes();
+      setPacientes(data);
+    } catch (err) {
+      showError('No se pudieron cargar los pacientes. Intenta nuevamente.');
+    } finally {
+      setListLoading(false);
+    }
+  }, [showError]);
+
+  const fetchObrasSociales = useCallback(async () => {
+    try {
+      const data = await ObrasSocialesService.getObrasSociales();
+      setObrasSociales(data);
+    } catch (err) {
+      showError('No se pudieron cargar las obras sociales.');
+    }
+  }, [showError]);
+
+  const fetchCentrosSalud = useCallback(async () => {
+    try {
+      const data = await CentrosSaludService.getCentros();
+      setCentrosSalud(data);
+    } catch (err) {
+      showError('No se pudieron cargar los centros de salud.');
+    }
+  }, [showError]);
 
   useEffect(() => {
     fetchPacientes();
     fetchObrasSociales();
     fetchCentrosSalud();
-  }, []);
-
-  const fetchPacientes = async () => {
-    try {
-      const data = await PacientesService.getPacientes();
-      setPacientes(data);
-    } catch (err) {
-      console.error('Error al obtener pacientes:', err);
-    }
-  };
-
-  const fetchObrasSociales = async () => {
-    try {
-      const data = await ObrasSocialesService.getObrasSociales();
-      setObrasSociales(data);
-    } catch (err) {
-      console.error('Error al obtener obras sociales:', err);
-    }
-  };
-
-  const fetchCentrosSalud = async () => {
-    try {
-      const data = await CentrosSaludService.getCentros();
-      setCentrosSalud(data);
-    } catch (err) {
-      console.error('Error al obtener centros de salud:', err);
-    }
-  };
+  }, [fetchCentrosSalud, fetchObrasSociales, fetchPacientes]);
 
   const resumenPacientes = useMemo(() => {
     const particulares = pacientes.filter((p) => p.tipoAtencion === 'particular').length;
@@ -129,19 +136,22 @@ function PacientesPage() {
     }
 
     try {
-      setLoading(true);
+      setFormLoading(true);
       if (editingId) {
         await PacientesService.updatePaciente(editingId, payload);
+        showSuccess('Paciente actualizado correctamente.');
       } else {
         await PacientesService.createPaciente(payload);
+        showSuccess('Paciente agregado correctamente.');
       }
       resetForm();
-      fetchPacientes();
+      await fetchPacientes();
     } catch (err) {
-      const message = err.response?.data?.error || 'No se pudo guardar el paciente.';
+      const message = err.response?.data?.message || err.response?.data?.error || 'No se pudo guardar el paciente.';
       setError(message);
+      showError(message);
     } finally {
-      setLoading(false);
+      setFormLoading(false);
     }
   };
 
@@ -150,10 +160,18 @@ function PacientesPage() {
       return;
     }
     try {
+      setDeleteLoadingId(id);
       await PacientesService.deletePaciente(id);
-      fetchPacientes();
+      if (editingId === id) {
+        resetForm();
+      }
+      await fetchPacientes();
+      showInfo('El paciente se eliminó correctamente.');
     } catch (err) {
-      console.error('Error al eliminar paciente:', err);
+      const message = err.response?.data?.message || 'No se pudo eliminar el paciente.';
+      showError(message);
+    } finally {
+      setDeleteLoadingId(null);
     }
   };
 
@@ -211,7 +229,8 @@ function PacientesPage() {
         <div className="card-body">
           {error && <div className="alert alert-danger">{error}</div>}
           <form onSubmit={handleSubmit}>
-            <div className="row g-3">
+            <fieldset disabled={formLoading} className="border-0 p-0">
+              <div className="row g-3">
               <div className="col-md-6 col-lg-3">
                 <input
                   type="text"
@@ -309,17 +328,29 @@ function PacientesPage() {
                   </select>
                 </div>
               )}
-              <div className="col-12 mt-3 d-flex justify-content-end">
-                {editingId && (
-                  <button type="button" className="btn btn-outline-secondary me-2" onClick={handleCancelEdit} disabled={loading}>
-                    Cancelar
+                <div className="col-12 mt-3 d-flex justify-content-end">
+                  {editingId && (
+                    <button type="button" className="btn btn-outline-secondary me-2" onClick={handleCancelEdit}>
+                      Cancelar
+                    </button>
+                  )}
+                  <button type="submit" className="btn btn-primary" disabled={formLoading}>
+                    {formLoading ? (
+                      <>
+                        <span
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                          aria-hidden="true"
+                        ></span>
+                        {editingId ? 'Actualizando...' : 'Guardando...'}
+                      </>
+                    ) : (
+                      <>{editingId ? 'Actualizar paciente' : 'Agregar paciente'}</>
+                    )}
                   </button>
-                )}
-                <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {editingId ? 'Actualizar paciente' : 'Agregar paciente'}
-                </button>
+                </div>
               </div>
-            </div>
+            </fieldset>
           </form>
         </div>
       </div>
@@ -338,8 +369,24 @@ function PacientesPage() {
               </tr>
             </thead>
             <tbody>
-              {pacientes.map((paciente) => (
-                <tr key={paciente._id}>
+              {listLoading ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-4">
+                    <div className="d-inline-flex align-items-center gap-2">
+                      <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                      <span>Cargando pacientes...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : pacientes.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center py-4 text-muted">
+                    No hay pacientes cargados todavía.
+                  </td>
+                </tr>
+              ) : (
+                pacientes.map((paciente) => (
+                  <tr key={paciente._id}>
                   <td>{paciente.nombre} {paciente.apellido}</td>
                   <td>{paciente.dni}</td>
                   <td>
@@ -363,18 +410,32 @@ function PacientesPage() {
                     <button
                       className="btn btn-warning btn-sm me-2"
                       onClick={() => handleEdit(paciente)}
+                      disabled={formLoading || Boolean(deleteLoadingId)}
                     >
                       Editar
                     </button>
                     <button
                       className="btn btn-danger btn-sm"
                       onClick={() => handleDelete(paciente._id)}
+                      disabled={deleteLoadingId === paciente._id || formLoading}
                     >
-                      Eliminar
+                      {deleteLoadingId === paciente._id ? (
+                        <>
+                          <span
+                            className="spinner-border spinner-border-sm me-2"
+                            role="status"
+                            aria-hidden="true"
+                          ></span>
+                          Eliminando...
+                        </>
+                      ) : (
+                        'Eliminar'
+                      )}
                     </button>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -382,11 +443,25 @@ function PacientesPage() {
 
       <div className="d-md-none">
         <div className="row g-3">
-          {pacientes.map((paciente) => (
-            <div className="col-12" key={paciente._id}>
-              <div className="card shadow-sm">
-                <div className="card-body">
-                  <h5 className="card-title">{paciente.nombre} {paciente.apellido}</h5>
+          {listLoading && (
+            <div className="col-12">
+              <div className="d-flex justify-content-center align-items-center py-4">
+                <span className="spinner-border text-primary" role="status" aria-hidden="true"></span>
+                <span className="ms-2">Cargando pacientes...</span>
+              </div>
+            </div>
+          )}
+          {!listLoading && pacientes.length === 0 && (
+            <div className="col-12">
+              <div className="alert alert-light text-center mb-0">Todavía no registraste pacientes.</div>
+            </div>
+          )}
+          {!listLoading &&
+            pacientes.map((paciente) => (
+              <div className="col-12" key={paciente._id}>
+                <div className="card shadow-sm">
+                  <div className="card-body">
+                    <h5 className="card-title">{paciente.nombre} {paciente.apellido}</h5>
                   <p className="card-text mb-1"><strong>DNI:</strong> {paciente.dni}</p>
                   <p className="card-text mb-1">
                     <strong>Contacto:</strong>{' '}
@@ -405,18 +480,37 @@ function PacientesPage() {
                       </span>
                     )}
                   </p>
-                  <div className="d-flex justify-content-end gap-2 mt-3">
-                    <button className="btn btn-warning btn-sm" onClick={() => handleEdit(paciente)}>
-                      Editar
-                    </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(paciente._id)}>
-                      Eliminar
-                    </button>
+                    <div className="d-flex justify-content-end gap-2 mt-3">
+                      <button
+                        className="btn btn-warning btn-sm"
+                        onClick={() => handleEdit(paciente)}
+                        disabled={formLoading || Boolean(deleteLoadingId)}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleDelete(paciente._id)}
+                        disabled={deleteLoadingId === paciente._id || formLoading}
+                      >
+                        {deleteLoadingId === paciente._id ? (
+                          <>
+                            <span
+                              className="spinner-border spinner-border-sm me-2"
+                              role="status"
+                              aria-hidden="true"
+                            ></span>
+                            Eliminando...
+                          </>
+                        ) : (
+                          'Eliminar'
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
       </div>
     </div>
