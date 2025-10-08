@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Turno = require('../models/Turno');
 const Paciente = require('../models/Paciente');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
 const calcularRecordatorio = (fecha, horasAntes) => {
   if (!fecha || horasAntes === undefined || horasAntes === null) {
@@ -35,7 +35,7 @@ const sanitizarRecordatorio = (recordatorioHorasAntes) => {
 };
 
 // Crear un nuevo turno
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const {
       paciente,
@@ -128,7 +128,7 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 // Actualizar un turno
-router.put('/:id', protect, async (req, res) => {
+router.put('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const {
       paciente,
@@ -206,7 +206,7 @@ router.put('/:id', protect, async (req, res) => {
 });
 
 // Actualizar el estado del recordatorio
-router.patch('/:id/recordatorio', protect, async (req, res) => {
+router.patch('/:id/recordatorio', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const { recordatorioEnviado } = req.body;
     const turnoActualizado = await Turno.findOneAndUpdate(
@@ -226,7 +226,7 @@ router.patch('/:id/recordatorio', protect, async (req, res) => {
 });
 
 // Eliminar un turno
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const turnoEliminado = await Turno.findOneAndDelete({
       _id: req.params.id,

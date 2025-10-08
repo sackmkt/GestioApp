@@ -1,30 +1,40 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { ROLES } = require('../models/User');
 
-// Función para generar un JWT
+const DEFAULT_ROLE = 'professional';
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '1h',
   });
 };
 
-const buildUserResponse = (user) => ({
-  _id: user._id,
-  username: user.username,
-  email: user.email,
-  firstName: user.firstName || '',
-  lastName: user.lastName || '',
-  profession: user.profession || '',
-  country: user.country || '',
-  province: user.province || '',
-  city: user.city || '',
-  profileCompleted: user.profileCompleted || false,
-  token: generateToken(user._id),
-});
+const buildUserResponse = (user, includeToken = true) => {
+  const base = {
+    _id: user._id,
+    username: user.username,
+    email: user.email,
+    firstName: user.firstName || '',
+    lastName: user.lastName || '',
+    profession: user.profession || '',
+    country: user.country || '',
+    province: user.province || '',
+    city: user.city || '',
+    profileCompleted: user.profileCompleted || false,
+    role: user.role || DEFAULT_ROLE,
+  };
 
-// @desc    Registrar un nuevo usuario
-// @route   POST /api/users/register
-// @access  Public
+  if (!includeToken) {
+    return base;
+  }
+
+  return {
+    ...base,
+    token: generateToken(user._id),
+  };
+};
+
 exports.registerUser = async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -46,7 +56,14 @@ exports.registerUser = async (req, res) => {
       return res.status(400).json({ message: 'El correo electrónico ya está registrado' });
     }
 
-    const user = await User.create({ username: normalizedUsername, email: normalizedEmail, password });
+    const roleFromRequest = req.body.role && ROLES.includes(req.body.role) ? req.body.role : DEFAULT_ROLE;
+
+    const user = await User.create({
+      username: normalizedUsername,
+      email: normalizedEmail,
+      password,
+      role: roleFromRequest,
+    });
 
     const createdUser = await User.findById(user._id).select('-password');
     res.status(201).json(buildUserResponse(createdUser));
@@ -55,9 +72,6 @@ exports.registerUser = async (req, res) => {
   }
 };
 
-// @desc    Autenticar un usuario y obtener token
-// @route   POST /api/users/login
-// @access  Public
 exports.loginUser = async (req, res) => {
   const { username, password } = req.body;
 
@@ -75,35 +89,18 @@ exports.loginUser = async (req, res) => {
   }
 };
 
-// @desc    Obtener perfil del usuario autenticado
-// @route   GET /api/users/me
-// @access  Private
 exports.getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('-password');
     if (!user) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
-    res.json({
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      firstName: user.firstName || '',
-      lastName: user.lastName || '',
-      profession: user.profession || '',
-      country: user.country || '',
-      province: user.province || '',
-      city: user.city || '',
-      profileCompleted: user.profileCompleted || false,
-    });
+    res.json(buildUserResponse(user, false));
   } catch (error) {
     res.status(500).json({ message: 'Error del servidor' });
   }
 };
 
-// @desc    Actualizar el perfil del usuario autenticado
-// @route   PUT /api/users/me
-// @access  Private
 exports.updateProfile = async (req, res) => {
   const { username, email, firstName, lastName, profession, country, province, city } = req.body;
 

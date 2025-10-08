@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Paciente = require('../models/Paciente');
 const CentroSalud = require('../models/CentroSalud');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authorizeRoles } = require('../middleware/authMiddleware');
 
 const normalizePacientePayload = async (payload, userId) => {
   const normalized = { ...payload };
@@ -34,8 +34,7 @@ const normalizePacientePayload = async (payload, userId) => {
   return normalized;
 };
 
-// Crea un nuevo paciente
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const payload = await normalizePacientePayload(req.body, req.user._id);
 
@@ -57,7 +56,6 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
-// Obtiene todos los pacientes del usuario autenticado
 router.get('/', protect, async (req, res) => {
   try {
     const pacientes = await Paciente.find({ user: req.user._id })
@@ -69,7 +67,6 @@ router.get('/', protect, async (req, res) => {
   }
 });
 
-// Obtener un paciente por ID (del usuario autenticado)
 router.get('/:id', protect, async (req, res) => {
   try {
     const paciente = await Paciente.findOne({ _id: req.params.id, user: req.user._id })
@@ -82,8 +79,7 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-// Actualiza un paciente por ID (del usuario autenticado)
-router.put('/:id', protect, async (req, res) => {
+router.put('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const payload = await normalizePacientePayload(req.body, req.user._id);
 
@@ -105,8 +101,7 @@ router.put('/:id', protect, async (req, res) => {
   }
 });
 
-// Elimina un paciente por ID (del usuario autenticado)
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
   try {
     const pacienteEliminado = await Paciente.findOneAndDelete({ _id: req.params.id, user: req.user._id });
     if (!pacienteEliminado) return res.status(404).json({ error: 'Paciente no encontrado o no autorizado' });

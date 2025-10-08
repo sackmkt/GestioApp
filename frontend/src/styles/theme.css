@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --gestio-primary: #1e3a8a;
+  --gestio-primary-soft: #3b82f6;
+  --gestio-dark: #0f172a;
+  --gestio-muted: #64748b;
+  --gestio-surface: #ffffff;
+  --gestio-surface-alt: rgba(255, 255, 255, 0.85);
+  --gestio-border: rgba(15, 23, 42, 0.08);
+  --gestio-gradient: linear-gradient(135deg, #e0f2fe, #ede9fe 45%, #fce7f3);
+}
+
+html, body {
+  min-height: 100%;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--gestio-gradient);
+  color: var(--gestio-dark);
+}
+
+.navbar.gestio-navbar {
+  background: var(--gestio-surface-alt);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--gestio-border);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.gestio-navbar .nav-link {
+  color: var(--gestio-muted);
+  font-weight: 500;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.gestio-navbar .nav-link.active,
+.gestio-navbar .nav-link:hover,
+.gestio-navbar .nav-link:focus {
+  color: var(--gestio-primary);
+  transform: translateY(-1px);
+}
+
+.gestio-navbar .navbar-brand {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gestio-dark);
+}
+
+.gestio-navbar .navbar-toggler {
+  border-color: transparent;
+}
+
+.gestio-navbar .navbar-toggler:focus {
+  box-shadow: none;
+}
+
+.gestio-navbar .navbar-toggler-icon {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(15,23,42,0.8)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+.gestio-main {
+  background: transparent;
+}
+
+.gestio-main .gestio-content {
+  background: var(--gestio-surface-alt);
+  border-radius: 24px;
+  padding: 2.5rem;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.gestio-pill {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--gestio-primary);
+  border-radius: 999px;
+  font-weight: 600;
+  padding: 0.4rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+footer.gestio-footer {
+  background: transparent;
+  color: var(--gestio-muted);
+  border-top: 1px solid var(--gestio-border);
+  backdrop-filter: blur(10px);
+}
+
+footer.gestio-footer a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.card.gestio-card {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px -16px rgba(15, 23, 42, 0.2);
+}
+
+.card-header.gestio-card-header {
+  background: rgba(30, 58, 138, 0.08);
+  color: var(--gestio-primary);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  font-weight: 600;
+}
+
+.card {
+  border-radius: 18px;
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: 0 18px 35px -22px rgba(15, 23, 42, 0.35);
+  background-color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.card .card-header:not(.bg-dark) {
+  background: rgba(30, 64, 175, 0.08);
+  color: var(--gestio-dark);
+}
+
+.card .card-header.bg-dark {
+  background-color: var(--gestio-dark) !important;
+  color: #f8fafc;
+}
+
+.badge.gestio-role {
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--gestio-dark);
+  font-weight: 600;
+}
+
+@media (max-width: 992px) {
+  .gestio-main .gestio-content {
+    padding: 1.75rem;
+    border-radius: 18px;
+  }
+}

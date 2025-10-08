@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import PacientesPage from './pages/PacientesPage';
 import ObrasSocialesPage from './pages/ObrasSocialesPage';
 import FacturasPage from './pages/FacturasPage';
@@ -13,10 +13,18 @@ import ProfilePage from './pages/ProfilePage';
 import GestioLogo from './assets/GestioLogo.png';
 import authService from './services/authService';
 import { useFeedback } from './context/FeedbackContext.jsx';
-import { useNavigate } from 'react-router-dom';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'v1.0.0';
-const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutos
+const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
+
+const NAVIGATION_ITEMS = [
+  { to: '/dashboard', label: 'Resumen' },
+  { to: '/pacientes', label: 'Pacientes' },
+  { to: '/centros-salud', label: 'Centros de Salud' },
+  { to: '/turnos', label: 'Agenda' },
+  { to: '/obras-sociales', label: 'Obras Sociales' },
+  { to: '/facturas', label: 'Facturación' },
+];
 
 function App() {
   const navigate = useNavigate();
@@ -62,6 +70,17 @@ function App() {
   );
 
   const isAuthenticated = Boolean(currentUser?.token);
+  const userRole = currentUser?.role || 'professional';
+  const userDisplayName = useMemo(() => {
+    if (!currentUser) {
+      return 'Profesional';
+    }
+    const firstName = currentUser.firstName?.split(' ')[0];
+    if (firstName) {
+      return firstName;
+    }
+    return currentUser.username;
+  }, [currentUser]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -99,24 +118,18 @@ function App() {
     }
   }, [isAuthenticated]);
 
-  const NavContent = () => {
-    const onLogoutClick = () => {
-      setIsMenuOpen(false);
-      handleLogout();
-    };
+  const navLinkClassName = ({ isActive }) => `nav-link ${isActive ? 'active' : ''}`;
 
-    const closeMenu = () => {
-      setIsMenuOpen(false);
-    };
+  const NavContent = () => {
+    const closeMenu = () => setIsMenuOpen(false);
 
     return (
-      <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
+      <nav className="navbar navbar-expand-lg gestio-navbar sticky-top py-3">
         <div className="container">
-          <NavLink className="navbar-brand d-flex align-items-center" to="/" onClick={closeMenu}>
-            <img src={GestioLogo} alt="Gestio Logo" style={{ height: '40px', marginRight: '10px' }} />
-            <span style={{ fontFamily: 'Barlow, sans-serif' }}>GESTIO</span>
+          <NavLink className="navbar-brand d-flex align-items-center" to={isAuthenticated ? '/dashboard' : '/'} onClick={closeMenu}>
+            <img src={GestioLogo} alt="Gestio Logo" style={{ height: '40px', marginRight: '12px' }} />
+            <span>GESTIO</span>
           </NavLink>
-
           <button
             className="navbar-toggler"
             type="button"
@@ -127,69 +140,44 @@ function App() {
           >
             <span className="navbar-toggler-icon"></span>
           </button>
-
           <div className={`collapse navbar-collapse ${isMenuOpen ? 'show' : ''}`} id="navbarNav">
-            <ul className="navbar-nav me-auto">
+            <ul className="navbar-nav me-auto align-items-lg-center">
               {isAuthenticated && (
-                <>
-                  <li className="nav-item">
-                    <NavLink className="nav-link" to="/pacientes" onClick={closeMenu}>
-                      Pacientes
+                NAVIGATION_ITEMS.map((item) => (
+                  <li className="nav-item" key={item.to}>
+                    <NavLink className={navLinkClassName} to={item.to} onClick={closeMenu}>
+                      {item.label}
                     </NavLink>
                   </li>
-                  <li className="nav-item">
-                    <NavLink className="nav-link" to="/centros-salud" onClick={closeMenu}>
-                      Centros de Salud
-                    </NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className="nav-link" to="/turnos" onClick={closeMenu}>
-                      Agenda
-                    </NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className="nav-link" to="/obras-sociales" onClick={closeMenu}>
-                      Obras Sociales
-                    </NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className="nav-link" to="/facturas" onClick={closeMenu}>
-                      Facturación
-                    </NavLink>
-                  </li>
-                </>
+                ))
               )}
             </ul>
-            <ul className="navbar-nav ms-auto align-items-lg-center">
+            <ul className="navbar-nav ms-auto align-items-lg-center gap-lg-3">
               {isAuthenticated ? (
                 <>
-                  {currentUser && (
-                    <li className="nav-item me-lg-3">
-                      <span className="navbar-text text-white-50">
-                        Hola, {currentUser.firstName ? currentUser.firstName.split(' ')[0] : currentUser.username}
-                      </span>
-                    </li>
-                  )}
+                  <li className="nav-item d-lg-flex align-items-center">
+                    <span className="gestio-pill">Rol: {userRole}</span>
+                  </li>
                   <li className="nav-item">
-                    <NavLink className="nav-link" to="/profile" onClick={closeMenu}>
+                    <NavLink className={navLinkClassName} to="/profile" onClick={closeMenu}>
                       Perfil
                     </NavLink>
                   </li>
-                  <li className="nav-item ms-lg-3 mt-2 mt-lg-0">
-                    <button onClick={onLogoutClick} className="btn btn-outline-light w-100">
-                      Cerrar Sesión
+                  <li className="nav-item mt-3 mt-lg-0">
+                    <button onClick={() => { closeMenu(); handleLogout(); }} className="btn btn-primary px-4">
+                      Cerrar sesión
                     </button>
                   </li>
                 </>
               ) : (
                 <>
                   <li className="nav-item">
-                    <NavLink className="nav-link" to="/login" onClick={closeMenu}>
-                      Iniciar Sesión
+                    <NavLink className={navLinkClassName} to="/login" onClick={closeMenu}>
+                      Iniciar sesión
                     </NavLink>
                   </li>
                   <li className="nav-item">
-                    <NavLink className="nav-link" to="/register" onClick={closeMenu}>
+                    <NavLink className={navLinkClassName} to="/register" onClick={closeMenu}>
                       Registrarse
                     </NavLink>
                   </li>
@@ -205,52 +193,69 @@ function App() {
   return (
     <div className="d-flex flex-column min-vh-100">
       <NavContent />
-      <main className="flex-grow-1">
-        <div className="container mt-4">
-          <Routes>
-            {!isAuthenticated && (
-              <>
-                <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />
-                <Route path="/register" element={<RegisterPage onAuthChange={handleAuthChange} />} />
-                <Route path="*" element={<LoginPage onAuthChange={handleAuthChange} />} />
-              </>
-            )}
+      <main className="flex-grow-1 gestio-main py-5">
+        <div className="container">
+          {isAuthenticated && (
+            <header className="mb-4 text-center text-lg-start">
+              <p className="text-uppercase text-muted fw-semibold mb-1">Hola, {userDisplayName}</p>
+              <h1 className="display-6 fw-semibold mb-3" style={{ color: '#0f172a' }}>
+                Gestión clínica sin fricciones
+              </h1>
+              <p className="text-muted mb-0 col-lg-6 p-0">
+                Visualiza tus pacientes, agenda y facturación desde un mismo panel. Actualizamos el diseño para que sea más simple
+                y profesional.
+              </p>
+            </header>
+          )}
+          <div className="gestio-content">
+            <Routes>
+              {!isAuthenticated && (
+                <>
+                  <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />
+                  <Route path="/register" element={<RegisterPage onAuthChange={handleAuthChange} />} />
+                  <Route path="*" element={<LoginPage onAuthChange={handleAuthChange} />} />
+                </>
+              )}
 
-            {isAuthenticated && !currentUser.profileCompleted && (
-              <>
-                <Route
-                  path="/complete-profile"
-                  element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
-                />
-                <Route
-                  path="*"
-                  element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
-                />
-              </>
-            )}
+              {isAuthenticated && !currentUser.profileCompleted && (
+                <>
+                  <Route
+                    path="/complete-profile"
+                    element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+                  />
+                  <Route
+                    path="*"
+                    element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+                  />
+                </>
+              )}
 
-            {isAuthenticated && currentUser.profileCompleted && (
-              <>
-                <Route
-                  path="/complete-profile"
-                  element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
-                />
-                <Route path="/profile" element={<ProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />} />
-                <Route path="/pacientes" element={<PacientesPage />} />
-                <Route path="/obras-sociales" element={<ObrasSocialesPage />} />
-                <Route path="/turnos" element={<TurnosPage />} />
-                <Route path="/centros-salud" element={<CentrosSaludPage />} />
-                <Route path="/facturas" element={<FacturasPage />} />
-                <Route path="/dashboard" element={<DashboardPage currentUser={currentUser} />} />
-                <Route path="/" element={<DashboardPage currentUser={currentUser} />} />
-                <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
-              </>
-            )}
-          </Routes>
+              {isAuthenticated && currentUser.profileCompleted && (
+                <>
+                  <Route
+                    path="/complete-profile"
+                    element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+                  />
+                  <Route
+                    path="/profile"
+                    element={<ProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+                  />
+                  <Route path="/pacientes" element={<PacientesPage />} />
+                  <Route path="/obras-sociales" element={<ObrasSocialesPage />} />
+                  <Route path="/turnos" element={<TurnosPage />} />
+                  <Route path="/centros-salud" element={<CentrosSaludPage />} />
+                  <Route path="/facturas" element={<FacturasPage />} />
+                  <Route path="/dashboard" element={<DashboardPage currentUser={currentUser} />} />
+                  <Route path="/" element={<DashboardPage currentUser={currentUser} />} />
+                  <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
+                </>
+              )}
+            </Routes>
+          </div>
         </div>
       </main>
-      <footer className="bg-dark text-white py-3 mt-auto">
-        <div className="container d-flex flex-column flex-md-row align-items-center justify-content-between">
+      <footer className="gestio-footer py-4 mt-auto">
+        <div className="container d-flex flex-column flex-md-row align-items-center justify-content-between gap-2">
           <span>© {new Date().getFullYear()} Gestio. Todos los derechos reservados.</span>
           <span>Versión {APP_VERSION}</span>
         </div>
