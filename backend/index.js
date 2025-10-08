@@ -4,10 +4,12 @@ const mongoose = require('mongoose');
 const cors = require('cors'); // ✅ Ya tienes esta línea
 const dotenv = require('dotenv');
 
-const pacientesRoutes = require('./Routes/pacientes');
-const obrasSocialesRoutes = require('./Routes/obrasSociales');
-const facturasRoutes = require('./Routes/facturas');
-const userRoutes = require('./Routes/userRoutes');
+const pacientesRoutes = require('./Rutas/pacientes');
+const obrasSocialesRoutes = require('./Rutas/obrasSociales');
+const facturasRoutes = require('./Rutas/facturas');
+const turnosRoutes = require('./Rutas/turnos');
+const centrosSaludRoutes = require('./Rutas/centrosSalud');
+const userRoutes = require('./Rutas/userRoutes');
 
 // Cargamos las variables de entorno desde el archivo .env
 dotenv.config();
@@ -38,6 +40,8 @@ mongoose.connect(MONGO_URI)
 app.use('/api/pacientes', pacientesRoutes);
 app.use('/api/obras-sociales', obrasSocialesRoutes);
 app.use('/api/facturas', facturasRoutes);
+app.use('/api/turnos', turnosRoutes);
+app.use('/api/centros-salud', centrosSaludRoutes);
 app.use('/api/users', userRoutes);
 
 // Es un endpoint. Para las peticiones al servidor, las realice. 

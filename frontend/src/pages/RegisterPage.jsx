@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import authService from '../services/authService';
 
-function RegisterPage({ setIsAuthenticated }) {
+function RegisterPage({ onAuthChange }) {
   const [formData, setFormData] = useState({
     username: '',
+    email: '',
     password: '',
-    confirmPassword: '', // Agregado para la confirmación
+    confirmPassword: '',
   });
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -43,14 +45,24 @@ function RegisterPage({ setIsAuthenticated }) {
       return;
     }
     
+    setIsSubmitting(true);
+
     try {
-      // El backend que creamos usa 'username' y 'password'
-      await authService.register({ username: formData.username, password: formData.password }); 
-      setIsAuthenticated(true);
-      navigate('/dashboard');
+      const user = await authService.register({
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+      if (onAuthChange) {
+        onAuthChange(user);
+      }
+      navigate('/complete-profile');
     } catch (error) {
-      setError('El nombre de usuario ya existe o hubo un error.');
+      const message = error.response?.data?.message || 'Hubo un error al registrar la cuenta.';
+      setError(message);
       console.error('Registration error:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -71,6 +83,17 @@ function RegisterPage({ setIsAuthenticated }) {
                     type="text"
                     name="username"
                     value={formData.username}
+                    onChange={handleChange}
+                    className="form-control"
+                    required
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Correo Electrónico</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
                     onChange={handleChange}
                     className="form-control"
                     required
@@ -99,8 +122,8 @@ function RegisterPage({ setIsAuthenticated }) {
                     required
                   />
                 </div>
-                <button type="submit" className="btn btn-info text-white w-100">
-                  Registrarse
+                <button type="submit" className="btn btn-info text-white w-100" disabled={isSubmitting}>
+                  {isSubmitting ? 'Creando cuenta...' : 'Registrarse'}
                 </button>
               </form>
               <p className="mt-3 text-center">
