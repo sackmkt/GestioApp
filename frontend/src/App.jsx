@@ -5,6 +5,7 @@ import ObrasSocialesPage from './pages/ObrasSocialesPage';
 import FacturasPage from './pages/FacturasPage';
 import DashboardPage from './pages/DashboardPage';
 import TurnosPage from './pages/TurnosPage';
+import CentrosSaludPage from './pages/CentrosSaludPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import CompleteProfilePage from './pages/CompleteProfilePage';
@@ -84,6 +85,9 @@ function App() {
                 <>
                   <li className="nav-item">
                     <NavLink className="nav-link" to="/pacientes" onClick={closeMenu}>Pacientes</NavLink>
+                  </li>
+                  <li className="nav-item">
+                    <NavLink className="nav-link" to="/centros-salud" onClick={closeMenu}>Centros de Salud</NavLink>
                   </li>
                   <li className="nav-item">
                     <NavLink className="nav-link" to="/turnos" onClick={closeMenu}>Agenda</NavLink>
@@ -175,6 +179,7 @@ function App() {
               <Route path="/pacientes" element={<PacientesPage />} />
               <Route path="/obras-sociales" element={<ObrasSocialesPage />} />
               <Route path="/turnos" element={<TurnosPage />} />
+              <Route path="/centros-salud" element={<CentrosSaludPage />} />
               <Route path="/facturas" element={<FacturasPage />} />
               <Route path="/dashboard" element={<DashboardPage currentUser={currentUser} />} />
               <Route path="/" element={<DashboardPage currentUser={currentUser} />} />

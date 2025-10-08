@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Factura = require('../models/Factura');
+const Paciente = require('../models/Paciente');
+const CentroSalud = require('../models/CentroSalud');
 const { protect } = require('../middleware/authMiddleware');
 
 const buildFacturaResponse = (facturaDoc) => {
@@ -21,6 +23,22 @@ const buildFacturaResponse = (facturaDoc) => {
     estado,
     pagado: estado === 'pagada',
   };
+};
+
+const populateFactura = async (factura) => {
+  if (!factura || typeof factura.populate !== 'function') {
+    return factura;
+  }
+
+  await factura.populate({
+    path: 'paciente',
+    select: 'nombre apellido dni tipoAtencion centroSalud',
+    populate: { path: 'centroSalud', select: 'nombre porcentajeRetencion' },
+  });
+  await factura.populate('obraSocial', 'nombre');
+  await factura.populate('centroSalud', 'nombre porcentajeRetencion');
+
+  return factura;
 };
 
 const syncEstadoDesdePagos = (factura) => {
@@ -44,13 +62,48 @@ const syncEstadoDesdePagos = (factura) => {
   }
 };
 
-const allowedUpdateFields = ['paciente', 'obraSocial', 'numeroFactura', 'montoTotal', 'fechaEmision', 'fechaVencimiento', 'interes', 'observaciones'];
+const allowedUpdateFields = ['paciente', 'obraSocial', 'numeroFactura', 'montoTotal', 'fechaEmision', 'fechaVencimiento', 'interes', 'observaciones', 'centroSalud'];
+
+const resolveCentroSaludId = async ({ centroSaludId, pacienteId, userId }) => {
+  if (centroSaludId === null || centroSaludId === '') {
+    return null;
+  }
+
+  if (centroSaludId !== undefined) {
+    if (!centroSaludId) {
+      return null;
+    }
+    const centro = await CentroSalud.findOne({ _id: centroSaludId, user: userId });
+    if (!centro) {
+      throw new Error('Centro de salud no válido para este profesional.');
+    }
+    return centro._id;
+  }
+
+  if (!pacienteId) {
+    return null;
+  }
+
+  const paciente = await Paciente.findOne({ _id: pacienteId, user: userId }).populate('centroSalud');
+  if (paciente && paciente.tipoAtencion === 'centro' && paciente.centroSalud) {
+    return paciente.centroSalud._id || paciente.centroSalud;
+  }
+
+  return null;
+};
 
 // Crea una nueva factura para el usuario autenticado
 router.post('/', protect, async (req, res) => {
   try {
+    const centroSaludId = await resolveCentroSaludId({
+      centroSaludId: req.body.centroSalud,
+      pacienteId: req.body.paciente,
+      userId: req.user._id,
+    });
+
     const nuevaFactura = new Factura({
       ...req.body,
+      centroSalud: centroSaludId || null,
       user: req.user._id,
     });
 
@@ -60,8 +113,7 @@ router.post('/', protect, async (req, res) => {
 
     syncEstadoDesdePagos(nuevaFactura);
     const facturaGuardada = await nuevaFactura.save();
-    await facturaGuardada.populate('paciente', 'nombre apellido dni');
-    await facturaGuardada.populate('obraSocial', 'nombre');
+    await populateFactura(facturaGuardada);
     res.status(201).json(buildFacturaResponse(facturaGuardada));
   } catch (error) {
     if (error.code === 11000) {
@@ -75,8 +127,13 @@ router.post('/', protect, async (req, res) => {
 router.get('/', protect, async (req, res) => {
   try {
     const facturas = await Factura.find({ user: req.user._id })
-      .populate('paciente', 'nombre apellido dni')
-      .populate('obraSocial', 'nombre');
+      .populate({
+        path: 'paciente',
+        select: 'nombre apellido dni tipoAtencion centroSalud',
+        populate: { path: 'centroSalud', select: 'nombre porcentajeRetencion' },
+      })
+      .populate('obraSocial', 'nombre')
+      .populate('centroSalud', 'nombre porcentajeRetencion');
 
     const payload = facturas.map((factura) => buildFacturaResponse(factura));
     res.json(payload);
@@ -94,10 +151,24 @@ router.put('/:id', protect, async (req, res) => {
     }
 
     allowedUpdateFields.forEach((field) => {
-      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field) && field !== 'centroSalud') {
         factura[field] = req.body[field];
       }
     });
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'centroSalud')) {
+      factura.centroSalud = await resolveCentroSaludId({
+        centroSaludId: req.body.centroSalud,
+        pacienteId: factura.paciente,
+        userId: req.user._id,
+      });
+    } else if (Object.prototype.hasOwnProperty.call(req.body, 'paciente')) {
+      factura.centroSalud = await resolveCentroSaludId({
+        centroSaludId: undefined,
+        pacienteId: factura.paciente,
+        userId: req.user._id,
+      });
+    }
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'estado')) {
       if (!Factura.ESTADOS_FACTURA.includes(req.body.estado)) {
@@ -118,8 +189,7 @@ router.put('/:id', protect, async (req, res) => {
     }
 
     await factura.save();
-    await factura.populate('paciente', 'nombre apellido dni');
-    await factura.populate('obraSocial', 'nombre');
+    await populateFactura(factura);
     res.json(buildFacturaResponse(factura));
   } catch (error) {
     if (error.code === 11000) {
@@ -159,8 +229,7 @@ router.post('/:id/pagos', protect, async (req, res) => {
 
     syncEstadoDesdePagos(factura);
     await factura.save();
-    await factura.populate('paciente', 'nombre apellido dni');
-    await factura.populate('obraSocial', 'nombre');
+    await populateFactura(factura);
     res.status(201).json(buildFacturaResponse(factura));
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -184,8 +253,7 @@ router.delete('/:id/pagos/:pagoId', protect, async (req, res) => {
 
     syncEstadoDesdePagos(factura);
     await factura.save();
-    await factura.populate('paciente', 'nombre apellido dni');
-    await factura.populate('obraSocial', 'nombre');
+    await populateFactura(factura);
     res.json(buildFacturaResponse(factura));
   } catch (error) {
     res.status(500).json({ error: error.message });

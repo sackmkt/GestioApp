@@ -9,6 +9,7 @@ const obrasSocialesRoutes = require('./Routes/obrasSociales');
 const facturasRoutes = require('./Routes/facturas');
 const turnosRoutes = require('./Routes/turnos');
 const userRoutes = require('./Routes/userRoutes');
+const centrosSaludRoutes = require('./Routes/centrosSalud');
 
 // Cargamos las variables de entorno desde el archivo .env
 dotenv.config();
@@ -38,6 +39,7 @@ mongoose.connect(MONGO_URI)
 // Usamos las rutas para cada modelo
 app.use('/api/pacientes', pacientesRoutes);
 app.use('/api/obras-sociales', obrasSocialesRoutes);
+app.use('/api/centros-salud', centrosSaludRoutes);
 app.use('/api/facturas', facturasRoutes);
 app.use('/api/turnos', turnosRoutes);
 app.use('/api/users', userRoutes);
