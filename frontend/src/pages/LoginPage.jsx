@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import authService from '../services/authService';
 
-function LoginPage({ setIsAuthenticated }) {
+function LoginPage({ onAuthChange }) {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
   });
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -16,13 +17,23 @@ function LoginPage({ setIsAuthenticated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
+
     try {
-      await authService.login(formData);
-      setIsAuthenticated(true);
-      navigate('/dashboard');
+      const user = await authService.login({
+        username: formData.username.trim(),
+        password: formData.password,
+      });
+      if (onAuthChange) {
+        onAuthChange(user);
+      }
+      navigate(user.profileCompleted ? '/dashboard' : '/complete-profile');
     } catch (error) {
-      setError('Credenciales inválidas. Inténtalo de nuevo.');
+      const message = error.response?.data?.message || 'Credenciales inválidas. Inténtalo de nuevo.';
+      setError(message);
       console.error('Login error:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -59,8 +70,8 @@ function LoginPage({ setIsAuthenticated }) {
                     required
                   />
                 </div>
-                <button type="submit" className="btn btn-primary w-100">
-                  Acceder
+                <button type="submit" className="btn btn-primary w-100" disabled={isSubmitting}>
+                  {isSubmitting ? 'Ingresando...' : 'Acceder'}
                 </button>
               </form>
               <p className="mt-3 text-center">
