@@ -8,9 +8,50 @@ const userSchema = new mongoose.Schema({
     unique: true,
     trim: true,
   },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+  },
   password: {
     type: String,
     required: true,
+  },
+  firstName: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  lastName: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  profession: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  country: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  province: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  city: {
+    type: String,
+    default: '',
+    trim: true,
+  },
+  profileCompleted: {
+    type: Boolean,
+    default: false,
   },
 }, {
   timestamps: true,

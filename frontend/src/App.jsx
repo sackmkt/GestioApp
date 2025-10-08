@@ -7,29 +7,46 @@ import DashboardPage from './pages/DashboardPage';
 import TurnosPage from './pages/TurnosPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import CompleteProfilePage from './pages/CompleteProfilePage';
+import ProfilePage from './pages/ProfilePage';
 import GestioLogo from './assets/GestioLogo.png';
 import authService from './services/authService';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(() => {
+    const storedUser = localStorage.getItem('user');
+    return storedUser ? JSON.parse(storedUser) : null;
+  });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
-    // Revisa si hay un usuario en localStorage al cargar la app
-    const user = localStorage.getItem('user');
-    if (user) {
-      setIsAuthenticated(true);
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setCurrentUser(JSON.parse(storedUser));
     }
   }, []);
 
+  const isAuthenticated = Boolean(currentUser?.token);
+
+  const handleAuthChange = (userData) => {
+    if (userData) {
+      localStorage.setItem('user', JSON.stringify(userData));
+      setCurrentUser(userData);
+    } else {
+      localStorage.removeItem('user');
+      setCurrentUser(null);
+    }
+  };
+
   const handleLogout = () => {
     authService.logout();
-    setIsAuthenticated(false);
+    handleAuthChange(null);
   };
 
   const NavContent = () => {
     const navigate = useNavigate();
     const onLogout = () => {
+      setIsMenuOpen(false);
       handleLogout();
       navigate('/login');
     };
@@ -83,13 +100,25 @@ function App() {
                 </>
               )}
             </ul>
-            <ul className="navbar-nav ms-auto">
+            <ul className="navbar-nav ms-auto align-items-lg-center">
               {isAuthenticated ? (
-                <li className="nav-item">
-                  <button onClick={onLogout} className="btn btn-outline-light">
-                    Cerrar Sesión
-                  </button>
-                </li>
+                <>
+                  {currentUser && (
+                    <li className="nav-item me-lg-3">
+                      <span className="navbar-text text-white-50">
+                        Hola, {currentUser.firstName ? currentUser.firstName.split(' ')[0] : currentUser.username}
+                      </span>
+                    </li>
+                  )}
+                  <li className="nav-item">
+                    <NavLink className="nav-link" to="/profile" onClick={closeMenu}>Perfil</NavLink>
+                  </li>
+                  <li className="nav-item ms-lg-3 mt-2 mt-lg-0">
+                    <button onClick={onLogout} className="btn btn-outline-light w-100">
+                      Cerrar Sesión
+                    </button>
+                  </li>
+                </>
               ) : (
                 <>
                   <li className="nav-item">
@@ -112,20 +141,45 @@ function App() {
       <NavContent />
       <div className="container mt-4">
         <Routes>
-          <Route path="/login" element={<LoginPage setIsAuthenticated={setIsAuthenticated} />} />
-          <Route path="/register" element={<RegisterPage setIsAuthenticated={setIsAuthenticated} />} />
-          
-          {isAuthenticated ? (
+          {!isAuthenticated && (
             <>
+              <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />
+              <Route path="/register" element={<RegisterPage onAuthChange={handleAuthChange} />} />
+              <Route path="*" element={<LoginPage onAuthChange={handleAuthChange} />} />
+            </>
+          )}
+
+          {isAuthenticated && !currentUser.profileCompleted && (
+            <>
+              <Route
+                path="/complete-profile"
+                element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+              />
+              <Route
+                path="*"
+                element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+              />
+            </>
+          )}
+
+          {isAuthenticated && currentUser.profileCompleted && (
+            <>
+              <Route
+                path="/complete-profile"
+                element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+              />
+              <Route
+                path="/profile"
+                element={<ProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+              />
               <Route path="/pacientes" element={<PacientesPage />} />
               <Route path="/obras-sociales" element={<ObrasSocialesPage />} />
               <Route path="/turnos" element={<TurnosPage />} />
               <Route path="/facturas" element={<FacturasPage />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/" element={<DashboardPage />} />
+              <Route path="/dashboard" element={<DashboardPage currentUser={currentUser} />} />
+              <Route path="/" element={<DashboardPage currentUser={currentUser} />} />
+              <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
             </>
-          ) : (
-            <Route path="*" element={<LoginPage setIsAuthenticated={setIsAuthenticated} />} />
           )}
         </Routes>
       </div>

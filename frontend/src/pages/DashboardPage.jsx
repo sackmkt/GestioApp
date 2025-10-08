@@ -8,7 +8,7 @@ import { FaMoneyBillWave, FaCheckCircle, FaTimesCircle, FaUsers, FaMedkit, FaCha
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
-function DashboardPage() {
+function DashboardPage({ currentUser }) {
   const [allFacturas, setAllFacturas] = useState([]);
   const [data, setData] = useState({
     totalFacturacion: 0,
@@ -41,6 +41,14 @@ function DashboardPage() {
       maximumFractionDigits: 0,
     }).format(number);
   };
+
+  const userDisplayName = (() => {
+    if (!currentUser) {
+      return 'Profesional';
+    }
+    const fullName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ').trim();
+    return fullName || currentUser.username || 'Profesional';
+  })();
   
   // Función de callback para procesar los datos
   const processAndSetData = useCallback((facturasToProcess) => {
@@ -269,7 +277,11 @@ function DashboardPage() {
 
   return (
     <div className="container mt-4">
-      <h2 className="mb-4 text-center">Dashboard Financiero</h2>
+      <div className="mb-4 text-center text-md-start">
+        <h2 className="fw-bold">¡Hola, {userDisplayName}! 👋</h2>
+        <p className="text-muted mb-0">Bienvenido/a a tu panel principal.</p>
+      </div>
+      <h3 className="mb-4 text-center">Dashboard Financiero</h3>
       
       {/* Sección del selector de fechas */}
       <div className="card shadow-sm mb-4">
