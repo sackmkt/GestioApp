@@ -4,6 +4,7 @@ const obraSocialSchema = new mongoose.Schema({
   nombre: { type: String, required: true },
   telefono: { type: String },
   email: { type: String },
+  cuit: { type: String, trim: true },
   user: { // Nuevo campo
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
