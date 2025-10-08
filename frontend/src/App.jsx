@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import PacientesPage from './pages/PacientesPage';
 import ObrasSocialesPage from './pages/ObrasSocialesPage';
@@ -13,12 +13,16 @@ import ProfilePage from './pages/ProfilePage';
 import GestioLogo from './assets/GestioLogo.png';
 import authService from './services/authService';
 
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'v1.0.0';
+const INACTIVITY_TIMEOUT = 20 * 60 * 1000; // 20 minutos
+
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     const storedUser = localStorage.getItem('user');
     return storedUser ? JSON.parse(storedUser) : null;
   });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const inactivityTimerRef = useRef(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -29,7 +33,7 @@ function App() {
 
   const isAuthenticated = Boolean(currentUser?.token);
 
-  const handleAuthChange = (userData) => {
+  const handleAuthChange = useCallback((userData) => {
     if (userData) {
       localStorage.setItem('user', JSON.stringify(userData));
       setCurrentUser(userData);
@@ -37,12 +41,44 @@ function App() {
       localStorage.removeItem('user');
       setCurrentUser(null);
     }
-  };
+  }, []);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     authService.logout();
     handleAuthChange(null);
-  };
+  }, [handleAuthChange]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+      return undefined;
+    }
+
+    const resetInactivityTimer = () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+      inactivityTimerRef.current = setTimeout(() => {
+        handleLogout();
+      }, INACTIVITY_TIMEOUT);
+    };
+
+    const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    activityEvents.forEach((event) => window.addEventListener(event, resetInactivityTimer));
+
+    resetInactivityTimer();
+
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+      activityEvents.forEach((event) => window.removeEventListener(event, resetInactivityTimer));
+    };
+  }, [isAuthenticated, handleLogout]);
 
   const NavContent = () => {
     const navigate = useNavigate();
@@ -61,7 +97,7 @@ function App() {
       <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
         <div className="container">
           {/* Nombre de la aplicación y logo */}
-          <NavLink className="navbar-brand d-flex align-items-center" to="/dashboard" onClick={closeMenu}>
+          <NavLink className="navbar-brand d-flex align-items-center" to="/" onClick={closeMenu}>
             <img src={GestioLogo} alt="Gestio Logo" style={{ height: '40px', marginRight: '10px' }} />
             <span style={{ fontFamily: 'Barlow, sans-serif' }}>GESTIO</span>
           </NavLink>
@@ -97,9 +133,6 @@ function App() {
                   </li>
                   <li className="nav-item">
                     <NavLink className="nav-link" to="/facturas" onClick={closeMenu}>Facturación</NavLink>
-                  </li>
-                  <li className="nav-item">
-                    <NavLink className="nav-link" to="/dashboard" onClick={closeMenu}>Dashboard</NavLink>
                   </li>
                 </>
               )}
@@ -142,9 +175,11 @@ function App() {
 
   return (
     <BrowserRouter>
-      <NavContent />
-      <div className="container mt-4">
-        <Routes>
+      <div className="d-flex flex-column min-vh-100">
+        <NavContent />
+        <main className="flex-grow-1">
+          <div className="container mt-4">
+            <Routes>
           {!isAuthenticated && (
             <>
               <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />
@@ -186,7 +221,15 @@ function App() {
               <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
             </>
           )}
-        </Routes>
+            </Routes>
+          </div>
+        </main>
+        <footer className="bg-dark text-white py-3 mt-auto">
+          <div className="container d-flex flex-column flex-md-row align-items-center justify-content-between">
+            <span>© {new Date().getFullYear()} Gestio. Todos los derechos reservados.</span>
+            <span>Versión {APP_VERSION}</span>
+          </div>
+        </footer>
       </div>
     </BrowserRouter>
   );

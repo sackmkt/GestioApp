@@ -7,6 +7,7 @@ function ObrasSocialesPage() {
     nombre: '',
     telefono: '',
     email: '',
+    cuit: '',
   });
   const [editingId, setEditingId] = useState(null);
 
@@ -31,7 +32,7 @@ function ObrasSocialesPage() {
     } else {
       await ObrasSocialesService.createObraSocial(formData);
     }
-    setFormData({ nombre: '', telefono: '', email: '' });
+    setFormData({ nombre: '', telefono: '', email: '', cuit: '' });
     fetchObrasSociales();
   };
 
@@ -46,6 +47,7 @@ function ObrasSocialesPage() {
       nombre: os.nombre,
       telefono: os.telefono,
       email: os.email,
+      cuit: os.cuit || '',
     });
   };
 
@@ -55,6 +57,7 @@ function ObrasSocialesPage() {
       nombre: '',
       telefono: '',
       email: '',
+      cuit: '',
     });
   };
 
@@ -76,6 +79,16 @@ function ObrasSocialesPage() {
                   value={formData.nombre}
                   onChange={handleChange}
                   required
+                />
+              </div>
+              <div className="col-md-4">
+                <input
+                  type="text"
+                  name="cuit"
+                  className="form-control"
+                  placeholder="CUIT/CUIL"
+                  value={formData.cuit}
+                  onChange={handleChange}
                 />
               </div>
               <div className="col-md-4">
@@ -120,6 +133,7 @@ function ObrasSocialesPage() {
             <thead className="table-dark">
               <tr>
                 <th>Nombre</th>
+                <th>CUIT/CUIL</th>
                 <th>Teléfono</th>
                 <th>Email</th>
                 <th>Acciones</th>
@@ -129,6 +143,7 @@ function ObrasSocialesPage() {
               {obrasSociales.map((os) => (
                 <tr key={os._id}>
                   <td>{os.nombre}</td>
+                  <td>{os.cuit || '—'}</td>
                   <td>{os.telefono}</td>
                   <td>{os.email}</td>
                   <td>
@@ -160,6 +175,7 @@ function ObrasSocialesPage() {
               <div className="card shadow-sm">
                 <div className="card-body">
                   <h5 className="card-title">{os.nombre}</h5>
+                  <p className="card-text mb-1"><strong>CUIT/CUIL:</strong> {os.cuit || '—'}</p>
                   <p className="card-text mb-1"><strong>Teléfono:</strong> {os.telefono}</p>
                   <p className="card-text"><strong>Email:</strong> {os.email}</p>
                   <div className="d-flex justify-content-between mt-3">
