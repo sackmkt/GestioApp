@@ -1,9 +1,5 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
-const { ROLES } = require('../models/User');
-
-const DEFAULT_ROLE = 'professional';
-
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '1h',
@@ -22,7 +18,6 @@ const buildUserResponse = (user, includeToken = true) => {
     province: user.province || '',
     city: user.city || '',
     profileCompleted: user.profileCompleted || false,
-    role: user.role || DEFAULT_ROLE,
   };
 
   if (!includeToken) {
@@ -56,13 +51,10 @@ exports.registerUser = async (req, res) => {
       return res.status(400).json({ message: 'El correo electrónico ya está registrado' });
     }
 
-    const roleFromRequest = req.body.role && ROLES.includes(req.body.role) ? req.body.role : DEFAULT_ROLE;
-
     const user = await User.create({
       username: normalizedUsername,
       email: normalizedEmail,
       password,
-      role: roleFromRequest,
     });
 
     const createdUser = await User.findById(user._id).select('-password');

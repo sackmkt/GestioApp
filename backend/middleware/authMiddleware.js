@@ -27,10 +27,3 @@ exports.protect = async (req, res, next) => {
   }
 };
 
-exports.authorizeRoles = (...allowedRoles) => (req, res, next) => {
-  if (!req.user || !allowedRoles.includes(req.user.role)) {
-    return res.status(403).json({ message: 'No cuentas con permisos para realizar esta acción' });
-  }
-
-  next();
-};

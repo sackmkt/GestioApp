@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ObraSocial = require('../models/ObraSocial');
-const { protect, authorizeRoles } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/authMiddleware');
 
 router.get('/', protect, async (req, res) => {
   try {
@@ -12,7 +12,7 @@ router.get('/', protect, async (req, res) => {
   }
 });
 
-router.post('/', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
+router.post('/', protect, async (req, res) => {
   try {
     const nuevaObraSocial = new ObraSocial({
       ...req.body,
@@ -35,7 +35,7 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-router.put('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
+router.put('/:id', protect, async (req, res) => {
   try {
     const obraSocialActualizada = await ObraSocial.findOneAndUpdate(
       { _id: req.params.id, user: req.user._id },
@@ -49,7 +49,7 @@ router.put('/:id', protect, authorizeRoles('admin', 'professional'), async (req,
   }
 });
 
-router.delete('/:id', protect, authorizeRoles('admin', 'professional'), async (req, res) => {
+router.delete('/:id', protect, async (req, res) => {
   try {
     const obraSocialEliminada = await ObraSocial.findOneAndDelete({ _id: req.params.id, user: req.user._id });
     if (!obraSocialEliminada) return res.status(404).json({ error: 'Obra Social no encontrada o no autorizada' });

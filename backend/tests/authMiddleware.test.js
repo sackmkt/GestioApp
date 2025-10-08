@@ -61,40 +61,19 @@ test('rechaza peticiones con token inválido', async () => {
   assert.equal(body.message, 'No autorizado, token inválido');
 });
 
-test('bloquea acciones restringidas para asistentes', async () => {
-  stubUser({ _id: 'assistant', role: 'assistant' });
-  const token = jwt.sign({ id: 'assistant' }, process.env.JWT_SECRET, { expiresIn: '5m' });
-
-  const response = await fetch(`${baseUrl}/__test__/restricted`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({}),
-  });
-  const body = await response.json();
-
-  assert.equal(response.status, 403);
-  assert.equal(body.message, 'No cuentas con permisos para realizar esta acción');
-  restoreUser();
-});
-
-test('permite acciones restringidas para profesionales', async () => {
-  stubUser({ _id: 'pro-user', role: 'professional' });
+test('permite el acceso a rutas protegidas con token válido', async () => {
+  stubUser({ _id: 'pro-user', username: 'demo' });
   const token = jwt.sign({ id: 'pro-user' }, process.env.JWT_SECRET, { expiresIn: '5m' });
 
-  const response = await fetch(`${baseUrl}/__test__/restricted`, {
-    method: 'POST',
+  const response = await fetch(`${baseUrl}/__test__/protected`, {
     headers: {
-      'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({}),
   });
+
   const body = await response.json();
 
-  assert.equal(response.status, 201);
-  assert.equal(body.message, 'authorized');
+  assert.equal(response.status, 200);
+  assert.equal(body.message, 'ok');
   restoreUser();
 });

@@ -5,9 +5,28 @@ import facturasService from '../services/FacturasService';
 import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
 import centrosSaludService from '../services/CentrosSaludService';
-import { FaMoneyBillWave, FaCheckCircle, FaTimesCircle, FaUsers, FaMedkit, FaChartBar, FaUserFriends, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital } from 'react-icons/fa';
+import turnosService from '../services/TurnosService';
+import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers } from 'react-icons/fa';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
+
+const ESTADO_LABELS = {
+  pendiente: 'Pendiente',
+  presentada: 'Presentada',
+  observada: 'Observada',
+  pagada_parcial: 'Pagada parcial',
+  pagada: 'Pagada',
+};
+
+const ESTADO_COLOR_MAP = {
+  pendiente: { background: 'rgba(255, 193, 7, 0.6)', border: 'rgba(255, 193, 7, 1)' },
+  presentada: { background: 'rgba(23, 162, 184, 0.6)', border: 'rgba(23, 162, 184, 1)' },
+  observada: { background: 'rgba(220, 53, 69, 0.6)', border: 'rgba(220, 53, 69, 1)' },
+  pagada_parcial: { background: 'rgba(102, 16, 242, 0.6)', border: 'rgba(102, 16, 242, 1)' },
+  pagada: { background: 'rgba(40, 167, 69, 0.6)', border: 'rgba(40, 167, 69, 1)' },
+};
+
+const WEEKLY_AVAILABLE_MINUTES = 5 * 8 * 60; // 5 días hábiles de 8 horas
 
 function DashboardPage({ currentUser }) {
   const [allFacturas, setAllFacturas] = useState([]);
@@ -31,11 +50,19 @@ function DashboardPage({ currentUser }) {
     monthlyBarChartData: {},
     obrasSocialesBarChartData: {},
     pacientesBarChartData: {},
+    facturasEstadoChartData: { labels: [], datasets: [] },
+    moraObraSocialData: { labels: [], datasets: [] },
+    montoMoraTotal: 0,
+    turnosProximos: [],
+    ocupacionSemanal: 0,
+    minutosProgramadosSemana: 0,
+    minutosDisponiblesSemana: WEEKLY_AVAILABLE_MINUTES,
     growthMetrics: {
       facturacion: { currentYear: 0, previousYear: 0, percentage: 0 },
       facturas: { currentYear: 0, previousYear: 0, percentage: 0 },
     },
   });
+  const [turnos, setTurnos] = useState([]);
 
   const [dateRange, setDateRange] = useState({
     startDate: '',
@@ -50,6 +77,79 @@ function DashboardPage({ currentUser }) {
       maximumFractionDigits: 0,
     }).format(number);
   };
+
+  const formatMinutes = (minutes) => {
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      return '0 h';
+    }
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = Math.round(minutes % 60);
+    if (hours === 0) {
+      return `${remainingMinutes} min`;
+    }
+    if (remainingMinutes === 0) {
+      return `${hours} h`;
+    }
+    return `${hours} h ${remainingMinutes} min`;
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) {
+      return 'Sin fecha';
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return 'Sin fecha';
+    }
+    return date.toLocaleString('es-AR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+  };
+
+  const buildAgendaMetrics = useCallback((turnosList) => {
+    const now = new Date();
+    const upcoming = Array.isArray(turnosList)
+      ? [...turnosList]
+        .filter((turno) => {
+          const fecha = new Date(turno.fecha);
+          return !Number.isNaN(fecha.getTime()) && fecha >= now;
+        })
+        .sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
+        .slice(0, 5)
+        .map((turno) => ({
+          _id: turno._id,
+          fecha: turno.fecha,
+          titulo: turno.titulo || 'Consulta',
+          estado: turno.estado,
+          paciente: turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}` : 'Paciente',
+          duracionMinutos: turno.duracionMinutos || 0,
+        }))
+      : [];
+
+    const startOfWeek = new Date();
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+    const programadosSemana = Array.isArray(turnosList)
+      ? turnosList.filter((turno) => {
+        const fecha = new Date(turno.fecha);
+        return !Number.isNaN(fecha.getTime()) && fecha >= startOfWeek && fecha <= endOfWeek;
+      })
+      : [];
+
+    const minutosProgramados = programadosSemana.reduce((sum, turno) => sum + (turno.duracionMinutos || 0), 0);
+    const ocupacion = WEEKLY_AVAILABLE_MINUTES > 0
+      ? Math.min((minutosProgramados / WEEKLY_AVAILABLE_MINUTES) * 100, 100)
+      : 0;
+
+    return {
+      upcoming,
+      minutosProgramados,
+      ocupacion,
+    };
+  }, []);
 
   const userDisplayName = (() => {
     if (!currentUser) {
@@ -123,6 +223,77 @@ function DashboardPage({ currentUser }) {
     const totalNetoCentros = centrosResumen.reduce((sum, centro) => sum + centro.totalNeto, 0);
     const centrosActivos = centrosResumen.filter((centro) => centro.totalFacturado > 0).length;
 
+    const estadoCounts = filteredFacturas.reduce((acc, factura) => {
+      const estadoFactura = factura.estado || (factura.pagado ? 'pagada' : 'pendiente');
+      acc[estadoFactura] = (acc[estadoFactura] || 0) + 1;
+      return acc;
+    }, {});
+
+    const estadoKeys = Object.keys(estadoCounts);
+    const facturasEstadoChartData = estadoKeys.length > 0
+      ? {
+          labels: estadoKeys.map((estado) => ESTADO_LABELS[estado] || estado),
+          datasets: [{
+            label: '# de facturas',
+            data: estadoKeys.map((estado) => estadoCounts[estado]),
+            backgroundColor: estadoKeys.map((estado) => ESTADO_COLOR_MAP[estado]?.background || 'rgba(0,0,0,0.15)'),
+            borderColor: estadoKeys.map((estado) => ESTADO_COLOR_MAP[estado]?.border || 'rgba(0,0,0,0.3)'),
+            borderWidth: 1,
+          }],
+        }
+      : {
+          labels: ['Sin datos'],
+          datasets: [{
+            label: '# de facturas',
+            data: [0],
+            backgroundColor: ['rgba(108, 117, 125, 0.4)'],
+            borderColor: ['rgba(108, 117, 125, 1)'],
+            borderWidth: 1,
+          }],
+        };
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const moraPorObra = filteredFacturas.reduce((acc, factura) => {
+      const fechaVencimiento = factura.fechaVencimiento ? new Date(factura.fechaVencimiento) : null;
+      const saldoPendiente = Number.isFinite(factura.saldoPendiente)
+        ? factura.saldoPendiente
+        : Math.max((factura.montoTotal || 0) - (factura.montoCobrado || 0), 0);
+      if (fechaVencimiento && !Number.isNaN(fechaVencimiento.getTime()) && fechaVencimiento < hoy && saldoPendiente > 0.5) {
+        const nombreObra = factura.obraSocial?.nombre || 'Sin obra social';
+        acc[nombreObra] = (acc[nombreObra] || 0) + saldoPendiente;
+      }
+      return acc;
+    }, {});
+
+    const moraEntries = Object.entries(moraPorObra).sort(([, a], [, b]) => b - a);
+    const moraObraSocialData = moraEntries.length > 0
+      ? {
+          labels: moraEntries.map(([nombre]) => nombre),
+          datasets: [{
+            label: 'Saldo vencido',
+            data: moraEntries.map(([, monto]) => monto),
+            backgroundColor: 'rgba(220, 53, 69, 0.6)',
+            borderColor: 'rgba(220, 53, 69, 1)',
+            borderWidth: 1,
+          }],
+        }
+      : {
+          labels: ['Sin datos'],
+          datasets: [{
+            label: 'Saldo vencido',
+            data: [0],
+            backgroundColor: ['rgba(108, 117, 125, 0.4)'],
+            borderColor: ['rgba(108, 117, 125, 1)'],
+            borderWidth: 1,
+          }],
+        };
+
+    const montoMoraTotal = moraEntries.reduce((sum, [, monto]) => sum + monto, 0);
+
+    const obrasSocialesBarChartData = calculateObrasSocialesData(filteredFacturas);
+    const pacientesBarChartData = calculatePacientesData(filteredFacturas);
+
     setData(prevData => ({
       ...prevData,
       totalFacturacion,
@@ -137,6 +308,11 @@ function DashboardPage({ currentUser }) {
       centrosActivos,
       netoParticulares: totalParticulares,
       netoCentros: totalNetoCentros,
+      facturasEstadoChartData,
+      moraObraSocialData,
+      montoMoraTotal,
+      obrasSocialesBarChartData,
+      pacientesBarChartData,
     }));
   }, [dateRange, centros]);
 
@@ -269,11 +445,16 @@ function DashboardPage({ currentUser }) {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [facturas, pacientes, obrasSociales, centros] = await Promise.all([
+        const now = new Date();
+        const horizon = new Date(now);
+        horizon.setDate(horizon.getDate() + 30);
+
+        const [facturas, pacientes, obrasSociales, centros, turnosList] = await Promise.all([
           facturasService.getFacturas(),
           pacientesService.getPacientes(),
           obrasSocialesService.getObrasSociales(),
           centrosSaludService.getCentros(),
+          turnosService.getTurnos({ desde: now.toISOString(), hasta: horizon.toISOString() }),
         ]);
         const pacientesByTipo = {
           particulares: pacientes.filter((p) => p.tipoAtencion !== 'centro').length,
@@ -284,6 +465,8 @@ function DashboardPage({ currentUser }) {
         const centrosActivos = centrosResumen.filter((centro) => centro.totalFacturado > 0).length;
         setAllFacturas(facturas);
         setCentros(centros);
+        setTurnos(turnosList);
+        const agendaMetrics = buildAgendaMetrics(turnosList);
         // Los datos de pacientes y obras sociales no necesitan filtrarse por fecha
         setData(prevData => ({
           ...prevData,
@@ -297,13 +480,16 @@ function DashboardPage({ currentUser }) {
           obrasSocialesBarChartData: calculateObrasSocialesData(facturas),
           pacientesBarChartData: calculatePacientesData(facturas),
           growthMetrics: calculateGrowthMetrics(facturas),
+          turnosProximos: agendaMetrics.upcoming,
+          ocupacionSemanal: agendaMetrics.ocupacion,
+          minutosProgramadosSemana: agendaMetrics.minutosProgramados,
         }));
       } catch (error) {
         console.error('Error fetching initial dashboard data:', error);
       }
     };
     fetchInitialData();
-  }, []);
+  }, [buildAgendaMetrics]);
 
   // useEffect para procesar datos cuando cambian las facturas o el rango de fechas
   useEffect(() => {
@@ -363,7 +549,7 @@ function DashboardPage({ currentUser }) {
         <p className="text-muted mb-0">Este resumen ejecutivo reúne tus principales indicadores asistenciales y financieros.</p>
       </div>
       <div className="row g-3 mb-4">
-        <div className="col-md-4">
+        <div className="col-xl-3 col-md-6">
           <div className="card shadow-sm border-0 h-100">
             <div className="card-body">
               <p className="text-muted mb-1">Facturación acumulada</p>
@@ -372,7 +558,7 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
-        <div className="col-md-4">
+        <div className="col-xl-3 col-md-6">
           <div className="card shadow-sm border-0 h-100">
             <div className="card-body">
               <p className="text-muted mb-1">Pacientes activos</p>
@@ -381,12 +567,32 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
-        <div className="col-md-4">
+        <div className="col-xl-3 col-md-6">
           <div className="card shadow-sm border-0 h-100">
             <div className="card-body">
               <p className="text-muted mb-1">Retención estimada a centros</p>
               <h4 className="fw-bold mb-1">{formatNumber(data.totalRetencionCentros)}</h4>
               <small className="text-muted">Centros con actividad: {data.centrosActivos}/{data.totalCentros}</small>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-3 col-md-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <p className="text-muted mb-1">Ocupación semanal</p>
+              <div className="d-flex align-items-baseline gap-2">
+                <FaClock className="text-primary" />
+                <h4 className="fw-bold mb-0">{Math.round(data.ocupacionSemanal)}%</h4>
+              </div>
+              <div className="progress mt-2" role="progressbar" aria-label="Ocupación semanal" aria-valuenow={Math.round(data.ocupacionSemanal)} aria-valuemin="0" aria-valuemax="100">
+                <div
+                  className={`progress-bar ${data.ocupacionSemanal >= 85 ? 'bg-danger' : data.ocupacionSemanal >= 60 ? 'bg-warning text-dark' : 'bg-success'}`}
+                  style={{ width: `${Math.min(Math.round(data.ocupacionSemanal), 100)}%` }}
+                ></div>
+              </div>
+              <small className="text-muted d-block mt-2">
+                Programados: {formatMinutes(data.minutosProgramadosSemana)} · Capacidad semanal: {formatMinutes(data.minutosDisponiblesSemana)}
+              </small>
             </div>
           </div>
         </div>
@@ -433,7 +639,7 @@ function DashboardPage({ currentUser }) {
       
       <div className="row g-4">
         {/* Sección de Resumen Financiero */}
-        <div className="col-lg-4 col-md-6">
+        <div className="col-xl-4 col-lg-6">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-primary text-white">
               <FaMoneyBillWave className="me-2" /> Resumen Financiero
@@ -529,7 +735,7 @@ function DashboardPage({ currentUser }) {
         </div>
 
         {/* Resumen de Centros de Salud */}
-        <div className="col-lg-4 col-md-6">
+        <div className="col-xl-4 col-lg-6">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-warning text-dark">
               <FaHospital className="me-2" /> Convenios con Centros
@@ -554,6 +760,39 @@ function DashboardPage({ currentUser }) {
                 </ul>
               ) : (
                 <p className="text-muted text-center py-4 mb-0">Aún no registraste centros con actividad.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Turnos próximos */}
+        <div className="col-xl-4 col-lg-6">
+          <div className="card shadow-sm h-100">
+            <div className="card-header bg-info text-white">
+              <FaCalendarAlt className="me-2" /> Turnos próximos
+            </div>
+            <div className="card-body">
+              {data.turnosProximos.length > 0 ? (
+                <ul className="list-group list-group-flush">
+                  {data.turnosProximos.map((turno) => (
+                    <li key={turno._id} className="list-group-item">
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div>
+                          <strong>{turno.paciente}</strong>
+                          <div className="small text-muted">{turno.titulo}</div>
+                        </div>
+                        <div className="text-end">
+                          <div className="small fw-semibold">{formatDateTime(turno.fecha)}</div>
+                          <span className={`badge ${turno.estado === 'confirmado' ? 'bg-success' : turno.estado === 'cancelado' ? 'bg-danger' : 'bg-secondary'}`}>
+                            {turno.estado || 'Programado'}
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted mb-0">No hay turnos programados en los próximos días.</p>
               )}
             </div>
           </div>
@@ -597,7 +836,7 @@ function DashboardPage({ currentUser }) {
         </div>
         
         {/* Gráfico de Barras de Facturación Mensual */}
-        <div className="col-lg-6 col-md-12">
+        <div className="col-xl-6 col-lg-12">
           <div className="card shadow-sm h-100">
             <div className="card-header">
               Facturación Mensual
@@ -612,8 +851,24 @@ function DashboardPage({ currentUser }) {
           </div>
         </div>
 
+        {/* Distribución por estado */}
+        <div className="col-xl-6 col-lg-12">
+          <div className="card shadow-sm h-100">
+            <div className="card-header">
+              <FaFileInvoiceDollar className="me-2" /> Facturas por estado
+            </div>
+            <div className="card-body">
+              {data.facturasEstadoChartData.labels?.length > 0 ? (
+                <Bar data={data.facturasEstadoChartData} options={chartOptions} />
+              ) : (
+                <p className="text-center text-muted">No hay información para mostrar la distribución de estados.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Gráfico de Barras de Top Obras Sociales */}
-        <div className="col-lg-6 col-md-12">
+        <div className="col-xl-6 col-lg-12">
           <div className="card shadow-sm h-100">
             <div className="card-header">
               Top 5 Obras Sociales
@@ -627,9 +882,26 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
-        
+
+        {/* Mora por obra social */}
+        <div className="col-xl-6 col-lg-12">
+          <div className="card shadow-sm h-100">
+            <div className="card-header">
+              Mora por obra social
+            </div>
+            <div className="card-body">
+              <p className="text-muted">Saldo vencido total: <strong>{formatNumber(data.montoMoraTotal)}</strong></p>
+              {data.moraObraSocialData.labels?.length > 0 ? (
+                <Bar data={data.moraObraSocialData} options={horizontalChartOptions} />
+              ) : (
+                <p className="text-center text-muted">No registras deudas vencidas con obras sociales.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Gráfico de Barras de Top Pacientes */}
-        <div className="col-lg-6 col-md-12">
+        <div className="col-xl-6 col-lg-12">
           <div className="card shadow-sm h-100">
             <div className="card-header">
               Top 5 Pacientes
