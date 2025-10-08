@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import turnosService from '../services/TurnosService';
 import PacientesService from '../services/PacientesService';
+import { useFeedback } from '../context/FeedbackContext.jsx';
 
 const formatoFechaLocal = (fechaISO) => {
   if (!fechaISO) return '';
@@ -57,6 +58,7 @@ const estadoLabel = {
 };
 
 const TurnosPage = () => {
+  const { showError, showSuccess, showInfo } = useFeedback();
   const [turnos, setTurnos] = useState([]);
   const [pacientes, setPacientes] = useState([]);
   const [editingId, setEditingId] = useState(null);
@@ -71,39 +73,42 @@ const TurnosPage = () => {
   });
   const [filtros, setFiltros] = useState({ estado: 'programado', rango: 'semana' });
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [recordatorioUpdatingId, setRecordatorioUpdatingId] = useState(null);
 
   useEffect(() => {
     const obtenerDatos = async () => {
-      const [listaPacientes] = await Promise.all([
-        PacientesService.getPacientes(),
-      ]);
-      setPacientes(listaPacientes);
-    };
-    obtenerDatos();
-  }, []);
-
-  useEffect(() => {
-    const cargarTurnos = async () => {
       try {
-        setLoading(true);
-        const rango = calcularRango(filtros.rango);
-        const parametros = {
-          ...rango,
-        };
-        if (filtros.estado !== 'todos') {
-          parametros.estado = filtros.estado;
-        }
-        const data = await turnosService.getTurnos(parametros);
-        setTurnos(data);
+        const listaPacientes = await PacientesService.getPacientes();
+        setPacientes(listaPacientes);
       } catch (error) {
-        console.error('No se pudieron obtener los turnos', error);
-      } finally {
-        setLoading(false);
+        showError('No se pudieron cargar los pacientes para agendar turnos.');
       }
     };
+    obtenerDatos();
+  }, [showError]);
 
-    cargarTurnos();
-  }, [filtros]);
+  const loadTurnos = useCallback(async () => {
+    try {
+      setLoading(true);
+      const rango = calcularRango(filtros.rango);
+      const parametros = { ...rango };
+      if (filtros.estado !== 'todos') {
+        parametros.estado = filtros.estado;
+      }
+      const data = await turnosService.getTurnos(parametros);
+      setTurnos(data);
+    } catch (error) {
+      showError('No se pudieron obtener los turnos. Intenta nuevamente.');
+    } finally {
+      setLoading(false);
+    }
+  }, [filtros.estado, filtros.rango, showError]);
+
+  useEffect(() => {
+    loadTurnos();
+  }, [loadTurnos]);
 
   const proximosTurnos = useMemo(() => {
     const ahora = new Date().getTime();
@@ -134,6 +139,7 @@ const TurnosPage = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!formData.paciente || !formData.fecha) {
+      showError('Selecciona un paciente y una fecha para guardar el turno.');
       return;
     }
 
@@ -151,21 +157,21 @@ const TurnosPage = () => {
     };
 
     try {
-      setLoading(true);
+      setSaving(true);
       if (editingId) {
         await turnosService.updateTurno(editingId, payload);
+        showSuccess('Turno actualizado correctamente.');
       } else {
         await turnosService.createTurno(payload);
+        showSuccess('Turno creado correctamente.');
       }
       resetForm();
-      const rango = calcularRango(filtros.rango);
-      const parametros = filtros.estado !== 'todos' ? { estado: filtros.estado, ...rango } : { ...rango };
-      const data = await turnosService.getTurnos(parametros);
-      setTurnos(data);
+      await loadTurnos();
     } catch (error) {
-      console.error('No se pudo guardar el turno', error);
+      const message = error.response?.data?.message || 'No se pudo guardar el turno. Intenta nuevamente.';
+      showError(message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -186,29 +192,39 @@ const TurnosPage = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!window.confirm('¿Deseas eliminar este turno? Esta acción no se puede deshacer.')) {
+      return;
+    }
     try {
-      setLoading(true);
+      setDeletingId(id);
       await turnosService.deleteTurno(id);
       setTurnos((prev) => prev.filter((turno) => turno._id !== id));
       if (editingId === id) {
         resetForm();
       }
+      showInfo('El turno se eliminó correctamente.');
     } catch (error) {
-      console.error('No se pudo eliminar el turno', error);
+      const message = error.response?.data?.message || 'No se pudo eliminar el turno. Intenta nuevamente.';
+      showError(message);
     } finally {
-      setLoading(false);
+      setDeletingId(null);
     }
   };
 
   const toggleRecordatorio = async (turno) => {
     try {
-      setLoading(true);
+      setRecordatorioUpdatingId(turno._id);
       const actualizado = await turnosService.updateRecordatorio(turno._id, !turno.recordatorioEnviado);
       setTurnos((prev) => prev.map((item) => (item._id === actualizado._id ? actualizado : item)));
+      if (actualizado.recordatorioEnviado) {
+        showSuccess('El recordatorio se marcó como enviado.');
+      } else {
+        showInfo('El recordatorio volverá a estar pendiente.');
+      }
     } catch (error) {
-      console.error('No se pudo actualizar el recordatorio', error);
+      showError('No se pudo actualizar el estado del recordatorio.');
     } finally {
-      setLoading(false);
+      setRecordatorioUpdatingId(null);
     }
   };
 
@@ -231,13 +247,20 @@ const TurnosPage = () => {
               className="form-select"
               value={filtros.estado}
               onChange={handleFiltroChange}
+              disabled={loading}
             >
               <option value="todos">Todos los estados</option>
               <option value="programado">Programados</option>
               <option value="completado">Completados</option>
               <option value="cancelado">Cancelados</option>
             </select>
-            <select name="rango" className="form-select" value={filtros.rango} onChange={handleFiltroChange}>
+            <select
+              name="rango"
+              className="form-select"
+              value={filtros.rango}
+              onChange={handleFiltroChange}
+              disabled={loading}
+            >
               <option value="todos">Todo el historial</option>
               <option value="hoy">Solo hoy</option>
               <option value="semana">Próximos 7 días</option>
@@ -246,7 +269,8 @@ const TurnosPage = () => {
         </div>
         <div className="card-body">
           <form onSubmit={handleSubmit}>
-            <div className="row g-3">
+            <fieldset disabled={saving} className="border-0 p-0">
+              <div className="row g-3">
               <div className="col-md-6 col-lg-4">
                 <label className="form-label">Paciente</label>
                 <select
@@ -333,26 +357,43 @@ const TurnosPage = () => {
                   placeholder="Detalles clínicos, indicaciones o recordatorios internos"
                 ></textarea>
               </div>
-              <div className="col-12 d-flex justify-content-end gap-2">
-                {editingId && (
-                  <button type="button" className="btn btn-secondary" onClick={resetForm}>
-                    Cancelar edición
+                <div className="col-12 d-flex justify-content-end gap-2">
+                  {editingId && (
+                    <button type="button" className="btn btn-secondary" onClick={resetForm}>
+                      Cancelar edición
+                    </button>
+                  )}
+                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                    {saving ? (
+                      <>
+                        <span
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                          aria-hidden="true"
+                        ></span>
+                        {editingId ? 'Guardando cambios...' : 'Creando turno...'}
+                      </>
+                    ) : (
+                      <>{editingId ? 'Actualizar turno' : 'Crear turno'}</>
+                    )}
                   </button>
-                )}
-                <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {editingId ? 'Actualizar turno' : 'Crear turno'}
-                </button>
+                </div>
               </div>
-            </div>
+            </fieldset>
           </form>
         </div>
       </div>
 
       <div className="card shadow-sm d-none d-md-block">
         <div className="card-body">
-          {loading && <p>Cargando...</p>}
-          {!loading && turnos.length === 0 && <p className="mb-0">No hay turnos para los filtros seleccionados.</p>}
-          {!loading && turnos.length > 0 && (
+          {loading ? (
+            <div className="text-center py-4">
+              <span className="spinner-border text-primary" role="status" aria-hidden="true"></span>
+              <span className="ms-2">Cargando turnos...</span>
+            </div>
+          ) : turnos.length === 0 ? (
+            <p className="mb-0">No hay turnos para los filtros seleccionados.</p>
+          ) : (
             <table className="table table-hover align-middle">
               <thead className="table-light">
                 <tr>
@@ -392,19 +433,52 @@ const TurnosPage = () => {
                           type="button"
                           className={`btn btn-sm mt-1 ${turno.recordatorioEnviado ? 'btn-success' : 'btn-outline-primary'}`}
                           onClick={() => toggleRecordatorio(turno)}
+                          disabled={recordatorioUpdatingId === turno._id || Boolean(deletingId) || saving}
                         >
-                          {turno.recordatorioEnviado ? 'Recordatorio enviado' : 'Marcar como enviado'}
+                          {recordatorioUpdatingId === turno._id ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-2"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
+                              Actualizando...
+                            </>
+                          ) : turno.recordatorioEnviado ? (
+                            'Recordatorio enviado'
+                          ) : (
+                            'Marcar como enviado'
+                          )}
                         </button>
                       </div>
                     </td>
                     <td className="small">{turno.notas || '—'}</td>
                     <td className="text-end">
                       <div className="btn-group" role="group">
-                        <button className="btn btn-warning btn-sm" onClick={() => handleEdit(turno)}>
+                        <button
+                          className="btn btn-warning btn-sm"
+                          onClick={() => handleEdit(turno)}
+                          disabled={saving || Boolean(deletingId)}
+                        >
                           Editar
                         </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(turno._id)}>
-                          Eliminar
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDelete(turno._id)}
+                          disabled={deletingId === turno._id || saving}
+                        >
+                          {deletingId === turno._id ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-2"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
+                              Eliminando...
+                            </>
+                          ) : (
+                            'Eliminar'
+                          )}
                         </button>
                       </div>
                     </td>
@@ -417,7 +491,12 @@ const TurnosPage = () => {
       </div>
 
       <div className="d-md-none">
-        {loading && <p>Cargando...</p>}
+        {loading && (
+          <div className="d-flex justify-content-center align-items-center py-4">
+            <span className="spinner-border text-primary" role="status" aria-hidden="true"></span>
+            <span className="ms-2">Cargando turnos...</span>
+          </div>
+        )}
         {!loading && turnos.length === 0 && <p>No hay turnos para mostrar.</p>}
         <div className="row g-3">
           {turnos.map((turno) => (
@@ -453,17 +532,50 @@ const TurnosPage = () => {
                     </p>
                   )}
                   <div className="d-flex flex-wrap gap-2">
-                    <button className="btn btn-warning btn-sm" onClick={() => handleEdit(turno)}>
+                    <button
+                      className="btn btn-warning btn-sm"
+                      onClick={() => handleEdit(turno)}
+                      disabled={saving || Boolean(deletingId)}
+                    >
                       Editar
                     </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(turno._id)}>
-                      Eliminar
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleDelete(turno._id)}
+                      disabled={deletingId === turno._id || saving}
+                    >
+                      {deletingId === turno._id ? (
+                        <>
+                          <span
+                            className="spinner-border spinner-border-sm me-2"
+                            role="status"
+                            aria-hidden="true"
+                          ></span>
+                          Eliminando...
+                        </>
+                      ) : (
+                        'Eliminar'
+                      )}
                     </button>
                     <button
                       className={`btn btn-sm ${turno.recordatorioEnviado ? 'btn-success' : 'btn-outline-primary'}`}
                       onClick={() => toggleRecordatorio(turno)}
+                      disabled={recordatorioUpdatingId === turno._id || Boolean(deletingId) || saving}
                     >
-                      {turno.recordatorioEnviado ? 'Recordatorio enviado' : 'Marcar recordatorio'}
+                      {recordatorioUpdatingId === turno._id
+                        ? (
+                          <>
+                            <span
+                              className="spinner-border spinner-border-sm me-2"
+                              role="status"
+                              aria-hidden="true"
+                            ></span>
+                            Actualizando...
+                          </>
+                        )
+                        : turno.recordatorioEnviado
+                        ? 'Recordatorio enviado'
+                        : 'Marcar recordatorio'}
                     </button>
                   </div>
                 </div>
