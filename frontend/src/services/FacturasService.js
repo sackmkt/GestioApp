@@ -32,6 +32,16 @@ const createFactura = async (facturaData) => {
   }
 };
 
+const updateFactura = async (id, facturaData) => {
+  try {
+    const response = await axios.put(`${API_URL}/${id}`, facturaData, getHeaders());
+    return response.data;
+  } catch (error) {
+    console.error('Error al actualizar factura:', error);
+    throw error;
+  }
+};
+
 const deleteFactura = async (id) => {
   try {
     await axios.delete(`${API_URL}/${id}`, getHeaders());
@@ -41,13 +51,22 @@ const deleteFactura = async (id) => {
   }
 };
 
-// Función para marcar una factura como pagada
-const markAsPaid = async (id) => {
+const registrarPago = async (id, pagoData) => {
   try {
-    const response = await axios.put(`${API_URL}/${id}`, {}, getHeaders());
+    const response = await axios.post(`${API_URL}/${id}/pagos`, pagoData, getHeaders());
     return response.data;
   } catch (error) {
-    console.error('Error al marcar factura como pagada:', error);
+    console.error('Error al registrar pago:', error);
+    throw error;
+  }
+};
+
+const eliminarPago = async (facturaId, pagoId) => {
+  try {
+    const response = await axios.delete(`${API_URL}/${facturaId}/pagos/${pagoId}`, getHeaders());
+    return response.data;
+  } catch (error) {
+    console.error('Error al eliminar pago:', error);
     throw error;
   }
 };
@@ -55,6 +74,8 @@ const markAsPaid = async (id) => {
 export default {
   getFacturas,
   createFactura,
+  updateFactura,
   deleteFactura,
-  markAsPaid,
+  registrarPago,
+  eliminarPago,
 };
