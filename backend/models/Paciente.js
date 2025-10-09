@@ -36,6 +36,17 @@ pacienteSchema.pre('validate', function validateCentro(next) {
   return next();
 });
 
-pacienteSchema.index({ user: 1, dni: 1 }, { unique: true });
+pacienteSchema.index(
+  { user: 1, dni: 1 },
+  {
+    unique: true,
+    name: 'paciente_user_dni_unique',
+    background: true,
+    partialFilterExpression: {
+      user: { $exists: true },
+      dni: { $exists: true },
+    },
+  },
+);
 
 module.exports = mongoose.model('Paciente', pacienteSchema);
