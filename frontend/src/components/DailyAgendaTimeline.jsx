@@ -1,13 +1,33 @@
 import React, { useMemo } from 'react';
 import '../styles/daily-agenda-timeline.css';
 
-const estadoClassName = {
-  programado: 'daily-agenda__event--programado',
-  completado: 'daily-agenda__event--completado',
-  cancelado: 'daily-agenda__event--cancelado',
+const ESTADO_META = {
+  programado: { label: 'Programado', color: '#0d6efd' },
+  completado: { label: 'Completado', color: '#198754' },
+  cancelado: { label: 'Cancelado', color: '#6c757d' },
 };
 
-const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const hexToRgba = (hex, alpha = 1) => {
+  if (typeof hex !== 'string') {
+    return `rgba(13, 110, 253, ${alpha})`;
+  }
+
+  const sanitized = hex.replace('#', '');
+  if (sanitized.length !== 3 && sanitized.length !== 6) {
+    return `rgba(13, 110, 253, ${alpha})`;
+  }
+
+  const fullHex = sanitized.length === 3
+    ? sanitized.split('').map((char) => char + char).join('')
+    : sanitized;
+
+  const bigint = parseInt(fullHex, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 const buildToday = () => {
   const today = new Date();
@@ -62,8 +82,6 @@ const getLocalDateKey = (date) => {
   return `${year}-${month}-${day}`;
 };
 
-const formatHourLabel = (hour) => `${hour.toString().padStart(2, '0')}:00`;
-
 const formatTimeRange = (startDate, durationMinutes) => {
   if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
     return '';
@@ -75,34 +93,6 @@ const formatTimeRange = (startDate, durationMinutes) => {
     minute: '2-digit',
   });
   return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
-};
-
-const buildEventStyle = (startDate, durationMinutes, startHour, totalMinutes) => {
-  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime()) || totalMinutes <= 0) {
-    return null;
-  }
-
-  const safeDuration = Number.isFinite(durationMinutes) ? durationMinutes : 0;
-  const eventStartMinutes = startDate.getHours() * 60 + startDate.getMinutes() - startHour * 60;
-  const eventEndMinutes = eventStartMinutes + safeDuration;
-
-  if (eventEndMinutes <= 0 || eventStartMinutes >= totalMinutes) {
-    return null;
-  }
-
-  const visibleStartMinutes = clamp(eventStartMinutes, 0, totalMinutes);
-  const visibleEndMinutes = clamp(eventEndMinutes, 0, totalMinutes);
-  const visibleMinutes = Math.max(visibleEndMinutes - visibleStartMinutes, 0);
-  const minVisibleMinutes = Math.max(Math.min(safeDuration, 20), 10);
-  const widthMinutes = Math.max(visibleMinutes, minVisibleMinutes);
-
-  const leftPercent = (visibleStartMinutes / totalMinutes) * 100;
-  const widthPercent = Math.min((widthMinutes / totalMinutes) * 100, 100 - leftPercent);
-
-  return {
-    left: `${leftPercent}%`,
-    width: `${widthPercent}%`,
-  };
 };
 
 const DailyAgendaTimeline = ({
@@ -119,112 +109,107 @@ const DailyAgendaTimeline = ({
   const normalizedStart = Math.min(safeStartHour, safeEndHour);
   const normalizedEnd = Math.max(safeStartHour, safeEndHour);
 
-  const hours = useMemo(() => {
-    return Array.from({ length: normalizedEnd - normalizedStart + 1 }, (_, index) => normalizedStart + index);
+  const workHoursLabel = useMemo(() => {
+    if (!Number.isFinite(normalizedStart) || !Number.isFinite(normalizedEnd)) {
+      return '';
+    }
+    const pad = (value) => value.toString().padStart(2, '0');
+    return `${pad(normalizedStart)}:00 - ${pad(normalizedEnd)}:00`;
   }, [normalizedEnd, normalizedStart]);
 
-  const totalMinutes = Math.max((normalizedEnd - normalizedStart) * 60, 0);
-  const hourSlots = Math.max(hours.length - 1, 1);
-
-  const eventsByPaciente = useMemo(() => {
+  const eventsForDay = useMemo(() => {
     if (!Array.isArray(turnos) || turnos.length === 0) {
       return [];
     }
 
     const targetKey = getLocalDateKey(baseDate);
-    const map = new Map();
 
-    turnos.forEach((turno) => {
-      const fecha = new Date(turno.fecha);
-      if (Number.isNaN(fecha.getTime())) {
-        return;
-      }
-      const eventKey = getLocalDateKey(fecha);
-      if (eventKey !== targetKey) {
-        return;
-      }
+    return turnos
+      .map((turno) => {
+        const fecha = new Date(turno.fecha);
+        if (Number.isNaN(fecha.getTime())) {
+          return null;
+        }
 
-      const pacienteNombre = [turno.paciente?.nombre, turno.paciente?.apellido]
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-      const paciente = pacienteNombre || turno.paciente || 'Paciente';
-      const duration = Number.isFinite(turno.duracionMinutos) ? turno.duracionMinutos : 0;
+        if (getLocalDateKey(fecha) !== targetKey) {
+          return null;
+        }
 
-      if (!map.has(paciente)) {
-        map.set(paciente, []);
-      }
+        const pacienteNombre = [turno.paciente?.nombre, turno.paciente?.apellido]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
 
-      map.get(paciente).push({
-        _id: turno._id,
-        fecha,
-        duracionMinutos: duration,
-        estado: turno.estado || 'programado',
-        titulo: turno.titulo || '',
-      });
-    });
-
-    map.forEach((items, key) => {
-      const ordered = [...items].sort((a, b) => a.fecha - b.fecha);
-      map.set(key, ordered);
-    });
-
-    return Array.from(map.entries());
+        return {
+          _id: turno._id || `${fecha.getTime()}-${pacienteNombre}`,
+          fecha,
+          duracionMinutos: Number.isFinite(turno.duracionMinutos) ? turno.duracionMinutos : 0,
+          estado: turno.estado || 'programado',
+          titulo: turno.titulo || '',
+          paciente: pacienteNombre || turno.paciente || 'Paciente',
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.fecha - b.fecha);
   }, [baseDate, turnos]);
 
-  const hasEvents = eventsByPaciente.length > 0;
+  const dateLabel = useMemo(() => {
+    if (!(baseDate instanceof Date) || Number.isNaN(baseDate.getTime())) {
+      return '';
+    }
+
+    return baseDate.toLocaleDateString('es-AR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+  }, [baseDate]);
+
+  const hasEvents = eventsForDay.length > 0;
 
   return (
     <div className="daily-agenda">
-      <div className="daily-agenda__hours">
-        <div className="daily-agenda__corner" aria-hidden="true"></div>
-        <div className="daily-agenda__hours-track">
-          {hours.map((hour) => (
-            <div key={hour} className="daily-agenda__hours-cell">
-              {formatHourLabel(hour)}
-            </div>
-          ))}
+      <div className="daily-agenda__header">
+        <div>
+          <h6 className="daily-agenda__title mb-1">Agenda del día</h6>
+          {dateLabel && <p className="daily-agenda__subtitle mb-0 text-muted text-capitalize">{dateLabel}</p>}
         </div>
-      </div>
-      <div className="daily-agenda__body">
-        {eventsByPaciente.map(([paciente, events]) => (
-          <div key={paciente} className="daily-agenda__row">
-            <div className="daily-agenda__row-label">{paciente}</div>
-            <div className="daily-agenda__row-track">
-              <div className="daily-agenda__grid" aria-hidden="true">
-                {Array.from({ length: hourSlots + 1 }, (_, index) => (
-                  <div
-                    key={index}
-                    className="daily-agenda__grid-line"
-                    style={{ left: `${(index / hourSlots) * 100}%` }}
-                  ></div>
-                ))}
-              </div>
-              {events.map((event) => {
-                const style = buildEventStyle(event.fecha, event.duracionMinutos, normalizedStart, totalMinutes);
-                if (!style) {
-                  return null;
-                }
-                return (
-                  <div
-                    key={event._id}
-                    className={`daily-agenda__event ${estadoClassName[event.estado] || ''}`}
-                    style={style}
-                  >
-                    <span className="daily-agenda__event-time">{formatTimeRange(event.fecha, event.duracionMinutos)}</span>
-                    {event.titulo && <span className="daily-agenda__event-title">{event.titulo}</span>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        {!hasEvents && (
-          <div className="daily-agenda__empty">
-            <p className="mb-0 text-muted small">{emptyMessage}</p>
-          </div>
+        {workHoursLabel && (
+          <span className="daily-agenda__work-hours text-muted">Horario: {workHoursLabel}</span>
         )}
       </div>
+      {hasEvents ? (
+        <ul className="daily-agenda__timeline">
+          {eventsForDay.map((event) => {
+            const meta = ESTADO_META[event.estado] || ESTADO_META.programado;
+            const statusLabel = meta?.label || 'Programado';
+            const statusColor = meta?.color || ESTADO_META.programado.color;
+
+            return (
+              <li
+                key={event._id}
+                className="daily-agenda__item"
+                style={{
+                  '--status-color': statusColor,
+                  '--status-color-soft': hexToRgba(statusColor, 0.12),
+                  '--status-color-border': hexToRgba(statusColor, 0.24),
+                }}
+              >
+                <div className="daily-agenda__time">{formatTimeRange(event.fecha, event.duracionMinutos)}</div>
+                <div className="daily-agenda__details">
+                  <span className="daily-agenda__patient">{event.paciente}</span>
+                  {event.titulo && <span className="daily-agenda__title">{event.titulo}</span>}
+                  <span className="daily-agenda__status">{statusLabel}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="daily-agenda__empty">
+          <p className="mb-0 text-muted small">{emptyMessage}</p>
+        </div>
+      )}
     </div>
   );
 };
