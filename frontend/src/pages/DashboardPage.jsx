@@ -6,7 +6,7 @@ import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
 import centrosSaludService from '../services/CentrosSaludService';
 import turnosService from '../services/TurnosService';
-import AgendaGantt from '../components/AgendaGantt.jsx';
+import DailyAgendaTimeline from '../components/DailyAgendaTimeline.jsx';
 import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers } from 'react-icons/fa';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
@@ -28,6 +28,16 @@ const ESTADO_COLOR_MAP = {
 };
 
 const WEEKLY_AVAILABLE_MINUTES = 5 * 8 * 60; // 5 días hábiles de 8 horas
+
+const getLocalDateKey = (date) => {
+  if (!(date instanceof Date)) {
+    return '';
+  }
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 function DashboardPage({ currentUser }) {
   const [allFacturas, setAllFacturas] = useState([]);
@@ -525,14 +535,58 @@ function DashboardPage({ currentUser }) {
     ? data.totalFacturacion / Math.max(data.totalPacientes, 1)
     : 0;
 
-  const agendaHoy = useMemo(() => {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const year = hoy.getFullYear();
-    const month = (hoy.getMonth() + 1).toString().padStart(2, '0');
-    const day = hoy.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  const hoyDate = useMemo(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
   }, []);
+
+  const mananaDate = useMemo(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + 1);
+    return date;
+  }, []);
+
+  const agendaHoy = useMemo(() => getLocalDateKey(hoyDate), [hoyDate]);
+  const agendaManana = useMemo(() => getLocalDateKey(mananaDate), [mananaDate]);
+
+  const turnosHoy = useMemo(() => {
+    if (!Array.isArray(turnos) || !agendaHoy) {
+      return [];
+    }
+    return turnos.filter((turno) => {
+      const fecha = new Date(turno.fecha);
+      return !Number.isNaN(fecha.getTime()) && getLocalDateKey(fecha) === agendaHoy;
+    });
+  }, [agendaHoy, turnos]);
+
+  const turnosManana = useMemo(() => {
+    if (!Array.isArray(turnos) || !agendaManana) {
+      return [];
+    }
+    return turnos
+      .filter((turno) => {
+        const fecha = new Date(turno.fecha);
+        return !Number.isNaN(fecha.getTime()) && getLocalDateKey(fecha) === agendaManana;
+      })
+      .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+  }, [agendaManana, turnos]);
+
+  const turnosPosteriores = useMemo(() => {
+    if (!Array.isArray(turnos)) {
+      return [];
+    }
+    const dayAfterTomorrow = new Date(mananaDate.getTime());
+    dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+    return turnos
+      .filter((turno) => {
+        const fecha = new Date(turno.fecha);
+        return !Number.isNaN(fecha.getTime()) && fecha >= dayAfterTomorrow;
+      })
+      .sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
+      .slice(0, 5);
+  }, [mananaDate, turnos]);
 
   return (
     <div className="container mt-4">
@@ -766,34 +820,88 @@ function DashboardPage({ currentUser }) {
           </div>
         </div>
 
-        {/* Agenda diaria y próximos turnos */}
-        <div className="col-xl-4 col-lg-6">
+        {/* Agenda diaria */}
+        <div className="col-12">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-info text-white">
               <FaCalendarAlt className="me-2" /> Agenda del día
             </div>
-            <div className="card-body d-flex flex-column">
-              <div className="mb-4">
-                <AgendaGantt
-                  turnos={turnos}
-                  selectedDate={agendaHoy}
-                  daysToShow={1}
-                  startHour={8}
-                  endHour={20}
-                  minuteHeight={0.85}
-                  emptyMessage="No hay turnos programados para hoy."
-                />
-              </div>
-              <div className="mt-auto">
-                <h6 className="text-muted text-uppercase fs-6 mb-3">Próximos turnos</h6>
-                {data.turnosProximos.length > 0 ? (
-                  <ul className="list-group list-group-flush">
-                    {data.turnosProximos.map((turno) => (
+            <div className="card-body">
+              <DailyAgendaTimeline
+                turnos={turnosHoy}
+                selectedDate={agendaHoy}
+                startHour={8}
+                endHour={20}
+                emptyMessage="No hay turnos programados para hoy."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Turnos de mañana */}
+        <div className="col-xl-4 col-lg-6">
+          <div className="card shadow-sm h-100">
+            <div className="card-header bg-primary text-white">
+              <FaClock className="me-2" /> Turnos de mañana
+            </div>
+            <div className="card-body">
+              {turnosManana.length > 0 ? (
+                <ul className="list-group list-group-flush">
+                  {turnosManana.map((turno) => {
+                    const fecha = new Date(turno.fecha);
+                    const horaLabel = Number.isNaN(fecha.getTime())
+                      ? 'Sin horario'
+                      : fecha.toLocaleTimeString('es-AR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                    const pacienteNombre = turno.paciente
+                      ? `${turno.paciente.nombre || ''} ${turno.paciente.apellido || ''}`.trim() || 'Paciente'
+                      : 'Paciente';
+                    return (
                       <li key={turno._id} className="list-group-item">
                         <div className="d-flex justify-content-between align-items-start">
                           <div>
-                            <strong>{turno.paciente}</strong>
-                            <div className="small text-muted">{turno.titulo}</div>
+                            <strong>{pacienteNombre}</strong>
+                            <div className="small text-muted">{turno.titulo || 'Consulta'}</div>
+                          </div>
+                          <div className="text-end">
+                            <div className="small fw-semibold">{horaLabel}</div>
+                            <span className={`badge ${turno.estado === 'confirmado' ? 'bg-success' : turno.estado === 'cancelado' ? 'bg-danger' : 'bg-secondary'}`}>
+                              {turno.estado || 'Programado'}
+                            </span>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-muted mb-0">No hay turnos agendados para mañana.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Próximos turnos */}
+        <div className="col-xl-4 col-lg-6">
+          <div className="card shadow-sm h-100">
+            <div className="card-header bg-secondary text-white">
+              <FaCalendarAlt className="me-2" /> Próximos turnos
+            </div>
+            <div className="card-body">
+              {turnosPosteriores.length > 0 ? (
+                <ul className="list-group list-group-flush">
+                  {turnosPosteriores.map((turno) => {
+                    const pacienteNombre = turno.paciente
+                      ? `${turno.paciente.nombre || ''} ${turno.paciente.apellido || ''}`.trim() || 'Paciente'
+                      : turno.paciente || 'Paciente';
+                    return (
+                      <li key={turno._id} className="list-group-item">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <strong>{pacienteNombre}</strong>
+                            <div className="small text-muted">{turno.titulo || 'Consulta'}</div>
                           </div>
                           <div className="text-end">
                             <div className="small fw-semibold">{formatDateTime(turno.fecha)}</div>
@@ -803,12 +911,12 @@ function DashboardPage({ currentUser }) {
                           </div>
                         </div>
                       </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-muted mb-0">No hay turnos programados en los próximos días.</p>
-                )}
-              </div>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-muted mb-0">No hay turnos programados a partir de pasado mañana.</p>
+              )}
             </div>
           </div>
         </div>
