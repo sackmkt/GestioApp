@@ -3,36 +3,9 @@ const dotenv = require('dotenv');
 const { app } = require('./app');
 const Factura = require('./models/Factura');
 const Paciente = require('./models/Paciente');
-const ObraSocial = require('./models/ObraSocial');
-
-const dropLegacyObraSocialIndexes = async () => {
-  try {
-    await ObraSocial.collection.dropIndex('cuit_1');
-    console.log('Índice obsoleto cuit_1 eliminado de ObraSocial');
-  } catch (error) {
-    const message = typeof error?.message === 'string' ? error.message : '';
-
-    if (error.codeName === 'IndexNotFound' || error.code === 27 || message.includes('index not found')) {
-      return;
-    }
-
-    if (error.code === 26 || message.includes('ns not found')) {
-      return;
-    }
-
-    throw error;
-  }
-};
 
 const syncTenantIndexes = async () => {
   const models = [
-    {
-      name: 'ObraSocial',
-      sync: async () => {
-        await dropLegacyObraSocialIndexes();
-        await ObraSocial.syncIndexes();
-      },
-    },
     { name: 'Factura', sync: () => Factura.syncIndexes() },
     { name: 'Paciente', sync: () => Paciente.syncIndexes() },
   ];
