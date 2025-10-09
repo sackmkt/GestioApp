@@ -8,12 +8,12 @@ const obraSocialSchema = new mongoose.Schema({
     type: String,
     trim: true,
     set: (value) => {
-      if (value === undefined || value === null) {
-        return undefined;
+      if (typeof value !== 'string') {
+        return value;
       }
 
-      const normalized = String(value).trim();
-      return normalized === '' ? undefined : normalized;
+      const trimmed = value.trim();
+      return trimmed === '' ? undefined : trimmed;
     },
   },
   user: {
