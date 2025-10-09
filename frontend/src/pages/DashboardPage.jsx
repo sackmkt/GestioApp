@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import facturasService from '../services/FacturasService';
@@ -6,6 +6,7 @@ import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
 import centrosSaludService from '../services/CentrosSaludService';
 import turnosService from '../services/TurnosService';
+import AgendaGantt from '../components/AgendaGantt.jsx';
 import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers } from 'react-icons/fa';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
@@ -524,6 +525,15 @@ function DashboardPage({ currentUser }) {
     ? data.totalFacturacion / Math.max(data.totalPacientes, 1)
     : 0;
 
+  const agendaHoy = useMemo(() => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const year = hoy.getFullYear();
+    const month = (hoy.getMonth() + 1).toString().padStart(2, '0');
+    const day = hoy.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
   return (
     <div className="container mt-4">
       <div className="mb-4 text-center text-md-start">
@@ -756,35 +766,49 @@ function DashboardPage({ currentUser }) {
           </div>
         </div>
 
-        {/* Turnos próximos */}
+        {/* Agenda diaria y próximos turnos */}
         <div className="col-xl-4 col-lg-6">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-info text-white">
-              <FaCalendarAlt className="me-2" /> Turnos próximos
+              <FaCalendarAlt className="me-2" /> Agenda del día
             </div>
-            <div className="card-body">
-              {data.turnosProximos.length > 0 ? (
-                <ul className="list-group list-group-flush">
-                  {data.turnosProximos.map((turno) => (
-                    <li key={turno._id} className="list-group-item">
-                      <div className="d-flex justify-content-between align-items-start">
-                        <div>
-                          <strong>{turno.paciente}</strong>
-                          <div className="small text-muted">{turno.titulo}</div>
+            <div className="card-body d-flex flex-column">
+              <div className="mb-4">
+                <AgendaGantt
+                  turnos={turnos}
+                  selectedDate={agendaHoy}
+                  daysToShow={1}
+                  startHour={8}
+                  endHour={20}
+                  minuteHeight={0.85}
+                  emptyMessage="No hay turnos programados para hoy."
+                />
+              </div>
+              <div className="mt-auto">
+                <h6 className="text-muted text-uppercase fs-6 mb-3">Próximos turnos</h6>
+                {data.turnosProximos.length > 0 ? (
+                  <ul className="list-group list-group-flush">
+                    {data.turnosProximos.map((turno) => (
+                      <li key={turno._id} className="list-group-item">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div>
+                            <strong>{turno.paciente}</strong>
+                            <div className="small text-muted">{turno.titulo}</div>
+                          </div>
+                          <div className="text-end">
+                            <div className="small fw-semibold">{formatDateTime(turno.fecha)}</div>
+                            <span className={`badge ${turno.estado === 'confirmado' ? 'bg-success' : turno.estado === 'cancelado' ? 'bg-danger' : 'bg-secondary'}`}>
+                              {turno.estado || 'Programado'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-end">
-                          <div className="small fw-semibold">{formatDateTime(turno.fecha)}</div>
-                          <span className={`badge ${turno.estado === 'confirmado' ? 'bg-success' : turno.estado === 'cancelado' ? 'bg-danger' : 'bg-secondary'}`}>
-                            {turno.estado || 'Programado'}
-                          </span>
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted mb-0">No hay turnos programados en los próximos días.</p>
-              )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-muted mb-0">No hay turnos programados en los próximos días.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
