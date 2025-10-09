@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ObrasSocialesService from '../services/ObrasSocialesService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
 
@@ -15,6 +15,7 @@ function ObrasSocialesPage() {
   const [listLoading, setListLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [deleteLoadingId, setDeleteLoadingId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchObrasSociales = useCallback(async () => {
     try {
@@ -98,8 +99,63 @@ function ObrasSocialesPage() {
     });
   };
 
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredObrasSociales = useMemo(() => {
+    if (!normalizedSearch) {
+      return obrasSociales;
+    }
+
+    return obrasSociales.filter((obra) => {
+      const nombre = (obra.nombre || '').toLowerCase();
+      const cuit = (obra.cuit || '').toString().toLowerCase();
+      return nombre.includes(normalizedSearch) || cuit.includes(normalizedSearch);
+    });
+  }, [obrasSociales, normalizedSearch]);
+
+  const hasSearch = Boolean(normalizedSearch);
+  const emptyObrasMessage = hasSearch
+    ? 'No se encontraron obras sociales que coincidan con la búsqueda.'
+    : 'No hay obras sociales registradas.';
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
   return (
     <div className="container mt-4">
+      <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
+        <div>
+          <h2 className="fw-bold mb-1">Obras Sociales</h2>
+          <p className="text-muted mb-0">Gestiona los convenios y datos de contacto de cada financiador.</p>
+        </div>
+        <div className="d-flex flex-wrap gap-3 justify-content-start justify-content-lg-end">
+          <div className="text-center flex-fill flex-lg-grow-0">
+            <span className="text-muted small d-block">Registradas</span>
+            <strong className="fs-5">{obrasSociales.length}</strong>
+          </div>
+          <div className="text-center flex-fill flex-lg-grow-0">
+            <span className="text-muted small d-block">Coinciden con la búsqueda</span>
+            <strong className="fs-5 text-info">{filteredObrasSociales.length}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <label htmlFor="obrasSearch" className="form-label visually-hidden">Buscar obras sociales</label>
+        <div className="input-group">
+          <span className="input-group-text" id="obrasSearchIcon" aria-hidden="true">🔍</span>
+          <input
+            id="obrasSearch"
+            type="search"
+            className="form-control"
+            placeholder="Buscar por nombre o CUIT/CUIL"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            aria-describedby="obrasSearchIcon"
+          />
+        </div>
+      </div>
+
       <div className="card shadow-sm mb-4">
         <div className="card-header bg-info text-white">
           <h2 className="mb-0">Gestión de Obras Sociales</h2>
@@ -199,14 +255,14 @@ function ObrasSocialesPage() {
                     </div>
                   </td>
                 </tr>
-              ) : obrasSociales.length === 0 ? (
+              ) : filteredObrasSociales.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="text-center text-muted py-4">
-                    No hay obras sociales registradas.
+                    {emptyObrasMessage}
                   </td>
                 </tr>
               ) : (
-                obrasSociales.map((os) => (
+                filteredObrasSociales.map((os) => (
                   <tr key={os._id}>
                     <td>{os.nombre}</td>
                     <td>{os.cuit || '—'}</td>
@@ -258,13 +314,13 @@ function ObrasSocialesPage() {
               </div>
             </div>
           )}
-          {!listLoading && obrasSociales.length === 0 && (
+          {!listLoading && filteredObrasSociales.length === 0 && (
             <div className="col-12">
-              <div className="alert alert-light text-center mb-0">Todavía no registraste obras sociales.</div>
+              <div className="alert alert-light text-center mb-0">{emptyObrasMessage}</div>
             </div>
           )}
           {!listLoading &&
-            obrasSociales.map((os) => (
+            filteredObrasSociales.map((os) => (
             <div className="col-12" key={os._id}>
               <div className="card shadow-sm">
                 <div className="card-body">
@@ -272,7 +328,7 @@ function ObrasSocialesPage() {
                   <p className="card-text mb-1"><strong>CUIT/CUIL:</strong> {os.cuit || '—'}</p>
                   <p className="card-text mb-1"><strong>Teléfono:</strong> {os.telefono}</p>
                   <p className="card-text"><strong>Email:</strong> {os.email}</p>
-                  <div className="d-flex justify-content-between mt-3">
+                  <div className="d-flex justify-content-end gap-2 mt-3">
                     <button
                       className="btn btn-warning btn-sm me-2"
                       onClick={() => handleEdit(os)}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
-import { Pie, Bar } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import facturasService from '../services/FacturasService';
 import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
@@ -542,6 +542,17 @@ function DashboardPage({ currentUser }) {
     return null;
   };
 
+  const cobranzaRate = data.totalFacturacion > 0
+    ? Math.round((data.montoPagado / data.totalFacturacion) * 100)
+    : 0;
+  const facturasTotal = data.facturasPagadas + data.facturasPendientes;
+  const facturasPendientesRate = facturasTotal > 0
+    ? Math.round((data.facturasPendientes / facturasTotal) * 100)
+    : 0;
+  const averageTicket = data.totalPacientes > 0
+    ? data.totalFacturacion / Math.max(data.totalPacientes, 1)
+    : 0;
+
   return (
     <div className="container mt-4">
       <div className="mb-4 text-center text-md-start">
@@ -716,20 +727,29 @@ function DashboardPage({ currentUser }) {
           </div>
         </div>
 
-        {/* Gráfico de Torta */}
+        {/* Salud de la cobranza */}
         <div className="col-lg-4 col-md-12">
           <div className="card shadow-sm h-100">
-            <div className="card-header">
-              Distribución de Facturas
+            <div className="card-header bg-dark text-white">
+              <FaFileInvoiceDollar className="me-2" /> Salud de la cobranza
             </div>
-            <div className="card-body d-flex align-items-center justify-content-center">
-              {data.facturasPagadas + data.facturasPendientes > 0 ? (
-                <div style={{ height: '250px', width: '250px' }}>
-                  <Pie data={data.pieChartData} />
-                </div>
-              ) : (
-                <p className="text-center text-muted">No hay datos de facturas para mostrar.</p>
-              )}
+            <div className="card-body">
+              <p className="text-muted mb-2">
+                El <strong>{cobranzaRate}%</strong> de tu facturación está cobrado. Mantén esta tasa por encima del 80% para sostener la liquidez.
+              </p>
+              <div className="progress" role="progressbar" aria-label="Tasa de cobranza" aria-valuenow={cobranzaRate} aria-valuemin="0" aria-valuemax="100">
+                <div
+                  className={`progress-bar ${cobranzaRate >= 80 ? 'bg-success' : cobranzaRate >= 60 ? 'bg-warning text-dark' : 'bg-danger'}`}
+                  style={{ width: `${Math.min(cobranzaRate, 100)}%` }}
+                ></div>
+              </div>
+              <div className="d-flex justify-content-between small text-muted mt-2">
+                <span>Pagadas: {data.facturasPagadas}</span>
+                <span>Pendientes: {data.facturasPendientes} ({facturasPendientesRate}%)</span>
+              </div>
+              <hr />
+              <p className="text-muted mb-1">Ticket promedio por paciente</p>
+              <h4 className="fw-bold mb-0">{formatNumber(averageTicket)}</h4>
             </div>
           </div>
         </div>

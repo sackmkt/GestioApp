@@ -126,6 +126,16 @@ footer.gestio-footer a {
   color: #f8fafc;
 }
 
+.input-group-text {
+  background-color: rgba(15, 23, 42, 0.05);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.input-group .form-control {
+  border-color: rgba(148, 163, 184, 0.25);
+  box-shadow: none;
+}
+
 .badge.gestio-role {
   background: rgba(15, 23, 42, 0.08);
   color: var(--gestio-dark);
@@ -136,5 +146,35 @@ footer.gestio-footer a {
   .gestio-main .gestio-content {
     padding: 1.75rem;
     border-radius: 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .gestio-main .gestio-content {
+    padding: 1.5rem;
+  }
+
+  .card .card-body {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .gestio-main .gestio-content {
+    padding: 1.1rem;
+    border-radius: 14px;
+  }
+
+  .card {
+    border-radius: 14px;
+    box-shadow: 0 12px 28px -20px rgba(15, 23, 42, 0.45);
+  }
+
+  .card .card-body {
+    padding: 1.1rem;
+  }
+
+  .input-group-text {
+    font-size: 1.1rem;
   }
 }
