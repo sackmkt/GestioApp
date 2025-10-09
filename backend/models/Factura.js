@@ -43,7 +43,10 @@ facturaSchema.index(
   { user: 1, puntoVenta: 1, numeroFactura: 1 },
   {
     unique: true,
+    name: 'factura_user_puntoVenta_numeroFactura_unique',
+    background: true,
     partialFilterExpression: {
+      user: { $exists: true },
       puntoVenta: { $exists: true },
       numeroFactura: { $exists: true },
     },

@@ -3,10 +3,17 @@ const router = express.Router();
 const Factura = require('../models/Factura');
 const Paciente = require('../models/Paciente');
 const CentroSalud = require('../models/CentroSalud');
+const ObraSocial = require('../models/ObraSocial');
 const { protect } = require('../middleware/authMiddleware');
 const storageService = require('../services/storageService');
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const createValidationError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+};
 
 const sanitizeBase64 = (value) => {
   if (typeof value !== 'string') {
@@ -132,7 +139,7 @@ const resolveCentroSaludId = async ({ centroSaludId, pacienteId, userId }) => {
     }
     const centro = await CentroSalud.findOne({ _id: centroSaludId, user: userId });
     if (!centro) {
-      throw new Error('Centro de salud no válido para este profesional.');
+      throw createValidationError('Centro de salud no válido para este profesional.');
     }
     return centro._id;
   }
@@ -149,12 +156,40 @@ const resolveCentroSaludId = async ({ centroSaludId, pacienteId, userId }) => {
   return null;
 };
 
+const resolvePacienteId = async ({ pacienteId, userId }) => {
+  if (!pacienteId) {
+    throw createValidationError('Debes seleccionar un paciente válido.');
+  }
+
+  const paciente = await Paciente.findOne({ _id: pacienteId, user: userId });
+  if (!paciente) {
+    throw createValidationError('Paciente no válido para este profesional.');
+  }
+
+  return paciente._id;
+};
+
+const resolveObraSocialId = async ({ obraSocialId, userId }) => {
+  if (obraSocialId === undefined || obraSocialId === null || obraSocialId === '') {
+    return null;
+  }
+
+  const obraSocial = await ObraSocial.findOne({ _id: obraSocialId, user: userId });
+  if (!obraSocial) {
+    throw createValidationError('Obra social no válida para este profesional.');
+  }
+
+  return obraSocial._id;
+};
+
 // Crea una nueva factura para el usuario autenticado
 router.post('/', protect, async (req, res) => {
   try {
+    const pacienteId = await resolvePacienteId({ pacienteId: req.body.paciente, userId: req.user._id });
+    const obraSocialId = await resolveObraSocialId({ obraSocialId: req.body.obraSocial, userId: req.user._id });
     const centroSaludId = await resolveCentroSaludId({
       centroSaludId: req.body.centroSalud,
-      pacienteId: req.body.paciente,
+      pacienteId,
       userId: req.user._id,
     });
 
@@ -193,8 +228,8 @@ router.post('/', protect, async (req, res) => {
     }
 
     const facturaData = {
-      paciente: req.body.paciente,
-      obraSocial: req.body.obraSocial || null,
+      paciente: pacienteId,
+      obraSocial: obraSocialId,
       puntoVenta: puntoVentaValor,
       numeroFactura: numeroFacturaValor,
       montoTotal: montoTotalValor,
@@ -232,7 +267,8 @@ router.post('/', protect, async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({ error: 'Ya existe una factura con ese punto de venta y número para este profesional.' });
     }
-    res.status(500).json({ error: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ error: error.message });
   }
 });
 
@@ -261,6 +297,17 @@ router.put('/:id', protect, async (req, res) => {
     const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id });
     if (!factura) {
       return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
+    }
+
+    let resolvedPacienteId;
+    let resolvedObraSocialId;
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'paciente')) {
+      resolvedPacienteId = await resolvePacienteId({ pacienteId: req.body.paciente, userId: req.user._id });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'obraSocial')) {
+      resolvedObraSocialId = await resolveObraSocialId({ obraSocialId: req.body.obraSocial, userId: req.user._id });
     }
 
     for (const field of allowedUpdateFields) {
@@ -319,7 +366,12 @@ router.put('/:id', protect, async (req, res) => {
       }
 
       if (field === 'obraSocial') {
-        factura.obraSocial = req.body.obraSocial || null;
+        factura.obraSocial = resolvedObraSocialId || null;
+        continue;
+      }
+
+      if (field === 'paciente' && resolvedPacienteId) {
+        factura.paciente = resolvedPacienteId;
         continue;
       }
 
@@ -365,7 +417,8 @@ router.put('/:id', protect, async (req, res) => {
     if (error.code === 11000) {
       return res.status(400).json({ error: 'Ya existe una factura con ese punto de venta y número para este profesional.' });
     }
-    res.status(500).json({ error: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ error: error.message });
   }
 });
 
