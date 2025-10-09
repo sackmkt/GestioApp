@@ -1,6 +1,26 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const { app } = require('./app');
+const Factura = require('./models/Factura');
+const Paciente = require('./models/Paciente');
+const ObraSocial = require('./models/ObraSocial');
+
+const syncTenantIndexes = async () => {
+  const models = [
+    { name: 'Factura', sync: () => Factura.syncIndexes() },
+    { name: 'Paciente', sync: () => Paciente.syncIndexes() },
+    { name: 'Obra Social', sync: () => ObraSocial.syncIndexes() },
+  ];
+
+  for (const { name, sync } of models) {
+    try {
+      await sync();
+    } catch (error) {
+      console.error(`No se pudieron sincronizar los índices de ${name}:`, error.message);
+      throw error;
+    }
+  }
+};
 
 dotenv.config();
 
@@ -15,6 +35,9 @@ const startServer = async () => {
 
     await mongoose.connect(MONGO_URI);
     console.log('Conectado a la base de datos de MongoDB');
+
+    await syncTenantIndexes();
+    console.log('Índices de inquilino sincronizados correctamente');
 
     app.listen(PORT, () => {
       console.log(`Servidor escuchando el puerto ${PORT}`);
