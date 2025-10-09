@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import turnosService from '../services/TurnosService';
 import PacientesService from '../services/PacientesService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
+import AgendaGantt from '../components/AgendaGantt.jsx';
 
 const formatoFechaLocal = (fechaISO) => {
   if (!fechaISO) return '';
@@ -57,6 +58,15 @@ const estadoLabel = {
   cancelado: 'Cancelado',
 };
 
+const obtenerFechaLocalISO = (date = new Date()) => {
+  const local = new Date(date);
+  local.setHours(0, 0, 0, 0);
+  const year = local.getFullYear();
+  const month = (local.getMonth() + 1).toString().padStart(2, '0');
+  const day = local.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const TurnosPage = () => {
   const { showError, showSuccess, showInfo } = useFeedback();
   const [turnos, setTurnos] = useState([]);
@@ -77,6 +87,8 @@ const TurnosPage = () => {
   const [deletingId, setDeletingId] = useState(null);
   const [recordatorioUpdatingId, setRecordatorioUpdatingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [agendaViewMode, setAgendaViewMode] = useState('day');
+  const [agendaDate, setAgendaDate] = useState(obtenerFechaLocalISO());
 
   useEffect(() => {
     const obtenerDatos = async () => {
@@ -265,6 +277,14 @@ const TurnosPage = () => {
     }));
   };
 
+  const handleAgendaDateChange = (event) => {
+    setAgendaDate(event.target.value);
+  };
+
+  const handleAgendaToday = () => {
+    setAgendaDate(obtenerFechaLocalISO());
+  };
+
   return (
     <div className="container mt-4">
       <div className="card shadow-sm mb-4">
@@ -424,6 +444,56 @@ const TurnosPage = () => {
               </div>
             </fieldset>
           </form>
+        </div>
+      </div>
+
+      <div className="card shadow-sm mb-4">
+        <div className="card-header bg-info text-white d-flex flex-column flex-md-row align-items-md-center justify-content-md-between gap-3">
+          <h5 className="mb-0">Agenda visual</h5>
+          <div className="d-flex flex-column flex-md-row align-items-md-center gap-2">
+            <div className="btn-group btn-group-sm" role="group" aria-label="Cambiar vista de agenda">
+              <button
+                type="button"
+                className={`btn ${agendaViewMode === 'day' ? 'btn-primary' : 'btn-outline-light text-white border-light'}`}
+                onClick={() => setAgendaViewMode('day')}
+              >
+                Día
+              </button>
+              <button
+                type="button"
+                className={`btn ${agendaViewMode === 'week' ? 'btn-primary' : 'btn-outline-light text-white border-light'}`}
+                onClick={() => setAgendaViewMode('week')}
+              >
+                Semana (7 días)
+              </button>
+            </div>
+            <div className="d-flex align-items-center gap-2">
+              <label htmlFor="agendaDate" className="form-label mb-0 text-white-50 small">
+                {agendaViewMode === 'week' ? 'Inicio de la semana' : 'Fecha'}
+              </label>
+              <input
+                id="agendaDate"
+                type="date"
+                className="form-control form-control-sm"
+                value={agendaDate}
+                onChange={handleAgendaDateChange}
+              />
+              <button type="button" className="btn btn-outline-light btn-sm" onClick={handleAgendaToday}>
+                Hoy
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="card-body">
+          <AgendaGantt
+            turnos={turnos}
+            selectedDate={agendaDate}
+            daysToShow={agendaViewMode === 'week' ? 7 : 1}
+            startHour={8}
+            endHour={20}
+            minuteHeight={1}
+            emptyMessage="No hay turnos programados en el período seleccionado."
+          />
         </div>
       </div>
 
