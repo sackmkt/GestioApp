@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import authService from '../services/authService';
+import GestioLogo from '../assets/GestioLogo.png';
+import '../styles/auth-pages.css';
 
 function RegisterPage({ onAuthChange }) {
   const [formData, setFormData] = useState({
@@ -67,70 +69,91 @@ function RegisterPage({ onAuthChange }) {
   };
 
   return (
-    <div className="container mt-5">
-      <div className="row justify-content-center">
-        <div className="col-md-6">
-          <div className="card shadow-sm">
-            <div className="card-header text-white bg-info">
-              <h4 className="mb-0">Crear Cuenta</h4>
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-card__brand">
+          <img src={GestioLogo} alt="Gestio" className="auth-card__brand-logo" />
+          <h2 className="auth-card__brand-title">GESTIO</h2>
+          <p className="auth-card__brand-subtitle">
+            Diseñado para equipos que necesitan centralizar la información clínica y la administración sin perder tiempo.
+          </p>
+          <ul className="auth-card__highlights">
+            <li>Perfiles de pacientes completos y seguros</li>
+            <li>Flujos de alta y seguimiento simplificados</li>
+            <li>Colaboración con tu equipo en tiempo real</li>
+          </ul>
+        </div>
+        <div className="auth-card__form">
+          <header>
+            <h1 className="auth-card__form-title">Crea tu cuenta</h1>
+            <p className="auth-card__form-description">
+              Configura tu acceso para comenzar a utilizar la plataforma y completar tu perfil profesional.
+            </p>
+          </header>
+          {error && <div className="auth-alert">{error}</div>}
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <div className="auth-form-group">
+              <label htmlFor="registerUsername">Nombre de usuario</label>
+              <input
+                id="registerUsername"
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                className="auth-input"
+                autoComplete="username"
+                required
+              />
             </div>
-            <div className="card-body">
-              {error && <div className="alert alert-danger">{error}</div>}
-              <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label className="form-label">Nombre de Usuario</label>
-                  <input
-                    type="text"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleChange}
-                    className="form-control"
-                    required
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Correo Electrónico</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="form-control"
-                    required
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Contraseña</label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="form-control"
-                    required
-                  />
-                </div>
-                {/* Campo de confirmación de contraseña agregado */}
-                <div className="mb-3">
-                  <label className="form-label">Confirmar Contraseña</label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    className="form-control"
-                    required
-                  />
-                </div>
-                <button type="submit" className="btn btn-info text-white w-100" disabled={isSubmitting}>
-                  {isSubmitting ? 'Creando cuenta...' : 'Registrarse'}
-                </button>
-              </form>
-              <p className="mt-3 text-center">
-                ¿Ya tienes una cuenta? <NavLink to="/login">Inicia sesión aquí</NavLink>
-              </p>
+            <div className="auth-form-group">
+              <label htmlFor="registerEmail">Correo electrónico</label>
+              <input
+                id="registerEmail"
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                className="auth-input"
+                autoComplete="email"
+                required
+              />
             </div>
-          </div>
+            <div className="auth-form-group">
+              <label htmlFor="registerPassword">Contraseña</label>
+              <input
+                id="registerPassword"
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="auth-input"
+                autoComplete="new-password"
+                required
+              />
+            </div>
+            <div className="auth-form-group">
+              <label htmlFor="registerConfirm">Confirmar contraseña</label>
+              <input
+                id="registerConfirm"
+                type="password"
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className="auth-input"
+                autoComplete="new-password"
+                required
+              />
+            </div>
+            <button type="submit" className="auth-submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Creando cuenta…' : 'Registrarse'}
+            </button>
+          </form>
+          <p className="auth-switch">
+            ¿Ya tienes una cuenta?{' '}
+            <NavLink to="/login" className="auth-link">
+              Inicia sesión aquí
+            </NavLink>
+          </p>
         </div>
       </div>
     </div>

@@ -130,13 +130,26 @@ const AgendaGantt = ({
     [baseDate, safeDaysToShow],
   );
 
-  const hours = useMemo(() => {
+  const hourMarks = useMemo(() => {
     const safeStart = Math.min(startHour, endHour);
     const safeEnd = Math.max(startHour, endHour);
     return Array.from({ length: safeEnd - safeStart + 1 }, (_, index) => safeStart + index);
   }, [startHour, endHour]);
 
-  const totalMinutes = Math.max((endHour - startHour) * 60, 0);
+  const hourSlots = useMemo(() => {
+    if (hourMarks.length <= 1) {
+      return hourMarks;
+    }
+    return hourMarks.slice(0, -1);
+  }, [hourMarks]);
+
+  const totalMinutes = useMemo(() => {
+    if (hourMarks.length > 1) {
+      return (hourMarks[hourMarks.length - 1] - hourMarks[0]) * 60;
+    }
+    return 60;
+  }, [hourMarks]);
+
   const timelineHeight = totalMinutes * minuteHeight;
 
   const eventsByDay = useMemo(() => {
@@ -221,7 +234,7 @@ const AgendaGantt = ({
           </div>
           <div className="agenda-gantt__body" style={{ gridTemplateColumns }}>
             <div className="agenda-gantt__time-column" style={{ height: `${timelineHeight}px` }}>
-              {hours.map((hour, index) => (
+              {hourSlots.map((hour, index) => (
                 <div
                   key={hour}
                   className={`agenda-gantt__time-cell ${index === 0 ? 'agenda-gantt__time-cell--first' : ''}`}
@@ -230,6 +243,11 @@ const AgendaGantt = ({
                   {formatHourLabel(hour)}
                 </div>
               ))}
+              {hourMarks.length > 0 && (
+                <div className="agenda-gantt__time-column-end" aria-hidden="true">
+                  {formatHourLabel(hourMarks[hourMarks.length - 1])}
+                </div>
+              )}
             </div>
             {days.map((day) => {
               const key = getLocalDateKey(day);
@@ -238,7 +256,7 @@ const AgendaGantt = ({
                 <div key={key} className="agenda-gantt__day-column">
                   <div className="agenda-gantt__day-inner" style={{ height: `${timelineHeight}px` }}>
                     <div className="agenda-gantt__hour-grid">
-                      {hours.map((hour) => (
+                      {hourSlots.map((hour) => (
                         <div
                           key={`${key}-${hour}`}
                           className="agenda-gantt__hour-cell"
@@ -263,10 +281,14 @@ const AgendaGantt = ({
                           className={`agenda-gantt__event ${estadoClassName[event.estado] || ''}`}
                           style={eventStyle}
                         >
-                          <div className="agenda-gantt__event-time">
-                            {formatTimeRange(event.fecha, event.duracionMinutos)}
+                          <div className="agenda-gantt__event-header">
+                            <span className="agenda-gantt__event-time">
+                              {formatTimeRange(event.fecha, event.duracionMinutos)}
+                            </span>
+                            <span className="agenda-gantt__event-title" title={event.paciente}>
+                              {event.paciente}
+                            </span>
                           </div>
-                          <div className="agenda-gantt__event-title">{event.paciente}</div>
                           {event.titulo && (
                             <div className="agenda-gantt__event-subtitle">{event.titulo}</div>
                           )}
