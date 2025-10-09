@@ -3,13 +3,11 @@ const dotenv = require('dotenv');
 const { app } = require('./app');
 const Factura = require('./models/Factura');
 const Paciente = require('./models/Paciente');
-const ObraSocial = require('./models/ObraSocial');
 
 const syncTenantIndexes = async () => {
   const models = [
     { name: 'Factura', sync: () => Factura.syncIndexes() },
     { name: 'Paciente', sync: () => Paciente.syncIndexes() },
-    { name: 'Obra Social', sync: () => ObraSocial.syncIndexes() },
   ];
 
   for (const { name, sync } of models) {
