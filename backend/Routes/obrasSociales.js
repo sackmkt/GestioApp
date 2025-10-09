@@ -21,6 +21,9 @@ router.post('/', protect, async (req, res) => {
     await nuevaObraSocial.save();
     res.status(201).json(nuevaObraSocial);
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Ya existe una obra social con este CUIT para este profesional.' });
+    }
     res.status(400).json({ error: error.message });
   }
 });
@@ -45,6 +48,9 @@ router.put('/:id', protect, async (req, res) => {
     if (!obraSocialActualizada) return res.status(404).json({ error: 'Obra social no encontrada o no autorizada' });
     res.json(obraSocialActualizada);
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Ya existe una obra social con este CUIT para este profesional.' });
+    }
     res.status(400).json({ error: error.message });
   }
 });
