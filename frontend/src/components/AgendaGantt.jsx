@@ -40,19 +40,46 @@ const getLocalDateKey = (date) => {
 };
 
 const ensureDate = (value) => {
+  const buildToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  };
+
   if (!value) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today;
+    return buildToday();
   }
-  const parsed = value instanceof Date ? new Date(value) : new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today;
+
+  if (value instanceof Date) {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return buildToday();
+    }
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
   }
-  parsed.setHours(0, 0, 0, 0);
-  return parsed;
+
+  if (typeof value === 'string') {
+    const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoDateMatch) {
+      const [, year, month, day] = isoDateMatch.map(Number);
+      const parsed = new Date(year, month - 1, day);
+      if (Number.isNaN(parsed.getTime())) {
+        return buildToday();
+      }
+      parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return buildToday();
+    }
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  }
+
+  return buildToday();
 };
 
 const getEventStyle = (startDate, durationMinutes, minuteHeight, startHour, totalMinutes) => {
