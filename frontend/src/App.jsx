@@ -193,13 +193,12 @@ function App() {
         <div className="container">
           {isAuthenticated && (
             <header className="mb-4 text-center text-lg-start">
-              <p className="text-uppercase text-muted fw-semibold mb-1">Hola, {userDisplayName}</p>
-              <h1 className="display-6 fw-semibold mb-3" style={{ color: '#0f172a' }}>
+              <p className="text-uppercase text-muted fw-semibold mb-2 fs-5">Hola, {userDisplayName}</p>
+              <h1 className="display-5 fw-bold mb-3" style={{ color: '#0f172a' }}>
                 Gestión clínica sin fricciones
               </h1>
               <p className="text-muted mb-0 col-lg-6 p-0">
-                Visualiza tus pacientes, agenda y facturación desde un mismo panel. Actualizamos el diseño para que sea más simple
-                y profesional.
+                Visualiza tus pacientes, agenda y facturación desde un mismo panel.
               </p>
             </header>
           )}

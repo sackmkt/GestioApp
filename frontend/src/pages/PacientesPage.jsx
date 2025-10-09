@@ -74,6 +74,7 @@ function PacientesPage() {
   const [documentUploadLoading, setDocumentUploadLoading] = useState(false);
   const [documentDeleteLoadingId, setDocumentDeleteLoadingId] = useState(null);
   const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const documentFileInputRef = useRef(null);
 
   const fetchPacientes = useCallback(async () => {
@@ -139,6 +140,24 @@ function PacientesPage() {
     [pacientes, editingId],
   );
 
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredPacientes = useMemo(() => {
+    if (!normalizedSearch) {
+      return pacientes;
+    }
+
+    return pacientes.filter((paciente) => {
+      const fullName = `${paciente.nombre || ''} ${paciente.apellido || ''}`.toLowerCase();
+      const dni = (paciente.dni || '').toString().toLowerCase();
+      return fullName.includes(normalizedSearch) || dni.includes(normalizedSearch);
+    });
+  }, [pacientes, normalizedSearch]);
+
+  const hasSearch = Boolean(normalizedSearch);
+  const emptyPatientsMessage = hasSearch
+    ? 'No se encontraron pacientes que coincidan con la búsqueda.'
+    : 'No hay pacientes cargados todavía.';
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => {
@@ -147,6 +166,10 @@ function PacientesPage() {
       }
       return { ...prev, [name]: value };
     });
+  };
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
   };
 
   const resetForm = () => {
@@ -367,30 +390,46 @@ function PacientesPage() {
 
   return (
     <div className="container py-4">
-      <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4">
+      <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
         <div>
           <h2 className="fw-bold mb-1">Pacientes</h2>
           <p className="text-muted mb-0">Centraliza el seguimiento de tus pacientes y sus datos de contacto.</p>
         </div>
-        <div className="mt-3 mt-md-0">
-          <div className="d-flex gap-3">
-            <div className="text-center">
+        <div className="mt-2 mt-lg-0">
+          <div className="d-flex flex-wrap gap-3 justify-content-start justify-content-lg-end">
+            <div className="text-center flex-fill flex-lg-grow-0">
               <span className="text-muted small d-block">Total</span>
               <strong className="fs-5">{resumenPacientes.total}</strong>
             </div>
-            <div className="text-center">
+            <div className="text-center flex-fill flex-lg-grow-0">
               <span className="text-muted small d-block">Particulares</span>
               <strong className="fs-5 text-success">{resumenPacientes.particulares}</strong>
             </div>
-            <div className="text-center">
+            <div className="text-center flex-fill flex-lg-grow-0">
               <span className="text-muted small d-block">Por centros</span>
               <strong className="fs-5 text-primary">{resumenPacientes.porCentro}</strong>
             </div>
-            <div className="text-center">
+            <div className="text-center flex-fill flex-lg-grow-0">
               <span className="text-muted small d-block">Con contacto</span>
               <strong className="fs-5">{resumenPacientes.conContacto}</strong>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <label htmlFor="pacientesSearch" className="form-label visually-hidden">Buscar pacientes</label>
+        <div className="input-group">
+          <span className="input-group-text" id="pacientesSearchIcon" aria-hidden="true">🔍</span>
+          <input
+            id="pacientesSearch"
+            type="search"
+            className="form-control"
+            placeholder="Buscar por nombre, apellido o DNI"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            aria-describedby="pacientesSearchIcon"
+          />
         </div>
       </div>
 
@@ -656,14 +695,14 @@ function PacientesPage() {
                     </div>
                   </td>
                 </tr>
-              ) : pacientes.length === 0 ? (
+              ) : filteredPacientes.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="text-center py-4 text-muted">
-                    No hay pacientes cargados todavía.
+                    {emptyPatientsMessage}
                   </td>
                 </tr>
               ) : (
-                pacientes.map((paciente) => (
+                filteredPacientes.map((paciente) => (
                   <tr key={paciente._id}>
                   <td>{paciente.nombre} {paciente.apellido}</td>
                   <td>{paciente.dni}</td>
@@ -729,13 +768,13 @@ function PacientesPage() {
               </div>
             </div>
           )}
-          {!listLoading && pacientes.length === 0 && (
+          {!listLoading && filteredPacientes.length === 0 && (
             <div className="col-12">
-              <div className="alert alert-light text-center mb-0">Todavía no registraste pacientes.</div>
+              <div className="alert alert-light text-center mb-0">{emptyPatientsMessage}</div>
             </div>
           )}
           {!listLoading &&
-            pacientes.map((paciente) => (
+            filteredPacientes.map((paciente) => (
               <div className="col-12" key={paciente._id}>
                 <div className="card shadow-sm">
                   <div className="card-body">
