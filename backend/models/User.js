@@ -49,6 +49,15 @@ const userSchema = new mongoose.Schema({
     default: '',
     trim: true,
   },
+  profileImage: {
+    type: String,
+    default: '',
+  },
+  profileAvatar: {
+    type: String,
+    default: '',
+    trim: true,
+  },
   profileCompleted: {
     type: Boolean,
     default: false,

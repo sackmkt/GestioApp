@@ -6,6 +6,34 @@ const generateToken = (id) => {
   });
 };
 
+const MAX_PROFILE_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
+const ALLOWED_AVATAR_IDS = new Set(['stethoscope', 'heartbeat', 'medkit', 'compass']);
+
+const isSupportedDataUrl = (value = '') => {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const [metadata] = value.split(',', 1);
+  if (!metadata?.startsWith('data:')) {
+    return false;
+  }
+  const mimeType = metadata.slice(5, metadata.indexOf(';'));
+  return ALLOWED_IMAGE_MIME_TYPES.has(mimeType);
+};
+
+const getDataUrlSize = (value = '') => {
+  if (typeof value !== 'string') {
+    return 0;
+  }
+  const base64Part = value.split(',')[1];
+  if (!base64Part) {
+    return 0;
+  }
+  const padding = (base64Part.match(/=/g) || []).length;
+  return Math.ceil((base64Part.length * 3) / 4) - padding;
+};
+
 const buildUserResponse = (user, includeToken = true) => {
   const base = {
     _id: user._id,
@@ -18,6 +46,8 @@ const buildUserResponse = (user, includeToken = true) => {
     province: user.province || '',
     city: user.city || '',
     profileCompleted: user.profileCompleted || false,
+    profileImage: user.profileImage || '',
+    profileAvatar: user.profileAvatar || '',
   };
 
   if (!includeToken) {
@@ -94,7 +124,7 @@ exports.getProfile = async (req, res) => {
 };
 
 exports.updateProfile = async (req, res) => {
-  const { username, email, firstName, lastName, profession, country, province, city } = req.body;
+  const { username, email, firstName, lastName, profession, country, province, city, profileImage, profileAvatar } = req.body;
 
   try {
     const user = await User.findById(req.user._id);
@@ -127,6 +157,32 @@ exports.updateProfile = async (req, res) => {
     if (typeof country !== 'undefined') user.country = (country || '').trim();
     if (typeof province !== 'undefined') user.province = (province || '').trim();
     if (typeof city !== 'undefined') user.city = (city || '').trim();
+
+    if (typeof profileAvatar !== 'undefined') {
+      if (profileAvatar === null || profileAvatar === '') {
+        user.profileAvatar = '';
+      } else if (ALLOWED_AVATAR_IDS.has(profileAvatar)) {
+        user.profileAvatar = profileAvatar;
+      } else {
+        return res.status(400).json({ message: 'El avatar seleccionado no es válido.' });
+      }
+    }
+
+    if (typeof profileImage !== 'undefined') {
+      if (profileImage === null || profileImage === '') {
+        user.profileImage = '';
+      } else if (!isSupportedDataUrl(profileImage)) {
+        return res.status(400).json({ message: 'El formato de imagen no está soportado.' });
+      } else if (getDataUrlSize(profileImage) > MAX_PROFILE_IMAGE_SIZE_BYTES) {
+        return res.status(400).json({ message: 'La imagen de perfil supera el límite de 2 MB.' });
+      } else {
+        user.profileImage = profileImage;
+      }
+    }
+
+    if (user.profileImage) {
+      user.profileAvatar = '';
+    }
 
     const mandatoryFields = [user.firstName, user.lastName, user.profession, user.country, user.province, user.city];
     user.profileCompleted = mandatoryFields.every((field) => field && field.trim() !== '');

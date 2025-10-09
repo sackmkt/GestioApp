@@ -108,7 +108,14 @@ function ObrasSocialesPage() {
     return obrasSociales.filter((obra) => {
       const nombre = (obra.nombre || '').toLowerCase();
       const cuit = (obra.cuit || '').toString().toLowerCase();
-      return nombre.includes(normalizedSearch) || cuit.includes(normalizedSearch);
+      const telefono = (obra.telefono || '').toLowerCase();
+      const email = (obra.email || '').toLowerCase();
+      return (
+        nombre.includes(normalizedSearch)
+        || cuit.includes(normalizedSearch)
+        || telefono.includes(normalizedSearch)
+        || email.includes(normalizedSearch)
+      );
     });
   }, [obrasSociales, normalizedSearch]);
 

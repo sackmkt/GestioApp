@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import userService from '../services/UserService';
 
@@ -12,6 +12,33 @@ const professionOptions = [
   'Pediatría',
   'Neurología',
   'Otra',
+];
+
+const AVATAR_OPTIONS = [
+  {
+    id: 'stethoscope',
+    label: 'Profesional',
+    gradient: 'linear-gradient(135deg, #38bdf8, #0ea5e9)',
+    emoji: '🩺',
+  },
+  {
+    id: 'heartbeat',
+    label: 'Cuidado',
+    gradient: 'linear-gradient(135deg, #f97316, #f43f5e)',
+    emoji: '💗',
+  },
+  {
+    id: 'medkit',
+    label: 'Guardia',
+    gradient: 'linear-gradient(135deg, #22c55e, #16a34a)',
+    emoji: '🧰',
+  },
+  {
+    id: 'compass',
+    label: 'Bienestar',
+    gradient: 'linear-gradient(135deg, #a855f7, #6366f1)',
+    emoji: '🧭',
+  },
 ];
 
 const resolveProfessionSelection = (profession) => {
@@ -40,6 +67,10 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [profileImage, setProfileImage] = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState('');
+  const [imageError, setImageError] = useState('');
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!currentUser) {
@@ -65,6 +96,9 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
           city: profile.city || '',
         });
         setProfessionSelection(resolveProfessionSelection(profile.profession));
+        setProfileImage(profile.profileImage || '');
+        setSelectedAvatar(profile.profileAvatar || '');
+        setImageError('');
       } catch (fetchError) {
         console.error('Error al cargar el perfil:', fetchError);
         setError('No pudimos cargar tu perfil. Intenta nuevamente.');
@@ -81,6 +115,28 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const professionDisplay = useMemo(() => {
+    return selected === 'Otra' ? custom : selected;
+  }, [selected, custom]);
+
+  const fullName = useMemo(() => {
+    return `${formData.firstName} ${formData.lastName}`.trim();
+  }, [formData.firstName, formData.lastName]);
+
+  const initials = useMemo(() => {
+    const base = fullName || formData.username || '';
+    return base
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() || '')
+      .join('');
+  }, [fullName, formData.username]);
+
+  const selectedAvatarOption = useMemo(() => {
+    return AVATAR_OPTIONS.find((option) => option.id === selectedAvatar) || null;
+  }, [selectedAvatar]);
+
   const handleProfessionChange = (event) => {
     const value = event.target.value;
     if (value === 'Otra') {
@@ -93,6 +149,83 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
   const handleCustomProfessionChange = (event) => {
     const value = event.target.value;
     setProfessionSelection((prev) => ({ ...prev, custom: value }));
+  };
+
+  const handleAvatarSelect = (avatarId) => {
+    setSelectedAvatar(avatarId);
+    setProfileImage('');
+    setImageError('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setImageError('El formato de la imagen debe ser PNG, JPG o WEBP.');
+      return;
+    }
+
+    const maxSizeBytes = 2 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      setImageError('La imagen de perfil no puede superar los 2 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfileImage(reader.result?.toString() || '');
+      setSelectedAvatar('');
+      setImageError('');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setProfileImage('');
+    setImageError('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const renderProfileVisual = () => {
+    if (profileImage) {
+      return <img src={profileImage} alt="Foto de perfil" className="rounded-circle shadow" style={{ width: '112px', height: '112px', objectFit: 'cover', border: '4px solid rgba(255, 255, 255, 0.8)' }} />;
+    }
+
+    if (selectedAvatarOption) {
+      return (
+        <div
+          className="rounded-circle d-flex align-items-center justify-content-center shadow"
+          style={{
+            width: '112px',
+            height: '112px',
+            backgroundImage: selectedAvatarOption.gradient,
+            color: '#fff',
+            fontSize: '2.5rem',
+            border: '4px solid rgba(255, 255, 255, 0.65)',
+          }}
+        >
+          <span role="img" aria-label={selectedAvatarOption.label}>{selectedAvatarOption.emoji}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className="rounded-circle d-flex align-items-center justify-content-center bg-white text-primary shadow"
+        style={{ width: '112px', height: '112px', fontWeight: 600, fontSize: '2rem', border: '4px solid rgba(255, 255, 255, 0.65)' }}
+      >
+        {initials || '👤'}
+      </div>
+    );
   };
 
   const handleSubmit = async (event) => {
@@ -129,11 +262,16 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
         country: formData.country.trim(),
         province: formData.province.trim(),
         city: formData.city.trim(),
+        profileImage,
+        profileAvatar: selectedAvatar,
       });
 
       if (onProfileUpdated) {
         onProfileUpdated(updatedUser);
       }
+
+      setProfileImage(updatedUser.profileImage || '');
+      setSelectedAvatar(updatedUser.profileAvatar || '');
 
       setSuccess('Actualizamos tus datos correctamente.');
     } catch (submitError) {
@@ -156,12 +294,127 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
   }
 
   return (
-    <div className="container mt-5">
+    <div className="container py-4">
       <div className="row justify-content-center">
-        <div className="col-lg-8 col-xl-7">
-          <div className="card gestio-card border-0">
-            <div className="card-header gestio-card-header">
-              <h4 className="mb-0">Mi Perfil</h4>
+        <div className="col-xl-8 col-xxl-7">
+          <div className="card shadow-sm border-0 overflow-hidden mb-4">
+            <div
+              className="p-4 text-white"
+              style={{ background: 'linear-gradient(135deg, #0ea5e9, #312e81)' }}
+            >
+              <div className="d-flex flex-column flex-md-row align-items-md-center gap-4">
+                <div className="position-relative d-inline-flex align-items-center justify-content-center">
+                  {renderProfileVisual()}
+                  {professionDisplay && (
+                    <span className="badge bg-light text-dark position-absolute bottom-0 start-50 translate-middle-x shadow-sm">
+                      {professionDisplay}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <h2 className="h4 mb-1">{fullName || 'Tu perfil profesional'}</h2>
+                  <p className="mb-3 text-white-50">
+                    Personaliza tu espacio cargando tu información y una imagen o avatar que te represente.
+                  </p>
+                  <div className="d-flex flex-wrap gap-3 text-white-50 small">
+                    <div>
+                      <span className="text-white fw-semibold">Usuario:</span> {formData.username || '—'}
+                    </div>
+                    <div>
+                      <span className="text-white fw-semibold">Ubicación:</span> {[formData.city, formData.province]
+                        .filter(Boolean)
+                        .join(', ') || '—'}
+                    </div>
+                    {formData.country && (
+                      <div>
+                        <span className="text-white fw-semibold">País:</span> {formData.country}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card shadow-sm border-0 mb-4">
+            <div className="card-header bg-white">
+              <h5 className="mb-0">Foto y avatar</h5>
+            </div>
+            <div className="card-body">
+              {imageError && <div className="alert alert-warning">{imageError}</div>}
+              <div className="row g-4 align-items-center">
+                <div className="col-md-4 text-center">
+                  <div className="d-inline-block position-relative">
+                    {renderProfileVisual()}
+                  </div>
+                  {profileImage && (
+                    <button type="button" className="btn btn-link text-danger mt-3" onClick={handleRemoveImage}>
+                      Quitar imagen subida
+                    </button>
+                  )}
+                </div>
+                <div className="col-md-8">
+                  <p className="text-muted small mb-2">
+                    Subí una imagen nítida en formato PNG, JPG o WEBP de hasta 2 MB para que tus pacientes puedan reconocerte.
+                  </p>
+                  <div className="d-flex flex-column flex-sm-row gap-2 mb-3">
+                    <label className="btn btn-outline-primary mb-0">
+                      Cargar imagen
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="d-none"
+                        accept="image/png,image/jpeg,image/jpg,image/webp"
+                        onChange={handleImageUpload}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => handleAvatarSelect(selectedAvatar || AVATAR_OPTIONS[0].id)}
+                    >
+                      Usar avatar ilustrado
+                    </button>
+                  </div>
+                  <p className="text-muted small mb-2">Elige un estilo rápido:</p>
+                  <div className="d-flex flex-wrap gap-3">
+                    {AVATAR_OPTIONS.map((option) => {
+                      const isActive = selectedAvatar === option.id && !profileImage;
+                      return (
+                        <button
+                          type="button"
+                          key={option.id}
+                          className="btn p-0 border-0 position-relative rounded-circle shadow-sm"
+                          style={{
+                            width: '64px',
+                            height: '64px',
+                            backgroundImage: option.gradient,
+                            border: isActive ? '3px solid rgba(14, 165, 233, 0.85)' : '3px solid transparent',
+                          }}
+                          onClick={() => handleAvatarSelect(option.id)}
+                          aria-pressed={isActive}
+                          aria-label={`Avatar ${option.label}`}
+                        >
+                          <span className="d-flex align-items-center justify-content-center h-100 w-100 text-white fs-4">
+                            {option.emoji}
+                          </span>
+                          {isActive && (
+                            <span className="position-absolute top-0 end-0 translate-middle badge rounded-pill bg-success">
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card shadow-sm border-0">
+            <div className="card-header bg-white">
+              <h5 className="mb-0">Datos personales</h5>
             </div>
             <div className="card-body">
               <p className="text-muted">
