@@ -20,6 +20,7 @@ function CentrosSaludPage() {
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchCentros();
@@ -71,6 +72,28 @@ function CentrosSaludPage() {
   const totalRetencion = useMemo(() => {
     return resumenCentros.reduce((sum, item) => sum + item.totalRetencion, 0);
   }, [resumenCentros]);
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  const filteredResumenCentros = useMemo(() => {
+    if (!normalizedSearch) {
+      return resumenCentros;
+    }
+
+    return resumenCentros.filter(({ centro }) => {
+      const nombre = (centro.nombre || '').toLowerCase();
+      return nombre.includes(normalizedSearch);
+    });
+  }, [resumenCentros, normalizedSearch]);
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const hasSearch = normalizedSearch.length > 0;
+  const emptyMessage = resumenCentros.length === 0
+    ? 'Todavía no registraste centros de salud.'
+    : 'No se encontraron centros que coincidan con la búsqueda.';
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -219,12 +242,30 @@ function CentrosSaludPage() {
       </div>
 
       <div className="card shadow-sm">
-        <div className="card-header bg-light">
-          <strong>Centros registrados</strong>
+        <div className="card-header bg-light d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+          <div>
+            <strong>Centros registrados</strong>
+            <div className="text-muted small">
+              Total: {resumenCentros.length}
+              {hasSearch && ` · Coincidencias: ${filteredResumenCentros.length}`}
+            </div>
+          </div>
+          <div className="input-group input-group-sm" style={{ maxWidth: '260px' }}>
+            <span className="input-group-text" id="centrosSearchIcon" aria-hidden="true">🔍</span>
+            <input
+              id="centrosSearch"
+              type="search"
+              className="form-control"
+              placeholder="Buscar por nombre"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              aria-describedby="centrosSearchIcon"
+            />
+          </div>
         </div>
         <div className="card-body p-0">
-          {centros.length === 0 ? (
-            <p className="text-center text-muted py-4 mb-0">Todavía no registraste centros de salud.</p>
+          {filteredResumenCentros.length === 0 ? (
+            <p className="text-center text-muted py-4 mb-0">{emptyMessage}</p>
           ) : (
             <div className="table-responsive">
               <table className="table table-hover mb-0">
@@ -239,7 +280,7 @@ function CentrosSaludPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {resumenCentros.map(({ centro, totalFacturado, totalRetencion, cantidadFacturas }) => (
+                  {filteredResumenCentros.map(({ centro, totalFacturado, totalRetencion, cantidadFacturas }) => (
                     <tr key={centro._id}>
                       <td>
                         <div className="fw-semibold">{centro.nombre}</div>

@@ -76,6 +76,7 @@ const TurnosPage = () => {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [recordatorioUpdatingId, setRecordatorioUpdatingId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const obtenerDatos = async () => {
@@ -114,6 +115,34 @@ const TurnosPage = () => {
     const ahora = new Date().getTime();
     return turnos.filter((turno) => new Date(turno.fecha).getTime() >= ahora);
   }, [turnos]);
+
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+
+  const filteredTurnos = useMemo(() => {
+    if (!normalizedSearch) {
+      return turnos;
+    }
+
+    return turnos.filter((turno) => {
+      const pacienteNombre = `${turno.paciente?.nombre || ''} ${turno.paciente?.apellido || ''}`.toLowerCase();
+      const titulo = (turno.titulo || '').toLowerCase();
+      const notas = (turno.notas || '').toLowerCase();
+      return (
+        pacienteNombre.includes(normalizedSearch)
+        || titulo.includes(normalizedSearch)
+        || notas.includes(normalizedSearch)
+      );
+    });
+  }, [turnos, normalizedSearch]);
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const hasSearch = normalizedSearch.length > 0;
+  const emptyMessage = hasSearch
+    ? 'No se encontraron turnos que coincidan con la búsqueda.'
+    : 'No hay turnos para los filtros seleccionados.';
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -239,32 +268,46 @@ const TurnosPage = () => {
   return (
     <div className="container mt-4">
       <div className="card shadow-sm mb-4">
-        <div className="card-header bg-primary text-white d-flex flex-column flex-md-row align-items-md-center justify-content-md-between">
-          <h2 className="mb-2 mb-md-0">Agenda de turnos</h2>
-          <div className="d-flex gap-2">
-            <select
-              name="estado"
-              className="form-select"
-              value={filtros.estado}
-              onChange={handleFiltroChange}
-              disabled={loading}
-            >
-              <option value="todos">Todos los estados</option>
-              <option value="programado">Programados</option>
-              <option value="completado">Completados</option>
-              <option value="cancelado">Cancelados</option>
-            </select>
-            <select
-              name="rango"
-              className="form-select"
-              value={filtros.rango}
-              onChange={handleFiltroChange}
-              disabled={loading}
-            >
-              <option value="todos">Todo el historial</option>
-              <option value="hoy">Solo hoy</option>
-              <option value="semana">Próximos 7 días</option>
-            </select>
+        <div className="card-header bg-primary text-white d-flex flex-column flex-xl-row align-items-xl-center justify-content-xl-between gap-3">
+          <h2 className="mb-0">Agenda de turnos</h2>
+          <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2">
+            <div className="d-flex gap-2">
+              <select
+                name="estado"
+                className="form-select"
+                value={filtros.estado}
+                onChange={handleFiltroChange}
+                disabled={loading}
+              >
+                <option value="todos">Todos los estados</option>
+                <option value="programado">Programados</option>
+                <option value="completado">Completados</option>
+                <option value="cancelado">Cancelados</option>
+              </select>
+              <select
+                name="rango"
+                className="form-select"
+                value={filtros.rango}
+                onChange={handleFiltroChange}
+                disabled={loading}
+              >
+                <option value="todos">Todo el historial</option>
+                <option value="hoy">Solo hoy</option>
+                <option value="semana">Próximos 7 días</option>
+              </select>
+            </div>
+            <div className="input-group input-group-sm" style={{ maxWidth: '260px' }}>
+              <span className="input-group-text" id="turnosSearchIcon" aria-hidden="true">🔍</span>
+              <input
+                id="turnosSearch"
+                type="search"
+                className="form-control"
+                placeholder="Buscar por paciente o título"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                aria-describedby="turnosSearchIcon"
+              />
+            </div>
           </div>
         </div>
         <div className="card-body">
@@ -391,8 +434,8 @@ const TurnosPage = () => {
               <span className="spinner-border text-primary" role="status" aria-hidden="true"></span>
               <span className="ms-2">Cargando turnos...</span>
             </div>
-          ) : turnos.length === 0 ? (
-            <p className="mb-0">No hay turnos para los filtros seleccionados.</p>
+          ) : filteredTurnos.length === 0 ? (
+            <p className="mb-0">{emptyMessage}</p>
           ) : (
             <table className="table table-hover align-middle">
               <thead className="table-light">
@@ -407,7 +450,7 @@ const TurnosPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {turnos.map((turno) => (
+                {filteredTurnos.map((turno) => (
                   <tr key={turno._id}>
                     <td>
                       <strong>{turno.paciente?.nombre} {turno.paciente?.apellido}</strong>
@@ -497,9 +540,9 @@ const TurnosPage = () => {
             <span className="ms-2">Cargando turnos...</span>
           </div>
         )}
-        {!loading && turnos.length === 0 && <p>No hay turnos para mostrar.</p>}
+        {!loading && filteredTurnos.length === 0 && <p>{emptyMessage}</p>}
         <div className="row g-3">
-          {turnos.map((turno) => (
+          {filteredTurnos.map((turno) => (
             <div className="col-12" key={turno._id}>
               <div className="card shadow-sm">
                 <div className="card-body">

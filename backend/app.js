@@ -3,6 +3,9 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const activityLogger = require('./middleware/activityLogger');
 const { protect } = require('./middleware/authMiddleware');
+const securityHeaders = require('./middleware/securityHeaders');
+const sanitizeRequest = require('./middleware/sanitizeRequest');
+const rateLimiter = require('./middleware/rateLimiter');
 
 const pacientesRoutes = require('./Routes/pacientes');
 const obrasSocialesRoutes = require('./Routes/obrasSociales');
@@ -14,6 +17,8 @@ const centrosSaludRoutes = require('./Routes/centrosSalud');
 dotenv.config();
 
 const app = express();
+
+app.disable('x-powered-by');
 
 const resolveAllowedOrigins = () => {
   const envValue = process.env.ALLOWED_ORIGINS;
@@ -43,9 +48,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use(securityHeaders);
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+app.use(sanitizeRequest);
 app.use(activityLogger);
+app.use('/api', rateLimiter);
 
 app.use('/api/pacientes', pacientesRoutes);
 app.use('/api/obras-sociales', obrasSocialesRoutes);

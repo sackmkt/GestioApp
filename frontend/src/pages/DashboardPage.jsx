@@ -49,7 +49,6 @@ function DashboardPage({ currentUser }) {
     pieChartData: {},
     monthlyBarChartData: {},
     obrasSocialesBarChartData: {},
-    pacientesBarChartData: {},
     facturasEstadoChartData: { labels: [], datasets: [] },
     moraObraSocialData: { labels: [], datasets: [] },
     montoMoraTotal: 0,
@@ -292,7 +291,6 @@ function DashboardPage({ currentUser }) {
     const montoMoraTotal = moraEntries.reduce((sum, [, monto]) => sum + monto, 0);
 
     const obrasSocialesBarChartData = calculateObrasSocialesData(filteredFacturas);
-    const pacientesBarChartData = calculatePacientesData(filteredFacturas);
 
     setData(prevData => ({
       ...prevData,
@@ -312,7 +310,6 @@ function DashboardPage({ currentUser }) {
       moraObraSocialData,
       montoMoraTotal,
       obrasSocialesBarChartData,
-      pacientesBarChartData,
     }));
   }, [dateRange, centros]);
 
@@ -367,31 +364,6 @@ function DashboardPage({ currentUser }) {
         data: sortedObrasSociales.map(([, monto]) => monto),
         backgroundColor: 'rgba(52, 58, 64, 0.6)',
         borderColor: 'rgba(52, 58, 64, 1)',
-        borderWidth: 1,
-      }],
-    };
-  };
-
-  const calculatePacientesData = (facturas) => {
-    const pacientesData = facturas.reduce((acc, f) => {
-      if (f.paciente?.nombre && f.paciente?.apellido) {
-        const nombreCompleto = `${f.paciente.nombre} ${f.paciente.apellido}`;
-        acc[nombreCompleto] = (acc[nombreCompleto] || 0) + f.montoTotal;
-      }
-      return acc;
-    }, {});
-
-    const sortedPacientes = Object.entries(pacientesData)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5);
-
-    return {
-      labels: sortedPacientes.map(([nombre]) => nombre),
-      datasets: [{
-        label: 'Monto Facturado',
-        data: sortedPacientes.map(([, monto]) => monto),
-        backgroundColor: 'rgba(0, 123, 255, 0.6)',
-        borderColor: 'rgba(0, 123, 255, 1)',
         borderWidth: 1,
       }],
     };
@@ -478,7 +450,6 @@ function DashboardPage({ currentUser }) {
           pacientesByTipo,
           centrosResumen,
           obrasSocialesBarChartData: calculateObrasSocialesData(facturas),
-          pacientesBarChartData: calculatePacientesData(facturas),
           growthMetrics: calculateGrowthMetrics(facturas),
           turnosProximos: agendaMetrics.upcoming,
           ocupacionSemanal: agendaMetrics.ocupacion,
@@ -915,22 +886,6 @@ function DashboardPage({ currentUser }) {
                 <Bar data={data.moraObraSocialData} options={horizontalChartOptions} />
               ) : (
                 <p className="text-center text-muted">No registras deudas vencidas con obras sociales.</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Gráfico de Barras de Top Pacientes */}
-        <div className="col-xl-6 col-lg-12">
-          <div className="card shadow-sm h-100">
-            <div className="card-header">
-              Top 5 Pacientes
-            </div>
-            <div className="card-body">
-              {data.pacientesBarChartData.labels?.length > 0 ? (
-                <Bar data={data.pacientesBarChartData} options={horizontalChartOptions} />
-              ) : (
-                <p className="text-center text-muted">No hay datos suficientes para el gráfico de pacientes.</p>
               )}
             </div>
           </div>
