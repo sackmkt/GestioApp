@@ -47,6 +47,42 @@ const EMPTY_PAYMENT_FORM = {
   nota: '',
 };
 
+const ITEMS_PER_PAGE = 16;
+
+const getMontoCobrado = (factura) => {
+  if (!factura) {
+    return 0;
+  }
+
+  const montoCobrado = Number(factura.montoCobrado);
+  if (Number.isFinite(montoCobrado)) {
+    return montoCobrado;
+  }
+
+  if (Array.isArray(factura.pagos) && factura.pagos.length > 0) {
+    return factura.pagos.reduce((sum, pago) => sum + (Number(pago.monto) || 0), 0);
+  }
+
+  const montoPagado = Number(factura.montoPagado);
+  return Number.isFinite(montoPagado) ? montoPagado : 0;
+};
+
+const getSaldoPendiente = (factura) => {
+  if (!factura) {
+    return 0;
+  }
+
+  const saldo = Number(factura.saldoPendiente);
+  if (Number.isFinite(saldo)) {
+    return saldo;
+  }
+
+  const montoTotal = Number(factura.montoTotal) || 0;
+  const montoCobrado = getMontoCobrado(factura);
+  const resultado = montoTotal - montoCobrado;
+  return resultado > 0 ? resultado : 0;
+};
+
 const formatCurrency = (value) => {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) {
@@ -144,6 +180,9 @@ function FacturasPage() {
   const [documentUploadLoadingId, setDocumentUploadLoadingId] = useState(null);
   const [documentDeleteLoadingId, setDocumentDeleteLoadingId] = useState(null);
   const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
+  const [dateFilter, setDateFilter] = useState('last10Days');
+  const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     fetchFacturas();
@@ -319,6 +358,27 @@ function FacturasPage() {
     setFilterSearchTerm(searchTerm);
   };
 
+  const handleDateFilterChange = (event) => {
+    const { value } = event.target;
+    setDateFilter(value);
+    setCurrentPage(1);
+  };
+
+  const handleCustomDateChange = (field, value) => {
+    setCustomDateRange((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page === currentPage || page > totalPages) {
+      return;
+    }
+    setCurrentPage(page);
+  };
+
   const toggleExpandFactura = (facturaId) => {
     setExpandedFacturaId((prev) => (prev === facturaId ? null : facturaId));
     setPaymentErrors((prev) => ({ ...prev, [facturaId]: null }));
@@ -400,7 +460,7 @@ function FacturasPage() {
   };
 
   const handleLiquidarSaldo = async (factura) => {
-    const saldoPendiente = Number(factura.saldoPendiente || 0);
+    const saldoPendiente = getSaldoPendiente(factura);
     if (saldoPendiente <= 0) {
       return;
     }
@@ -424,7 +484,74 @@ function FacturasPage() {
     }
   };
 
-  const appliedSearch = filterSearchTerm.trim().toLowerCase();
+  const { startDate, endDate } = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let start = null;
+    let end = null;
+
+    switch (dateFilter) {
+      case 'last10Days': {
+        start = new Date(today);
+        start.setDate(start.getDate() - 9);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(today);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case 'last30Days': {
+        start = new Date(today);
+        start.setDate(start.getDate() - 29);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(today);
+        end.setHours(23, 59, 59, 999);
+        break;
+      }
+      case 'thisMonth': {
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+        break;
+      }
+      case 'thisYear': {
+        start = new Date(today.getFullYear(), 0, 1);
+        start.setHours(0, 0, 0, 0);
+        end = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
+        break;
+      }
+      case 'custom': {
+        if (customDateRange.start) {
+          const parsedStart = new Date(customDateRange.start);
+          if (!Number.isNaN(parsedStart.getTime())) {
+            start = new Date(parsedStart);
+            start.setHours(0, 0, 0, 0);
+          }
+        }
+        if (customDateRange.end) {
+          const parsedEnd = new Date(customDateRange.end);
+          if (!Number.isNaN(parsedEnd.getTime())) {
+            end = new Date(parsedEnd);
+            end.setHours(23, 59, 59, 999);
+          }
+        }
+        break;
+      }
+      case 'all':
+      default: {
+        start = null;
+        end = null;
+        break;
+      }
+    }
+
+    return { startDate: start, endDate: end };
+  }, [dateFilter, customDateRange]);
+
+  const startDateTime = startDate ? startDate.getTime() : null;
+  const endDateTime = endDate ? endDate.getTime() : null;
+
+  const appliedSearch = useMemo(() => filterSearchTerm.trim().toLowerCase(), [filterSearchTerm]);
 
   const filteredFacturas = useMemo(() => {
     return facturas.filter((factura) => {
@@ -437,6 +564,26 @@ function FacturasPage() {
 
       if (!matchesStatus) {
         return false;
+      }
+
+      if (startDateTime || endDateTime) {
+        const fechaEmision = factura.fechaEmision ? new Date(factura.fechaEmision) : null;
+        if (!fechaEmision || Number.isNaN(fechaEmision.getTime())) {
+          return false;
+        }
+        const fechaNormalizada = new Date(fechaEmision);
+        fechaNormalizada.setHours(0, 0, 0, 0);
+
+        if (startDateTime && fechaNormalizada.getTime() < startDateTime) {
+          return false;
+        }
+
+        if (endDateTime) {
+          const fechaFin = endDateTime;
+          if (fechaNormalizada.getTime() > fechaFin) {
+            return false;
+          }
+        }
       }
 
       if (!appliedSearch) {
@@ -465,7 +612,82 @@ function FacturasPage() {
         .map((value) => value.toLowerCase());
       return valuesToSearch.some((value) => value.includes(appliedSearch));
     });
-  }, [facturas, statusFilter, appliedSearch]);
+  }, [facturas, statusFilter, appliedSearch, startDateTime, endDateTime]);
+
+  const deudores = useMemo(() => {
+    const acumulado = new Map();
+
+    filteredFacturas.forEach((factura) => {
+      const saldoPendiente = getSaldoPendiente(factura);
+      if (saldoPendiente <= 0) {
+        return;
+      }
+
+      const pacienteId = factura.paciente?._id || `sin-paciente-${factura._id}`;
+      const nombreBase = factura.paciente
+        ? `${factura.paciente?.nombre || ''} ${factura.paciente?.apellido || ''}`.trim()
+        : '';
+      const nombre = nombreBase || 'Paciente sin identificar';
+
+      if (!acumulado.has(pacienteId)) {
+        acumulado.set(pacienteId, { id: pacienteId, nombre, total: 0, facturas: 0 });
+      }
+
+      const entry = acumulado.get(pacienteId);
+      entry.total += saldoPendiente;
+      entry.facturas += 1;
+    });
+
+    return Array.from(acumulado.values()).sort((a, b) => b.total - a.total);
+  }, [filteredFacturas]);
+
+  const totalFacturas = filteredFacturas.length;
+  const totalPages = Math.max(Math.ceil(totalFacturas / ITEMS_PER_PAGE), 1);
+  const paginatedFacturas = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredFacturas.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredFacturas, currentPage]);
+
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const pages = [];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    pages.push(1);
+
+    if (start > 2) {
+      pages.push('start-ellipsis');
+    }
+
+    for (let page = start; page <= end; page += 1) {
+      pages.push(page);
+    }
+
+    if (end < totalPages - 1) {
+      pages.push('end-ellipsis');
+    }
+
+    pages.push(totalPages);
+
+    return pages;
+  }, [totalPages, currentPage]);
+
+  const showingFrom = totalFacturas === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const showingTo = totalFacturas === 0 ? 0 : Math.min(currentPage * ITEMS_PER_PAGE, totalFacturas);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, appliedSearch, startDateTime, endDateTime]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const statusCounts = useMemo(() => {
     const counts = {
@@ -824,25 +1046,96 @@ function FacturasPage() {
 
       <div className="card shadow-sm mb-4">
         <div className="card-header">
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-            <h4 className="mb-0">Listado de Facturas</h4>
-            <div className="input-group" style={{ maxWidth: '320px' }}>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Buscar por paciente, punto de venta, factura u obra social"
-                value={searchTerm}
-                onChange={handleInputChange}
-              />
-              <button className="btn btn-outline-secondary" type="button" onClick={handleSearchClick}>
-                Buscar
-              </button>
+          <div className="d-flex flex-column gap-3">
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+              <h4 className="mb-0">Listado de Facturas</h4>
+              <div className="input-group" style={{ maxWidth: '320px' }}>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Buscar por paciente, punto de venta, factura u obra social"
+                  value={searchTerm}
+                  onChange={handleInputChange}
+                />
+                <button className="btn btn-outline-secondary" type="button" onClick={handleSearchClick}>
+                  Buscar
+                </button>
+              </div>
+            </div>
+            <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
+              <div className="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+                <label className="form-label mb-0 text-muted text-uppercase small fw-semibold" htmlFor="dateFilter">
+                  Período
+                </label>
+                <div className="d-flex flex-column flex-sm-row gap-2">
+                  <select
+                    id="dateFilter"
+                    className="form-select form-select-sm"
+                    value={dateFilter}
+                    onChange={handleDateFilterChange}
+                  >
+                    <option value="last10Days">Últimos 10 días</option>
+                    <option value="last30Days">Últimos 30 días</option>
+                    <option value="thisMonth">Este mes</option>
+                    <option value="thisYear">Este año</option>
+                    <option value="all">Todo el período</option>
+                    <option value="custom">Personalizado</option>
+                  </select>
+                  {dateFilter === 'custom' && (
+                    <div className="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+                      <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        value={customDateRange.start}
+                        max={customDateRange.end || undefined}
+                        onChange={(event) => handleCustomDateChange('start', event.target.value)}
+                      />
+                      <span className="text-muted small">a</span>
+                      <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        value={customDateRange.end}
+                        min={customDateRange.start || undefined}
+                        onChange={(event) => handleCustomDateChange('end', event.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="text-muted small">
+                {totalFacturas === 0
+                  ? 'Sin facturas para mostrar con los filtros actuales'
+                  : `Mostrando ${showingFrom}-${showingTo} de ${totalFacturas} facturas`}
+              </div>
             </div>
           </div>
           {renderStatusTabs()}
         </div>
         <div className="card-body">
-          <div className="table-responsive d-none d-md-block">
+          <div className="mb-4">
+            <h6 className="text-uppercase text-muted fw-semibold mb-2">Pacientes con saldo pendiente</h6>
+            {deudores.length === 0 ? (
+              <p className="text-muted mb-0 small">No hay pacientes con saldo pendiente en el período seleccionado.</p>
+            ) : (
+              <div className="list-group small">
+                {deudores.map((deudor) => (
+                  <div key={deudor.id} className="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                      <div className="fw-semibold">{deudor.nombre}</div>
+                      <span className="text-muted">{deudor.facturas} {deudor.facturas === 1 ? 'factura' : 'facturas'} con saldo</span>
+                    </div>
+                    <span className="badge bg-warning text-dark fs-6">{formatCurrency(deudor.total)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {totalFacturas === 0 ? (
+            <p className="text-center text-muted my-4">No se encontraron facturas con los filtros seleccionados.</p>
+          ) : (
+            <>
+              <div className="table-responsive d-none d-md-block">
             <table className="table table-striped table-hover mb-0 align-middle">
               <thead className="table-dark">
                 <tr>
@@ -861,73 +1154,79 @@ function FacturasPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredFacturas.map((factura) => {
-                  const estado = normalizeEstado(factura);
-                  const badgeClass = ESTADO_BADGES[estado] || 'bg-secondary';
-                  const isVencida = esFacturaVencida(factura);
-                  const puntoVentaDisplay = factura.puntoVenta !== null && factura.puntoVenta !== undefined ? factura.puntoVenta : '—';
-                  const numeroFacturaDisplay = factura.numeroFactura !== null && factura.numeroFactura !== undefined ? factura.numeroFactura : '—';
-                  return (
-                    <React.Fragment key={factura._id}>
-                      <tr className={factura.pagado ? 'table-success' : ''}>
-                        <td>{puntoVentaDisplay}</td>
-                        <td>{numeroFacturaDisplay}</td>
-                        <td>{factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</td>
-                        <td>{factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</td>
-                        <td>{factura.centroSalud ? factura.centroSalud.nombre : 'Sin centro'}</td>
-                        <td>{formatCurrency(factura.montoTotal)}</td>
-                        <td>{formatDate(factura.fechaEmision)}</td>
-                        <td>
-                          {formatDate(factura.fechaVencimiento)}
-                          {isVencida && (
-                            <span className="badge bg-danger ms-2">Vencida</span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="d-flex flex-column gap-2">
-                            <span className={`badge rounded-pill ${badgeClass}`}>
-                              {ESTADO_LABELS[estado] || estado}
-                            </span>
-                            <select
-                              className="form-select form-select-sm"
-                              value={estado}
-                              onChange={(e) => handleEstadoUpdate(factura._id, e.target.value)}
-                            >
-                              {ESTADO_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </td>
-                        <td>{formatCurrency(factura.montoCobrado || 0)}</td>
-                        <td>{formatCurrency(factura.saldoPendiente || 0)}</td>
-                        <td>
-                          <div className="d-flex flex-column gap-2">
-                            <button
-                              className="btn btn-outline-primary btn-sm"
-                              type="button"
-                              onClick={() => toggleExpandFactura(factura._id)}
-                            >
-                              {expandedFacturaId === factura._id ? 'Ocultar' : 'Detalles'}
-                            </button>
-                            <button
-                              className="btn btn-warning btn-sm"
-                              type="button"
-                              onClick={() => handleEdit(factura)}
-                            >
-                              Editar
-                            </button>
-                            <button
-                              className="btn btn-danger btn-sm"
-                              type="button"
-                              onClick={() => handleDelete(factura._id)}
-                            >
-                              Eliminar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {expandedFacturaId === factura._id && (
+                {paginatedFacturas.length === 0 ? (
+                  <tr>
+                    <td colSpan="12" className="text-center text-muted py-4">No hay facturas para mostrar.</td>
+                  </tr>
+                ) : paginatedFacturas.map((factura) => {
+                    const estado = normalizeEstado(factura);
+                    const badgeClass = ESTADO_BADGES[estado] || 'bg-secondary';
+                    const isVencida = esFacturaVencida(factura);
+                    const puntoVentaDisplay = factura.puntoVenta !== null && factura.puntoVenta !== undefined ? factura.puntoVenta : '—';
+                    const numeroFacturaDisplay = factura.numeroFactura !== null && factura.numeroFactura !== undefined ? factura.numeroFactura : '—';
+                    const montoCobrado = getMontoCobrado(factura);
+                    const saldoPendiente = getSaldoPendiente(factura);
+                    return (
+                      <React.Fragment key={factura._id}>
+                        <tr className={factura.pagado ? 'table-success' : ''}>
+                          <td>{puntoVentaDisplay}</td>
+                          <td>{numeroFacturaDisplay}</td>
+                          <td>{factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</td>
+                          <td>{factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</td>
+                          <td>{factura.centroSalud ? factura.centroSalud.nombre : 'Sin centro'}</td>
+                          <td>{formatCurrency(factura.montoTotal)}</td>
+                          <td>{formatDate(factura.fechaEmision)}</td>
+                          <td>
+                            {formatDate(factura.fechaVencimiento)}
+                            {isVencida && (
+                              <span className="badge bg-danger ms-2">Vencida</span>
+                            )}
+                          </td>
+                          <td>
+                            <div className="d-flex flex-column gap-2">
+                              <span className={`badge rounded-pill ${badgeClass}`}>
+                                {ESTADO_LABELS[estado] || estado}
+                              </span>
+                              <select
+                                className="form-select form-select-sm"
+                                value={estado}
+                                onChange={(e) => handleEstadoUpdate(factura._id, e.target.value)}
+                              >
+                                {ESTADO_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </td>
+                          <td>{formatCurrency(montoCobrado)}</td>
+                          <td>{formatCurrency(saldoPendiente)}</td>
+                          <td>
+                            <div className="d-flex flex-column gap-2">
+                              <button
+                                className="btn btn-outline-primary btn-sm"
+                                type="button"
+                                onClick={() => toggleExpandFactura(factura._id)}
+                              >
+                                {expandedFacturaId === factura._id ? 'Ocultar' : 'Detalles'}
+                              </button>
+                              <button
+                                className="btn btn-warning btn-sm"
+                                type="button"
+                                onClick={() => handleEdit(factura)}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                className="btn btn-danger btn-sm"
+                                type="button"
+                                onClick={() => handleDelete(factura._id)}
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedFacturaId === factura._id && (
                         <tr>
                           <td colSpan="12">
                             <div className="p-3 bg-light border rounded">
@@ -941,13 +1240,13 @@ function FacturasPage() {
                                   <p className="mb-1"><strong>Observaciones:</strong> {factura.observaciones || '—'}</p>
                                   <p className="mb-1"><strong>Punto de venta:</strong> {puntoVentaDisplay}</p>
                                   <p className="mb-1"><strong>Número de factura:</strong> {numeroFacturaDisplay}</p>
-                                  <p className="mb-1"><strong>Saldo Pendiente:</strong> {formatCurrency(factura.saldoPendiente || 0)}</p>
+                                  <p className="mb-1"><strong>Saldo Pendiente:</strong> {formatCurrency(saldoPendiente)}</p>
                                   <div className="d-flex gap-2 mt-3">
                                     <button
                                       className="btn btn-success btn-sm"
                                       type="button"
                                       onClick={() => handleLiquidarSaldo(factura)}
-                                      disabled={(factura.saldoPendiente || 0) <= 0}
+                                      disabled={saldoPendiente <= 0}
                                     >
                                       Liquidar saldo
                                     </button>
@@ -1177,15 +1476,22 @@ function FacturasPage() {
             </table>
           </div>
 
-          <div className="d-md-none">
+              <div className="d-md-none">
             <div className="row g-3">
-              {filteredFacturas.map((factura) => {
-                const estado = normalizeEstado(factura);
-                const badgeClass = ESTADO_BADGES[estado] || 'bg-secondary';
-                const paymentForm = getPaymentForm(factura._id);
-                const puntoVentaDisplay = factura.puntoVenta !== null && factura.puntoVenta !== undefined ? factura.puntoVenta : '—';
-                const numeroFacturaDisplay = factura.numeroFactura !== null && factura.numeroFactura !== undefined ? factura.numeroFactura : '—';
-                return (
+              {paginatedFacturas.length === 0 ? (
+                <div className="col-12">
+                  <div className="alert alert-light border text-center mb-0">No hay facturas para mostrar.</div>
+                </div>
+              ) : (
+                paginatedFacturas.map((factura) => {
+                  const estado = normalizeEstado(factura);
+                  const badgeClass = ESTADO_BADGES[estado] || 'bg-secondary';
+                  const paymentForm = getPaymentForm(factura._id);
+                  const puntoVentaDisplay = factura.puntoVenta !== null && factura.puntoVenta !== undefined ? factura.puntoVenta : '—';
+                  const numeroFacturaDisplay = factura.numeroFactura !== null && factura.numeroFactura !== undefined ? factura.numeroFactura : '—';
+                  const montoCobrado = getMontoCobrado(factura);
+                  const saldoPendiente = getSaldoPendiente(factura);
+                  return (
                   <div className="col-12" key={factura._id}>
                     <div className="card shadow-sm">
                       <div className="card-body">
@@ -1203,8 +1509,8 @@ function FacturasPage() {
                           </div>
                           <span className={`badge rounded-pill ${badgeClass}`}>{ESTADO_LABELS[estado] || estado}</span>
                         </div>
-                        <p className="mb-1"><strong>Cobrado:</strong> {formatCurrency(factura.montoCobrado || 0)}</p>
-                        <p className="mb-2"><strong>Saldo:</strong> {formatCurrency(factura.saldoPendiente || 0)}</p>
+                        <p className="mb-1"><strong>Cobrado:</strong> {formatCurrency(montoCobrado)}</p>
+                        <p className="mb-2"><strong>Saldo:</strong> {formatCurrency(saldoPendiente)}</p>
                         <p className="mb-3"><strong>Observaciones:</strong> {factura.observaciones || '—'}</p>
 
                         <div className="mb-3">
@@ -1231,7 +1537,7 @@ function FacturasPage() {
                             className="btn btn-success btn-sm"
                             type="button"
                             onClick={() => handleLiquidarSaldo(factura)}
-                            disabled={(factura.saldoPendiente || 0) <= 0}
+                            disabled={saldoPendiente <= 0}
                           >
                             Liquidar saldo
                           </button>
@@ -1424,9 +1730,55 @@ function FacturasPage() {
                     </div>
                   </div>
                 );
-              })}
+                })
+              )}
             </div>
           </div>
+
+              <nav className="d-flex justify-content-center mt-4" aria-label="Paginación de facturas">
+            <ul className="pagination mb-0">
+              <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                <button
+                  className="page-link"
+                  type="button"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </button>
+              </li>
+              {pageNumbers.map((page, index) => (
+                <li
+                  key={`${page}-${index}`}
+                  className={`page-item ${page === currentPage ? 'active' : ''} ${typeof page === 'string' ? 'disabled' : ''}`}
+                >
+                  {typeof page === 'string' ? (
+                    <span className="page-link">…</span>
+                  ) : (
+                    <button
+                      className="page-link"
+                      type="button"
+                      onClick={() => handlePageChange(page)}
+                    >
+                      {page}
+                    </button>
+                  )}
+                </li>
+              ))}
+              <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <button
+                  className="page-link"
+                  type="button"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </button>
+              </li>
+            </ul>
+          </nav>
+        </>
+      )}
         </div>
       </div>
     </div>
