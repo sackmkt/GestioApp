@@ -196,20 +196,15 @@ function FacturasPage() {
       const data = await facturasService.getFacturas();
       setFacturas(data);
     } catch (fetchError) {
-      console.error('No se pudieron cargar las facturas.', fetchError);
       showError('No se pudieron cargar las facturas. Intenta nuevamente.');
     }
   };
 
   const fetchPacientes = async () => {
     try {
-      const response = await pacientesService.getPacientes({
-        limit: 0,
-        fields: 'nombre,apellido,dni,tipoAtencion,obraSocial,centroSalud,email,telefono',
-      });
-      setPacientes(Array.isArray(response?.data) ? response.data : []);
+      const data = await pacientesService.getPacientes();
+      setPacientes(data);
     } catch (fetchError) {
-      console.error('No se pudieron cargar los pacientes.', fetchError);
       showError('No se pudieron cargar los pacientes.');
     }
   };
@@ -219,7 +214,6 @@ function FacturasPage() {
       const data = await obrasSocialesService.getObrasSociales();
       setObrasSociales(data);
     } catch (fetchError) {
-      console.error('No se pudieron cargar las obras sociales.', fetchError);
       showError('No se pudieron cargar las obras sociales.');
     }
   };
@@ -229,7 +223,6 @@ function FacturasPage() {
       const data = await centrosSaludService.getCentros();
       setCentrosSalud(data);
     } catch (fetchError) {
-      console.error('No se pudieron cargar los centros de salud.', fetchError);
       showError('No se pudieron cargar los centros de salud.');
     }
   };
@@ -397,7 +390,6 @@ function FacturasPage() {
       await fetchFacturas();
       showSuccess('Estado de la factura actualizado.');
     } catch (estadoError) {
-      console.error('No se pudo actualizar el estado de la factura.', estadoError);
       showError('No se pudo actualizar el estado de la factura.');
     }
   };

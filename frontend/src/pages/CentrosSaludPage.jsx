@@ -32,7 +32,6 @@ function CentrosSaludPage() {
       const data = await centrosSaludService.getCentros();
       setCentros(data);
     } catch (err) {
-      console.error('No se pudieron cargar los centros de salud.', err);
       showError('No se pudieron cargar los centros de salud.');
     }
   };
@@ -42,7 +41,6 @@ function CentrosSaludPage() {
       const data = await facturasService.getFacturas();
       setFacturas(data);
     } catch (err) {
-      console.error('No se pudo obtener la facturación vinculada a los centros.', err);
       showError('No se pudo obtener la facturación vinculada a los centros.');
     }
   };
@@ -169,7 +167,6 @@ function CentrosSaludPage() {
       fetchCentros();
       showInfo('El centro de salud se eliminó correctamente.');
     } catch (err) {
-      console.error('No se pudo eliminar el centro de salud.', err);
       showError('No se pudo eliminar el centro de salud.');
     } finally {
       setLoading(false);

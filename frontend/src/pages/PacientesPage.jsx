@@ -22,23 +22,6 @@ const ATENCION_LABELS = {
 
 const ITEMS_PER_PAGE = 16;
 
-const DEFAULT_PAGINATION = {
-  page: 1,
-  limit: ITEMS_PER_PAGE,
-  totalDocs: 0,
-  totalPages: 1,
-  hasNextPage: false,
-  hasPrevPage: false,
-};
-
-const DEFAULT_SUMMARY = {
-  total: 0,
-  particulares: 0,
-  porCentro: 0,
-  conContacto: 0,
-  centrosActivos: 0,
-};
-
 const buildPageNumbers = (totalPages, currentPage) => {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -122,87 +105,24 @@ function PacientesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const documentFileInputRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
-  const [summary, setSummary] = useState(DEFAULT_SUMMARY);
 
-  const trimmedSearch = searchTerm.trim();
-  const hasSearch = Boolean(trimmedSearch);
-
-  const fetchPacientes = useCallback(async (pageToLoad = 1) => {
-    setListLoading(true);
+  const fetchPacientes = useCallback(async () => {
     try {
-      const response = await PacientesService.getPacientes({
-        page: pageToLoad,
-        limit: ITEMS_PER_PAGE,
-        search: trimmedSearch || undefined,
-      });
-
-      const data = Array.isArray(response?.data) ? response.data : [];
+      setListLoading(true);
+      const data = await PacientesService.getPacientes();
       setPacientes(data);
-
-      const paginationData = response?.pagination || {};
-      const resolvedPage = paginationData.page ?? pageToLoad;
-      const resolvedLimit = paginationData.limit ?? ITEMS_PER_PAGE;
-      const resolvedTotalDocs = paginationData.totalDocs ?? data.length;
-      const resolvedTotalPages = paginationData.totalPages
-        ?? Math.max(Math.ceil(resolvedTotalDocs / (resolvedLimit || 1)), 1);
-
-      setPagination({
-        page: resolvedPage,
-        limit: resolvedLimit,
-        totalDocs: resolvedTotalDocs,
-        totalPages: resolvedTotalPages,
-        hasNextPage: paginationData.hasNextPage ?? (resolvedPage < resolvedTotalPages),
-        hasPrevPage: paginationData.hasPrevPage ?? (resolvedPage > 1),
-      });
-
-      const summaryData = response?.summary;
-      if (summaryData) {
-        setSummary({
-          total: summaryData.total ?? 0,
-          particulares: summaryData.particulares ?? 0,
-          porCentro: summaryData.porCentro ?? 0,
-          conContacto: summaryData.conContacto ?? 0,
-          centrosActivos: summaryData.centrosActivos ?? 0,
-        });
-      } else {
-        const particulares = data.filter((p) => p.tipoAtencion === 'particular').length;
-        const porCentro = data.filter((p) => p.tipoAtencion === 'centro').length;
-        const conContacto = data.filter((p) => p.email || p.telefono).length;
-        const centrosVinculados = data.reduce((acc, paciente) => {
-          const centroId = paciente.centroSalud?._id || paciente.centroSalud;
-          if (paciente.tipoAtencion === 'centro' && centroId) {
-            acc.add(centroId.toString());
-          }
-          return acc;
-        }, new Set());
-        setSummary({
-          total: data.length,
-          particulares,
-          porCentro,
-          conContacto,
-          centrosActivos: centrosVinculados.size,
-        });
-      }
-
-      return { resolvedPage };
     } catch (err) {
-      console.error('Error al obtener pacientes.', err);
-      setPacientes([]);
-      setPagination(DEFAULT_PAGINATION);
-      setSummary(DEFAULT_SUMMARY);
-      throw err;
+      showError('No se pudieron cargar los pacientes. Intenta nuevamente.');
     } finally {
       setListLoading(false);
     }
-  }, [trimmedSearch]);
+  }, [showError]);
 
   const fetchObrasSociales = useCallback(async () => {
     try {
       const data = await ObrasSocialesService.getObrasSociales();
       setObrasSociales(data);
     } catch (err) {
-      console.error('No se pudieron cargar las obras sociales.', err);
       showError('No se pudieron cargar las obras sociales.');
     }
   }, [showError]);
@@ -212,77 +132,60 @@ function PacientesPage() {
       const data = await CentrosSaludService.getCentros();
       setCentrosSalud(data);
     } catch (err) {
-      console.error('No se pudieron cargar los centros de salud.', err);
       showError('No se pudieron cargar los centros de salud.');
     }
   }, [showError]);
 
   useEffect(() => {
+    fetchPacientes();
     fetchObrasSociales();
     fetchCentrosSalud();
-  }, [fetchCentrosSalud, fetchObrasSociales]);
+  }, [fetchCentrosSalud, fetchObrasSociales, fetchPacientes]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const resumenPacientes = useMemo(() => {
+    const particulares = pacientes.filter((p) => p.tipoAtencion === 'particular').length;
+    const porCentro = pacientes.filter((p) => p.tipoAtencion === 'centro').length;
+    const conContacto = pacientes.filter((p) => p.email || p.telefono).length;
 
-    const loadPacientes = async () => {
-      try {
-        const { resolvedPage } = await fetchPacientes(currentPage);
-        if (!cancelled && resolvedPage !== undefined && resolvedPage !== currentPage) {
-          setCurrentPage(resolvedPage);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error('No se pudieron cargar los pacientes.', err);
-          showError('No se pudieron cargar los pacientes. Intenta nuevamente.');
-        }
+    const centrosVinculados = pacientes.reduce((acc, paciente) => {
+      const centroId = paciente.centroSalud?._id || paciente.centroSalud;
+      if (paciente.tipoAtencion === 'centro' && centroId) {
+        acc.add(centroId);
       }
+      return acc;
+    }, new Set());
+
+    return {
+      total: pacientes.length,
+      particulares,
+      porCentro,
+      conContacto,
+      centrosActivos: centrosVinculados.size,
     };
-
-    loadPacientes();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentPage, fetchPacientes, showError]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [trimmedSearch]);
+  }, [pacientes]);
 
   const pacienteSeleccionado = useMemo(
     () => pacientes.find((paciente) => paciente._id === editingId),
     [pacientes, editingId],
   );
 
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredPacientes = useMemo(() => {
+    if (!normalizedSearch) {
+      return pacientes;
+    }
+
+    return pacientes.filter((paciente) => {
+      const fullName = `${paciente.nombre || ''} ${paciente.apellido || ''}`.toLowerCase();
+      const dni = (paciente.dni || '').toString().toLowerCase();
+      return fullName.includes(normalizedSearch) || dni.includes(normalizedSearch);
+    });
+  }, [pacientes, normalizedSearch]);
+
+  const hasSearch = Boolean(normalizedSearch);
   const emptyPatientsMessage = hasSearch
     ? 'No se encontraron pacientes que coincidan con la búsqueda.'
     : 'No hay pacientes cargados todavía.';
-
-  const totalPacientes = pagination.totalDocs;
-  const totalPages = Math.max(pagination.totalPages, 1);
-  const pageNumbers = useMemo(
-    () => buildPageNumbers(totalPages, pagination.page),
-    [totalPages, pagination.page],
-  );
-
-  const showingFrom = totalPacientes === 0
-    ? 0
-    : (Math.max(pagination.page, 1) - 1) * (pagination.limit || ITEMS_PER_PAGE) + 1;
-  const showingTo = totalPacientes === 0
-    ? 0
-    : Math.min(showingFrom + pacientes.length - 1, totalPacientes);
-
-  const handlePageChange = (pageNumber) => {
-    if (
-      typeof pageNumber === 'number'
-      && pageNumber >= 1
-      && pageNumber <= totalPages
-      && pageNumber !== currentPage
-    ) {
-      setCurrentPage(pageNumber);
-    }
-  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -297,6 +200,37 @@ function PacientesPage() {
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
   };
+
+  const totalPacientes = filteredPacientes.length;
+  const totalPages = Math.max(Math.ceil(totalPacientes / ITEMS_PER_PAGE), 1);
+  const paginatedPacientes = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredPacientes.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredPacientes, currentPage]);
+
+  const pageNumbers = useMemo(
+    () => buildPageNumbers(totalPages, currentPage),
+    [totalPages, currentPage],
+  );
+
+  const showingFrom = totalPacientes === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const showingTo = totalPacientes === 0 ? 0 : Math.min(currentPage * ITEMS_PER_PAGE, totalPacientes);
+
+  const handlePageChange = (page) => {
+    if (typeof page === 'number' && page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [normalizedSearch, pacientes.length]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const resetForm = () => {
     setFormData(EMPTY_FORM);
@@ -348,12 +282,7 @@ function PacientesPage() {
         showSuccess('Paciente agregado correctamente.');
       }
       resetForm();
-      const targetPage = editingId ? currentPage : 1;
-      if (targetPage === currentPage) {
-        await fetchPacientes(targetPage);
-      } else {
-        setCurrentPage(targetPage);
-      }
+      await fetchPacientes();
     } catch (err) {
       const message = err.response?.data?.message || err.response?.data?.error || 'No se pudo guardar el paciente.';
       setError(message);
@@ -373,15 +302,7 @@ function PacientesPage() {
       if (editingId === id) {
         resetForm();
       }
-      const isLastItemOnPage = pacientes.length <= 1;
-      const targetPage = isLastItemOnPage && pagination.page > 1
-        ? pagination.page - 1
-        : pagination.page;
-      if (targetPage === currentPage) {
-        await fetchPacientes(targetPage);
-      } else {
-        setCurrentPage(targetPage);
-      }
+      await fetchPacientes();
       showInfo('El paciente se eliminó correctamente.');
     } catch (err) {
       const message = err.response?.data?.message || 'No se pudo eliminar el paciente.';
@@ -538,19 +459,19 @@ function PacientesPage() {
           <div className="d-flex flex-wrap gap-3 justify-content-start justify-content-lg-end">
             <div className="text-center flex-fill flex-lg-grow-0">
               <span className="text-muted small d-block">Total</span>
-              <strong className="fs-5">{summary.total}</strong>
+              <strong className="fs-5">{resumenPacientes.total}</strong>
             </div>
             <div className="text-center flex-fill flex-lg-grow-0">
               <span className="text-muted small d-block">Particulares</span>
-              <strong className="fs-5 text-success">{summary.particulares}</strong>
+              <strong className="fs-5 text-success">{resumenPacientes.particulares}</strong>
             </div>
             <div className="text-center flex-fill flex-lg-grow-0">
               <span className="text-muted small d-block">Por centros</span>
-              <strong className="fs-5 text-primary">{summary.porCentro}</strong>
+              <strong className="fs-5 text-primary">{resumenPacientes.porCentro}</strong>
             </div>
             <div className="text-center flex-fill flex-lg-grow-0">
               <span className="text-muted small d-block">Con contacto</span>
-              <strong className="fs-5">{summary.conContacto}</strong>
+              <strong className="fs-5">{resumenPacientes.conContacto}</strong>
             </div>
           </div>
         </div>
@@ -841,14 +762,14 @@ function PacientesPage() {
                     </div>
                   </td>
                 </tr>
-              ) : pacientes.length === 0 ? (
+              ) : filteredPacientes.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="text-center py-4 text-muted">
                     {emptyPatientsMessage}
                   </td>
                 </tr>
               ) : (
-                pacientes.map((paciente) => (
+                paginatedPacientes.map((paciente) => (
                   <tr key={paciente._id}>
                   <td>{paciente.nombre} {paciente.apellido}</td>
                   <td>{paciente.dni}</td>
@@ -901,7 +822,7 @@ function PacientesPage() {
               )}
             </tbody>
           </table>
-          {totalPacientes > (pagination.limit || ITEMS_PER_PAGE) && (
+          {totalPacientes > ITEMS_PER_PAGE && (
             <nav className="d-flex justify-content-center py-3" aria-label="Paginación de pacientes">
               <ul className="pagination mb-0">
                 <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
@@ -954,13 +875,13 @@ function PacientesPage() {
               </div>
             </div>
           )}
-          {!listLoading && pacientes.length === 0 && (
+          {!listLoading && filteredPacientes.length === 0 && (
             <div className="col-12">
               <div className="alert alert-light text-center mb-0">{emptyPatientsMessage}</div>
             </div>
           )}
           {!listLoading &&
-            pacientes.map((paciente) => (
+            paginatedPacientes.map((paciente) => (
               <div className="col-12" key={paciente._id}>
                 <div className="card shadow-sm">
                   <div className="card-body">
@@ -1015,7 +936,7 @@ function PacientesPage() {
               </div>
             ))}
         </div>
-        {totalPacientes > (pagination.limit || ITEMS_PER_PAGE) && (
+        {totalPacientes > ITEMS_PER_PAGE && (
           <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de pacientes móvil">
             <ul className="pagination mb-0">
               <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>

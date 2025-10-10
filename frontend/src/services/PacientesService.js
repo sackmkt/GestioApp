@@ -32,9 +32,9 @@ const extractFilename = (disposition, fallback = 'documento.pdf') => {
   return match ? decodeURIComponent(match[1]) : fallback;
 };
 
-const getPacientes = async (params = {}) => {
+const getPacientes = async () => {
   try {
-    const response = await axios.get(API_URL, getHeadersWithConfig({ params }));
+    const response = await axios.get(API_URL, getHeaders());
     return response.data;
   } catch (error) {
     console.error('Error al obtener pacientes:', error);

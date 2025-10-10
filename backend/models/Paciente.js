@@ -49,34 +49,4 @@ pacienteSchema.index(
   },
 );
 
-pacienteSchema.index(
-  { user: 1, email: 1 },
-  {
-    name: 'paciente_user_email_idx',
-    background: true,
-    partialFilterExpression: {
-      email: { $exists: true, $ne: null },
-    },
-  },
-);
-
-pacienteSchema.index(
-  { user: 1, telefono: 1 },
-  {
-    name: 'paciente_user_telefono_idx',
-    background: true,
-    partialFilterExpression: {
-      telefono: { $exists: true, $ne: null },
-    },
-  },
-);
-
-pacienteSchema.index(
-  { user: 1, apellido: 1, nombre: 1 },
-  {
-    name: 'paciente_user_nombre_idx',
-    background: true,
-  },
-);
-
 module.exports = mongoose.model('Paciente', pacienteSchema);

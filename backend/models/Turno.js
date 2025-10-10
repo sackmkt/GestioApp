@@ -51,7 +51,5 @@ const turnoSchema = new mongoose.Schema(
 );
 
 turnoSchema.index({ user: 1, fecha: 1 });
-turnoSchema.index({ user: 1, estado: 1, fecha: 1 });
-turnoSchema.index({ user: 1, paciente: 1, fecha: 1 });
 
 module.exports = mongoose.model('Turno', turnoSchema);
