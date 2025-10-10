@@ -1139,16 +1139,12 @@ function FacturasPage() {
             <table className="table table-striped table-hover mb-0 align-middle">
               <thead className="table-dark">
                 <tr>
-                  <th>Punto de Venta</th>
-                  <th>N° Factura</th>
+                  <th>Factura</th>
                   <th>Paciente</th>
-                  <th>Obra Social</th>
-                  <th>Centro</th>
                   <th>Monto</th>
                   <th>Emitida</th>
                   <th>Vence</th>
                   <th>Estado</th>
-                  <th>Cobrado</th>
                   <th>Saldo</th>
                   <th>Acciones</th>
                 </tr>
@@ -1156,7 +1152,7 @@ function FacturasPage() {
               <tbody>
                 {paginatedFacturas.length === 0 ? (
                   <tr>
-                    <td colSpan="12" className="text-center text-muted py-4">No hay facturas para mostrar.</td>
+                    <td colSpan="8" className="text-center text-muted py-4">No hay facturas para mostrar.</td>
                   </tr>
                 ) : paginatedFacturas.map((factura) => {
                     const estado = normalizeEstado(factura);
@@ -1169,11 +1165,12 @@ function FacturasPage() {
                     return (
                       <React.Fragment key={factura._id}>
                         <tr className={factura.pagado ? 'table-success' : ''}>
-                          <td>{puntoVentaDisplay}</td>
-                          <td>{numeroFacturaDisplay}</td>
+                          <td>
+                            {puntoVentaDisplay !== '—' || numeroFacturaDisplay !== '—'
+                              ? `PV ${puntoVentaDisplay} · N° ${numeroFacturaDisplay}`
+                              : '—'}
+                          </td>
                           <td>{factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</td>
-                          <td>{factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</td>
-                          <td>{factura.centroSalud ? factura.centroSalud.nombre : 'Sin centro'}</td>
                           <td>{formatCurrency(factura.montoTotal)}</td>
                           <td>{formatDate(factura.fechaEmision)}</td>
                           <td>
@@ -1198,7 +1195,6 @@ function FacturasPage() {
                               </select>
                             </div>
                           </td>
-                          <td>{formatCurrency(montoCobrado)}</td>
                           <td>{formatCurrency(saldoPendiente)}</td>
                           <td>
                             <div className="d-flex flex-column gap-2">
@@ -1228,13 +1224,14 @@ function FacturasPage() {
                         </tr>
                         {expandedFacturaId === factura._id && (
                         <tr>
-                          <td colSpan="12">
+                          <td colSpan="8">
                             <div className="p-3 bg-light border rounded">
                               <div className="row g-3">
                                 <div className="col-md-4">
                                   <h6 className="text-uppercase text-muted">Detalle</h6>
                                   <p className="mb-1"><strong>Monto Total:</strong> {formatCurrency(factura.montoTotal)}</p>
                                   <p className="mb-1"><strong>Interés:</strong> {factura.interes ? `${factura.interes}%` : '0%'}</p>
+                                  <p className="mb-1"><strong>Monto Cobrado:</strong> {formatCurrency(montoCobrado)}</p>
                                   <p className="mb-1"><strong>Obra Social:</strong> {factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</p>
                                   <p className="mb-1"><strong>Centro:</strong> {factura.centroSalud ? `${factura.centroSalud.nombre} · Ret. ${factura.centroSalud.porcentajeRetencion}%` : 'Sin centro asociado'}</p>
                                   <p className="mb-1"><strong>Observaciones:</strong> {factura.observaciones || '—'}</p>
@@ -1491,6 +1488,8 @@ function FacturasPage() {
                   const numeroFacturaDisplay = factura.numeroFactura !== null && factura.numeroFactura !== undefined ? factura.numeroFactura : '—';
                   const montoCobrado = getMontoCobrado(factura);
                   const saldoPendiente = getSaldoPendiente(factura);
+                  const isVencida = esFacturaVencida(factura);
+                  const isExpanded = expandedFacturaId === factura._id;
                   return (
                   <div className="col-12" key={factura._id}>
                     <div className="card shadow-sm">
@@ -1499,17 +1498,15 @@ function FacturasPage() {
                           <div>
                             <h5 className="card-title mb-1">Factura PV {puntoVentaDisplay} · N° {numeroFacturaDisplay}</h5>
                             <p className="mb-1"><strong>Paciente:</strong> {factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</p>
-                            <p className="mb-1"><strong>Punto de venta:</strong> {puntoVentaDisplay}</p>
-                            <p className="mb-1"><strong>Número de factura:</strong> {numeroFacturaDisplay}</p>
-                            <p className="mb-1"><strong>Obra Social:</strong> {factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</p>
-                            <p className="mb-1"><strong>Centro:</strong> {factura.centroSalud ? `${factura.centroSalud.nombre} · Ret. ${factura.centroSalud.porcentajeRetencion}%` : 'Sin centro asociado'}</p>
                             <p className="mb-1"><strong>Monto:</strong> {formatCurrency(factura.montoTotal)}</p>
                             <p className="mb-1"><strong>Emitida:</strong> {formatDate(factura.fechaEmision)}</p>
-                            <p className="mb-1"><strong>Vence:</strong> {formatDate(factura.fechaVencimiento)}</p>
+                            <p className="mb-1">
+                              <strong>Vence:</strong> {formatDate(factura.fechaVencimiento)}
+                              {isVencida && <span className="badge bg-danger ms-2">Vencida</span>}
+                            </p>
                           </div>
                           <span className={`badge rounded-pill ${badgeClass}`}>{ESTADO_LABELS[estado] || estado}</span>
                         </div>
-                        <p className="mb-1"><strong>Cobrado:</strong> {formatCurrency(montoCobrado)}</p>
                         <p className="mb-2"><strong>Saldo:</strong> {formatCurrency(saldoPendiente)}</p>
                         <p className="mb-3"><strong>Observaciones:</strong> {factura.observaciones || '—'}</p>
 
@@ -1541,7 +1538,25 @@ function FacturasPage() {
                           >
                             Liquidar saldo
                           </button>
+                          <button
+                            className="btn btn-outline-primary btn-sm"
+                            type="button"
+                            onClick={() => toggleExpandFactura(factura._id)}
+                          >
+                            {isExpanded ? 'Ocultar detalles' : 'Detalles'}
+                          </button>
                         </div>
+
+                        {isExpanded && (
+                          <div className="mb-3 p-3 bg-light border rounded">
+                            <h6 className="text-uppercase text-muted">Detalle de facturación</h6>
+                            <p className="mb-1"><strong>Punto de venta:</strong> {puntoVentaDisplay}</p>
+                            <p className="mb-1"><strong>Número de factura:</strong> {numeroFacturaDisplay}</p>
+                            <p className="mb-1"><strong>Monto cobrado:</strong> {formatCurrency(montoCobrado)}</p>
+                            <p className="mb-1"><strong>Obra Social:</strong> {factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</p>
+                            <p className="mb-1"><strong>Centro:</strong> {factura.centroSalud ? `${factura.centroSalud.nombre} · Ret. ${factura.centroSalud.porcentajeRetencion}%` : 'Sin centro asociado'}</p>
+                          </div>
+                        )}
 
                         <div className="mb-3">
                           <h6 className="text-uppercase text-muted">Pagos</h6>
