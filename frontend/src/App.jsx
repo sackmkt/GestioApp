@@ -194,11 +194,13 @@ function App() {
         <div className="container">
           {isAuthenticated && (
             <header className="mb-4 text-center text-lg-start">
-              <p className="text-uppercase text-muted fw-semibold mb-2 fs-5">Hola, {userDisplayName}</p>
-              <p className="mb-3">
-                <span className="badge rounded-pill bg-light text-primary border border-primary-subtle px-3 py-2 fw-semibold">
-                  Profesión: <span className="text-primary">{userProfessionLabel}</span>
-                </span>
+              <p className="text-uppercase text-muted fw-semibold mb-3 fs-5 d-flex flex-column flex-sm-row align-items-center gap-2 justify-content-center justify-content-lg-start">
+                <span>Hola, {userDisplayName}</span>
+                {userProfessionLabel ? (
+                  <span className="badge rounded-pill bg-light text-primary border border-primary-subtle px-3 py-2 fw-semibold">
+                    {userProfessionLabel}
+                  </span>
+                ) : null}
               </p>
               <h1 className="display-5 fw-bold mb-3" style={{ color: '#0f172a' }}>
                 Gestión clínica sin fricciones

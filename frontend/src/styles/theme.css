@@ -21,6 +21,10 @@ body {
   color: var(--gestio-dark);
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 .navbar.gestio-navbar {
   background: var(--gestio-surface-alt);
   backdrop-filter: blur(12px);
