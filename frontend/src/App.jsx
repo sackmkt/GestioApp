@@ -80,6 +80,7 @@ function App() {
     }
     return currentUser.username;
   }, [currentUser]);
+  const userProfessionLabel = (currentUser?.profession && currentUser.profession.trim()) || 'Profesional de la salud';
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -194,6 +195,11 @@ function App() {
           {isAuthenticated && (
             <header className="mb-4 text-center text-lg-start">
               <p className="text-uppercase text-muted fw-semibold mb-2 fs-5">Hola, {userDisplayName}</p>
+              <p className="mb-3">
+                <span className="badge rounded-pill bg-light text-primary border border-primary-subtle px-3 py-2 fw-semibold">
+                  Profesión: <span className="text-primary">{userProfessionLabel}</span>
+                </span>
+              </p>
               <h1 className="display-5 fw-bold mb-3" style={{ color: '#0f172a' }}>
                 Gestión clínica sin fricciones
               </h1>
