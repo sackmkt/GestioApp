@@ -71,8 +71,22 @@ const shouldServeFrontend = fs.existsSync(frontendIndexPath);
 if (shouldServeFrontend) {
   app.use(express.static(frontendDistPath));
 
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) {
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') {
+      return next();
+    }
+
+    if (req.path.startsWith('/api') || req.path.startsWith('/__test__')) {
+      return next();
+    }
+
+    const acceptsHtml = req.headers.accept && req.headers.accept.includes('text/html');
+
+    if (!acceptsHtml) {
+      return next();
+    }
+
+    if (path.extname(req.path)) {
       return next();
     }
 
