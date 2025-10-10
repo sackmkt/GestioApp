@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const fs = require('fs');
+const path = require('path');
 const activityLogger = require('./middleware/activityLogger');
 const { protect } = require('./middleware/authMiddleware');
 const securityHeaders = require('./middleware/securityHeaders');
@@ -62,9 +64,25 @@ app.use('/api/facturas', facturasRoutes);
 app.use('/api/turnos', turnosRoutes);
 app.use('/api/users', userRoutes);
 
-app.get('/', (req, res) => {
-  res.send('Te saludo desde el backend! El servidor esta funcionando.');
-});
+const frontendDistPath = path.resolve(__dirname, '..', 'frontend', 'dist');
+const frontendIndexPath = path.join(frontendDistPath, 'index.html');
+const shouldServeFrontend = fs.existsSync(frontendIndexPath);
+
+if (shouldServeFrontend) {
+  app.use(express.static(frontendDistPath));
+
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+
+    return res.sendFile(frontendIndexPath);
+  });
+} else {
+  app.get('/', (req, res) => {
+    res.send('Te saludo desde el backend! El servidor esta funcionando.');
+  });
+}
 
 if (process.env.NODE_ENV === 'test') {
   const testRouter = express.Router();
