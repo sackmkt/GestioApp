@@ -25,37 +25,28 @@ const InfoModal = ({ show, title, onClose, children }) => {
 
   return (
     <div
-      className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-      style={{ backgroundColor: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1050 }}
+      className="info-panel-overlay"
       role="dialog"
       aria-modal="true"
       aria-labelledby={modalTitleId}
       onClick={onClose}
     >
       <div
-        className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"
+        className="info-panel"
+        role="document"
         onClick={(event) => event.stopPropagation()}
       >
-        <div
-          className="modal-content shadow-lg border-0"
-          role="document"
-          style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.98)',
-            backdropFilter: 'blur(12px)',
-          }}
-        >
-          <div className="modal-header">
-            <h5 id={modalTitleId} className="modal-title mb-0">
-              {title}
-            </h5>
-            <button type="button" className="btn-close" aria-label="Cerrar" onClick={onClose} />
-          </div>
-          <div className="modal-body">{children}</div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-primary" onClick={onClose}>
-              Entendido
-            </button>
-          </div>
+        <div className="info-panel-header">
+          <h5 id={modalTitleId} className="mb-0">
+            {title}
+          </h5>
+          <button type="button" className="btn-close" aria-label="Cerrar" onClick={onClose} />
+        </div>
+        <div className="info-panel-body">{children}</div>
+        <div className="info-panel-footer">
+          <button type="button" className="btn btn-primary w-100" onClick={onClose}>
+            Entendido
+          </button>
         </div>
       </div>
     </div>
@@ -139,20 +130,24 @@ function DashboardPage({ currentUser }) {
   });
 
   useEffect(() => {
-    const anyModalOpen = showMonthlyInfo || showEstadoInfo || showTopObrasInfo || showMoraInfo;
-    if (typeof document !== 'undefined') {
-      if (anyModalOpen) {
-        document.body.classList.add('modal-open');
-      } else {
-        document.body.classList.remove('modal-open');
-      }
+    if (typeof document === 'undefined') {
+      return undefined;
     }
-    return () => {
-      if (typeof document !== 'undefined') {
-        document.body.classList.remove('modal-open');
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeAllModals();
       }
     };
-  }, [showMonthlyInfo, showEstadoInfo, showTopObrasInfo, showMoraInfo]);
+
+    if (showMonthlyInfo || showEstadoInfo || showTopObrasInfo || showMoraInfo) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showMonthlyInfo, showEstadoInfo, showTopObrasInfo, showMoraInfo, closeAllModals]);
 
   const closeAllModals = useCallback(() => {
     setShowMonthlyInfo(false);
