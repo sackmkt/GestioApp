@@ -1,8 +1,17 @@
 const express = require('express');
+const mongoose = require('mongoose');
+
 const router = express.Router();
 const Turno = require('../models/Turno');
 const Paciente = require('../models/Paciente');
 const { protect } = require('../middleware/authMiddleware');
+
+const DEFAULT_PAGE_LIMIT = 16;
+const MAX_PAGE_LIMIT = 100;
+const AGENDA_MAX_LIMIT = 200;
+const UPCOMING_LIMIT = 10;
+
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const calcularRecordatorio = (fecha, horasAntes) => {
   if (!fecha || horasAntes === undefined || horasAntes === null) {
@@ -82,28 +91,153 @@ router.post('/', protect, async (req, res) => {
 // Obtener todos los turnos del usuario autenticado
 router.get('/', protect, async (req, res) => {
   try {
-    const { estado, desde, hasta } = req.query;
-    const filtro = { user: req.user._id };
+    const {
+      estado,
+      desde,
+      hasta,
+      search,
+      paciente: pacienteParam,
+      page = '1',
+      limit = DEFAULT_PAGE_LIMIT.toString(),
+      sortOrder = 'asc',
+    } = req.query;
 
-    if (estado) {
+    const userId = new mongoose.Types.ObjectId(req.user._id);
+    const filtro = { user: userId };
+
+    if (estado && estado !== 'todos') {
       filtro.estado = estado;
     }
 
-    if (desde || hasta) {
-      filtro.fecha = {};
-      if (desde) {
-        filtro.fecha.$gte = new Date(desde);
-      }
-      if (hasta) {
-        filtro.fecha.$lte = new Date(hasta);
-      }
+    if (typeof pacienteParam === 'string' && mongoose.Types.ObjectId.isValid(pacienteParam)) {
+      filtro.paciente = new mongoose.Types.ObjectId(pacienteParam);
     }
 
-    const turnos = await Turno.find(filtro)
-      .sort({ fecha: 1 })
+    const rangoFechas = {};
+    if (desde) {
+      const fechaDesde = new Date(desde);
+      if (!Number.isNaN(fechaDesde.getTime())) {
+        rangoFechas.$gte = fechaDesde;
+      }
+    }
+    if (hasta) {
+      const fechaHasta = new Date(hasta);
+      if (!Number.isNaN(fechaHasta.getTime())) {
+        rangoFechas.$lte = fechaHasta;
+      }
+    }
+    if (Object.keys(rangoFechas).length > 0) {
+      filtro.fecha = rangoFechas;
+    }
+
+    const trimmedSearch = typeof search === 'string' ? search.trim() : '';
+    if (trimmedSearch) {
+      const regex = new RegExp(escapeRegex(trimmedSearch), 'i');
+      const pacientesCoincidentes = await Paciente.find({
+        user: userId,
+        $or: [
+          { nombre: regex },
+          { apellido: regex },
+          { dni: regex },
+        ],
+      }).select('_id');
+
+      const pacientesIds = pacientesCoincidentes.map((doc) => doc._id);
+      const condicionesBusqueda = [
+        { titulo: regex },
+        { notas: regex },
+      ];
+
+      if (pacientesIds.length > 0) {
+        condicionesBusqueda.push({ paciente: { $in: pacientesIds } });
+      }
+
+      filtro.$or = condicionesBusqueda;
+    }
+
+    let parsedLimit = Number.parseInt(limit, 10);
+    if (Number.isNaN(parsedLimit)) {
+      parsedLimit = DEFAULT_PAGE_LIMIT;
+    }
+
+    if (parsedLimit < 0) {
+      parsedLimit = DEFAULT_PAGE_LIMIT;
+    }
+
+    if (parsedLimit > MAX_PAGE_LIMIT) {
+      parsedLimit = MAX_PAGE_LIMIT;
+    }
+
+    if (String(limit).trim() === '0') {
+      parsedLimit = 0;
+    }
+
+    const normalizedLimit = parsedLimit === 0 ? 0 : Math.max(parsedLimit, 1);
+    const totalDocs = await Turno.countDocuments(filtro);
+    const totalPages = normalizedLimit > 0 ? Math.max(Math.ceil(totalDocs / normalizedLimit), 1) : 1;
+    const requestedPage = Number.parseInt(page, 10);
+    const safePage = normalizedLimit > 0
+      ? Math.min(Math.max(Number.isNaN(requestedPage) ? 1 : requestedPage, 1), totalPages)
+      : 1;
+    const skip = normalizedLimit > 0 ? (safePage - 1) * normalizedLimit : 0;
+
+    const sortDirection = String(sortOrder).toLowerCase() === 'desc' ? -1 : 1;
+    const sort = { fecha: sortDirection, _id: sortDirection };
+
+    let turnosQuery = Turno.find(filtro)
+      .sort(sort)
       .populate('paciente', 'nombre apellido dni');
 
-    res.json(turnos);
+    if (normalizedLimit > 0) {
+      turnosQuery = turnosQuery.skip(skip).limit(normalizedLimit);
+    }
+
+    const agendaLimit = normalizedLimit > 0
+      ? Math.min(normalizedLimit * 5, AGENDA_MAX_LIMIT)
+      : AGENDA_MAX_LIMIT;
+
+    const agendaQuery = Turno.find(filtro)
+      .sort(sort)
+      .limit(agendaLimit)
+      .populate('paciente', 'nombre apellido dni');
+
+    const upcomingFilter = { ...filtro };
+    if (filtro.fecha) {
+      upcomingFilter.fecha = { ...filtro.fecha };
+    }
+
+    const now = new Date();
+    upcomingFilter.fecha = upcomingFilter.fecha || {};
+    if (!upcomingFilter.fecha.$gte || upcomingFilter.fecha.$gte < now) {
+      upcomingFilter.fecha.$gte = now;
+    }
+
+    const upcomingQuery = Turno.find(upcomingFilter)
+      .sort(sort)
+      .limit(UPCOMING_LIMIT)
+      .populate('paciente', 'nombre apellido dni');
+
+    const [turnos, agendaTurnos, upcomingTurnos] = await Promise.all([
+      turnosQuery.exec(),
+      agendaQuery.exec(),
+      upcomingQuery.exec(),
+    ]);
+
+    const pagination = {
+      page: safePage,
+      limit: normalizedLimit,
+      totalDocs,
+      totalPages,
+      hasPrevPage: normalizedLimit > 0 ? safePage > 1 : false,
+      hasNextPage: normalizedLimit > 0 ? safePage < totalPages : false,
+    };
+
+    res.json({
+      data: turnos,
+      pagination,
+      agenda: agendaTurnos,
+      upcoming: upcomingTurnos,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

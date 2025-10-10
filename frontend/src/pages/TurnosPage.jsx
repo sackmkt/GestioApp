@@ -69,6 +69,15 @@ const obtenerFechaLocalISO = (date = new Date()) => {
 
 const ITEMS_PER_PAGE = 16;
 
+const DEFAULT_PAGINATION = {
+  page: 1,
+  limit: ITEMS_PER_PAGE,
+  totalDocs: 0,
+  totalPages: 1,
+  hasNextPage: false,
+  hasPrevPage: false,
+};
+
 const buildPageNumbers = (totalPages, currentPage) => {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -98,6 +107,8 @@ const buildPageNumbers = (totalPages, currentPage) => {
 const TurnosPage = () => {
   const { showError, showSuccess, showInfo } = useFeedback();
   const [turnos, setTurnos] = useState([]);
+  const [agendaTurnos, setAgendaTurnos] = useState([]);
+  const [upcomingTurnos, setUpcomingTurnos] = useState([]);
   const [pacientes, setPacientes] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
@@ -119,94 +130,120 @@ const TurnosPage = () => {
   const [agendaDate, setAgendaDate] = useState(obtenerFechaLocalISO());
   const [currentPage, setCurrentPage] = useState(1);
   const [futurePage, setFuturePage] = useState(1);
+  const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
+
+  const trimmedSearch = searchTerm.trim();
+  const hasSearch = trimmedSearch.length > 0;
 
   useEffect(() => {
     const obtenerDatos = async () => {
       try {
-        const listaPacientes = await PacientesService.getPacientes();
-        setPacientes(listaPacientes);
+        const response = await PacientesService.getPacientes({
+          limit: 0,
+          fields: 'nombre,apellido,dni',
+        });
+        setPacientes(Array.isArray(response?.data) ? response.data : []);
       } catch (error) {
+        console.error('No se pudieron cargar los pacientes para agendar turnos.', error);
         showError('No se pudieron cargar los pacientes para agendar turnos.');
       }
     };
     obtenerDatos();
   }, [showError]);
 
-  const loadTurnos = useCallback(async () => {
+  const loadTurnos = useCallback(async (pageToLoad = 1) => {
+    setLoading(true);
     try {
-      setLoading(true);
       const rango = calcularRango(filtros.rango);
-      const parametros = { ...rango };
+      const parametros = {
+        ...rango,
+        page: pageToLoad,
+        limit: ITEMS_PER_PAGE,
+        search: trimmedSearch || undefined,
+      };
       if (filtros.estado !== 'todos') {
         parametros.estado = filtros.estado;
       }
-      const data = await turnosService.getTurnos(parametros);
+      const response = await turnosService.getTurnos(parametros);
+      const data = Array.isArray(response?.data) ? response.data : [];
       setTurnos(data);
+      setAgendaTurnos(Array.isArray(response?.agenda) ? response.agenda : data);
+      setUpcomingTurnos(Array.isArray(response?.upcoming) ? response.upcoming : []);
+      const paginationData = response?.pagination || {};
+      const resolvedPage = paginationData.page ?? pageToLoad;
+      const resolvedLimit = paginationData.limit ?? ITEMS_PER_PAGE;
+      const resolvedTotalDocs = paginationData.totalDocs ?? data.length;
+      const resolvedTotalPages = paginationData.totalPages
+        ?? Math.max(Math.ceil(resolvedTotalDocs / (resolvedLimit || 1)), 1);
+      setPagination({
+        page: resolvedPage,
+        limit: resolvedLimit,
+        totalDocs: resolvedTotalDocs,
+        totalPages: resolvedTotalPages,
+        hasNextPage: paginationData.hasNextPage ?? (resolvedPage < resolvedTotalPages),
+        hasPrevPage: paginationData.hasPrevPage ?? (resolvedPage > 1),
+      });
+      return { resolvedPage };
     } catch (error) {
-      showError('No se pudieron obtener los turnos. Intenta nuevamente.');
+      console.error('Error al obtener turnos.', error);
+      setTurnos([]);
+      setAgendaTurnos([]);
+      setUpcomingTurnos([]);
+      setPagination(DEFAULT_PAGINATION);
+      throw error;
     } finally {
       setLoading(false);
     }
-  }, [filtros.estado, filtros.rango, showError]);
+  }, [filtros.estado, filtros.rango, trimmedSearch]);
 
   useEffect(() => {
-    loadTurnos();
-  }, [loadTurnos]);
+    let cancelled = false;
 
-  const proximosTurnos = useMemo(() => {
-    const ahora = new Date().getTime();
-    return turnos.filter((turno) => new Date(turno.fecha).getTime() >= ahora);
-  }, [turnos]);
+    const fetchTurnos = async () => {
+      try {
+        const { resolvedPage } = await loadTurnos(currentPage);
+        if (!cancelled && resolvedPage !== undefined && resolvedPage !== currentPage) {
+          setCurrentPage(resolvedPage);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('No se pudieron obtener los turnos.', error);
+          showError('No se pudieron obtener los turnos. Intenta nuevamente.');
+        }
+      }
+    };
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
+    fetchTurnos();
 
-  const filteredTurnos = useMemo(() => {
-    if (!normalizedSearch) {
-      return turnos;
-    }
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage, loadTurnos, showError]);
 
-    return turnos.filter((turno) => {
-      const pacienteNombre = `${turno.paciente?.nombre || ''} ${turno.paciente?.apellido || ''}`.toLowerCase();
-      const titulo = (turno.titulo || '').toLowerCase();
-      const notas = (turno.notas || '').toLowerCase();
-      return (
-        pacienteNombre.includes(normalizedSearch)
-        || titulo.includes(normalizedSearch)
-        || notas.includes(normalizedSearch)
-      );
-    });
-  }, [turnos, normalizedSearch]);
-
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
-  };
-
-  const hasSearch = normalizedSearch.length > 0;
   const emptyMessage = hasSearch
     ? 'No se encontraron turnos que coincidan con la búsqueda.'
     : 'No hay turnos para los filtros seleccionados.';
 
-  const totalTurnos = filteredTurnos.length;
-  const totalPages = Math.max(Math.ceil(totalTurnos / ITEMS_PER_PAGE), 1);
-  const paginatedTurnos = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredTurnos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredTurnos, currentPage]);
-
+  const totalTurnos = pagination.totalDocs;
+  const totalPages = Math.max(pagination.totalPages, 1);
   const pageNumbers = useMemo(
-    () => buildPageNumbers(totalPages, currentPage),
-    [totalPages, currentPage],
+    () => buildPageNumbers(totalPages, pagination.page),
+    [totalPages, pagination.page],
   );
 
-  const showingFrom = totalTurnos === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const showingTo = totalTurnos === 0 ? 0 : Math.min(currentPage * ITEMS_PER_PAGE, totalTurnos);
+  const showingFrom = totalTurnos === 0
+    ? 0
+    : (Math.max(pagination.page, 1) - 1) * (pagination.limit || ITEMS_PER_PAGE) + 1;
+  const showingTo = totalTurnos === 0
+    ? 0
+    : Math.min(showingFrom + turnos.length - 1, totalTurnos);
 
-  const totalFutureTurnos = proximosTurnos.length;
+  const totalFutureTurnos = upcomingTurnos.length;
   const totalFuturePages = Math.max(Math.ceil(totalFutureTurnos / ITEMS_PER_PAGE), 1);
   const paginatedProximosTurnos = useMemo(() => {
     const startIndex = (futurePage - 1) * ITEMS_PER_PAGE;
-    return proximosTurnos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [proximosTurnos, futurePage]);
+    return upcomingTurnos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [upcomingTurnos, futurePage]);
 
   const futurePageNumbers = useMemo(
     () => buildPageNumbers(totalFuturePages, futurePage),
@@ -216,21 +253,33 @@ const TurnosPage = () => {
   const futureShowingFrom = totalFutureTurnos === 0 ? 0 : (futurePage - 1) * ITEMS_PER_PAGE + 1;
   const futureShowingTo = totalFutureTurnos === 0 ? 0 : Math.min(futurePage * ITEMS_PER_PAGE, totalFutureTurnos);
 
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+    setCurrentPage(1);
+    setFuturePage(1);
+  };
+
   const handlePageChange = (page) => {
-    if (typeof page === 'number' && page >= 1 && page <= totalPages) {
+    if (
+      typeof page === 'number'
+      && page >= 1
+      && page <= totalPages
+      && page !== currentPage
+    ) {
       setCurrentPage(page);
     }
   };
 
   const handleFuturePageChange = (page) => {
-    if (typeof page === 'number' && page >= 1 && page <= totalFuturePages) {
+    if (
+      typeof page === 'number'
+      && page >= 1
+      && page <= totalFuturePages
+      && page !== futurePage
+    ) {
       setFuturePage(page);
     }
   };
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [normalizedSearch, filtros.estado, filtros.rango, turnos.length]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -299,7 +348,13 @@ const TurnosPage = () => {
         showSuccess('Turno creado correctamente.');
       }
       resetForm();
-      await loadTurnos();
+      const targetPage = editingId ? currentPage : 1;
+      if (targetPage === currentPage) {
+        await loadTurnos(targetPage);
+      } else {
+        setCurrentPage(targetPage);
+      }
+      setFuturePage(1);
     } catch (error) {
       const message = error.response?.data?.message || 'No se pudo guardar el turno. Intenta nuevamente.';
       showError(message);
@@ -331,13 +386,23 @@ const TurnosPage = () => {
     try {
       setDeletingId(id);
       await turnosService.deleteTurno(id);
-      setTurnos((prev) => prev.filter((turno) => turno._id !== id));
       if (editingId === id) {
         resetForm();
       }
+      const isLastItemOnPage = turnos.length <= 1;
+      const targetPage = isLastItemOnPage && pagination.page > 1
+        ? pagination.page - 1
+        : pagination.page;
+      if (targetPage === currentPage) {
+        await loadTurnos(targetPage);
+      } else {
+        setCurrentPage(targetPage);
+      }
+      setFuturePage(1);
       showInfo('El turno se eliminó correctamente.');
     } catch (error) {
       const message = error.response?.data?.message || 'No se pudo eliminar el turno. Intenta nuevamente.';
+      console.error('Error al eliminar turno.', error);
       showError(message);
     } finally {
       setDeletingId(null);
@@ -349,12 +414,15 @@ const TurnosPage = () => {
       setRecordatorioUpdatingId(turno._id);
       const actualizado = await turnosService.updateRecordatorio(turno._id, !turno.recordatorioEnviado);
       setTurnos((prev) => prev.map((item) => (item._id === actualizado._id ? actualizado : item)));
+      setAgendaTurnos((prev) => prev.map((item) => (item._id === actualizado._id ? actualizado : item)));
+      setUpcomingTurnos((prev) => prev.map((item) => (item._id === actualizado._id ? actualizado : item)));
       if (actualizado.recordatorioEnviado) {
         showSuccess('El recordatorio se marcó como enviado.');
       } else {
         showInfo('El recordatorio volverá a estar pendiente.');
       }
     } catch (error) {
+      console.error('No se pudo actualizar el estado del recordatorio.', error);
       showError('No se pudo actualizar el estado del recordatorio.');
     } finally {
       setRecordatorioUpdatingId(null);
@@ -367,6 +435,8 @@ const TurnosPage = () => {
       ...prev,
       [name]: value,
     }));
+    setCurrentPage(1);
+    setFuturePage(1);
   };
 
   const handleAgendaDateChange = (event) => {
@@ -578,7 +648,7 @@ const TurnosPage = () => {
         </div>
         <div className="card-body">
           <AgendaGantt
-            turnos={turnos}
+            turnos={agendaTurnos}
             selectedDate={agendaDate}
             daysToShow={agendaViewMode === 'week' ? 7 : 1}
             startHour={8}
@@ -596,7 +666,7 @@ const TurnosPage = () => {
               <span className="spinner-border text-primary" role="status" aria-hidden="true"></span>
               <span className="ms-2">Cargando turnos...</span>
             </div>
-          ) : filteredTurnos.length === 0 ? (
+          ) : turnos.length === 0 ? (
             <p className="mb-0">{emptyMessage}</p>
           ) : (
             <>
@@ -620,7 +690,7 @@ const TurnosPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {paginatedTurnos.map((turno) => (
+                {turnos.map((turno) => (
                   <tr key={turno._id}>
                     <td>
                       <strong>{turno.paciente?.nombre} {turno.paciente?.apellido}</strong>
@@ -699,8 +769,8 @@ const TurnosPage = () => {
                 ))}
               </tbody>
             </table>
-              {totalTurnos > ITEMS_PER_PAGE && (
-                <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de turnos">
+          {totalTurnos > (pagination.limit || ITEMS_PER_PAGE) && (
+            <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de turnos">
                   <ul className="pagination mb-0">
                     <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
                       <button
@@ -751,9 +821,9 @@ const TurnosPage = () => {
             <span className="ms-2">Cargando turnos...</span>
           </div>
         )}
-        {!loading && filteredTurnos.length === 0 && <p>{emptyMessage}</p>}
+        {!loading && turnos.length === 0 && <p>{emptyMessage}</p>}
         <div className="row g-3">
-          {paginatedTurnos.map((turno) => (
+          {turnos.map((turno) => (
             <div className="col-12" key={turno._id}>
               <div className="card shadow-sm">
                 <div className="card-body">
@@ -837,7 +907,7 @@ const TurnosPage = () => {
             </div>
           ))}
         </div>
-        {totalTurnos > ITEMS_PER_PAGE && (
+        {totalTurnos > (pagination.limit || ITEMS_PER_PAGE) && (
           <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de turnos móvil">
             <ul className="pagination mb-0">
               <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>

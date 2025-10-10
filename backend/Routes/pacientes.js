@@ -1,9 +1,59 @@
 const express = require('express');
+const mongoose = require('mongoose');
+
 const router = express.Router();
 const Paciente = require('../models/Paciente');
 const CentroSalud = require('../models/CentroSalud');
 const { protect } = require('../middleware/authMiddleware');
 const storageService = require('../services/storageService');
+
+const DEFAULT_PAGE_LIMIT = 16;
+const MAX_PAGE_LIMIT = 100;
+const SUMMARY_DEFAULT = {
+  total: 0,
+  particulares: 0,
+  porCentro: 0,
+  conContacto: 0,
+  centrosActivos: 0,
+};
+
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildProjection = (fieldsParam) => {
+  if (typeof fieldsParam !== 'string' || !fieldsParam.trim()) {
+    return undefined;
+  }
+
+  const allowedFields = new Set([
+    'nombre',
+    'apellido',
+    'dni',
+    'email',
+    'telefono',
+    'tipoAtencion',
+    'obraSocial',
+    'centroSalud',
+    'documentos',
+    'createdAt',
+    'updatedAt',
+  ]);
+
+  const fields = fieldsParam
+    .split(',')
+    .map((field) => field.trim())
+    .filter((field) => allowedFields.has(field));
+
+  if (fields.length === 0) {
+    return undefined;
+  }
+
+  // Siempre mantenemos el identificador del paciente.
+  if (!fields.includes('_id')) {
+    fields.push('_id');
+  }
+
+  return fields.join(' ');
+};
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -120,11 +170,166 @@ router.post('/', protect, async (req, res) => {
 
 router.get('/', protect, async (req, res) => {
   try {
-    const pacientes = await Paciente.find({ user: req.user._id })
+    const {
+      page = '1',
+      limit = DEFAULT_PAGE_LIMIT.toString(),
+      search,
+      tipoAtencion,
+      obraSocial,
+      centroSalud,
+      sortField = 'createdAt',
+      sortOrder = 'desc',
+      fields,
+    } = req.query;
+
+    const userId = new mongoose.Types.ObjectId(req.user._id);
+    const filter = { user: userId };
+
+    if (typeof tipoAtencion === 'string' && ['particular', 'centro'].includes(tipoAtencion)) {
+      filter.tipoAtencion = tipoAtencion;
+    }
+
+    if (typeof obraSocial === 'string' && mongoose.Types.ObjectId.isValid(obraSocial)) {
+      filter.obraSocial = new mongoose.Types.ObjectId(obraSocial);
+    }
+
+    if (typeof centroSalud === 'string' && mongoose.Types.ObjectId.isValid(centroSalud)) {
+      filter.centroSalud = new mongoose.Types.ObjectId(centroSalud);
+    }
+
+    const trimmedSearch = typeof search === 'string' ? search.trim() : '';
+    if (trimmedSearch) {
+      const regex = new RegExp(escapeRegex(trimmedSearch), 'i');
+      filter.$or = [
+        { nombre: regex },
+        { apellido: regex },
+        { dni: regex },
+        { email: regex },
+        { telefono: regex },
+      ];
+    }
+
+    let parsedLimit = Number.parseInt(limit, 10);
+    if (Number.isNaN(parsedLimit)) {
+      parsedLimit = DEFAULT_PAGE_LIMIT;
+    }
+
+    if (parsedLimit < 0) {
+      parsedLimit = DEFAULT_PAGE_LIMIT;
+    }
+
+    if (parsedLimit > MAX_PAGE_LIMIT) {
+      parsedLimit = MAX_PAGE_LIMIT;
+    }
+
+    if (String(limit).trim() === '0') {
+      parsedLimit = 0;
+    }
+
+    const normalizedLimit = parsedLimit === 0 ? 0 : Math.max(parsedLimit, 1);
+    const totalDocs = await Paciente.countDocuments(filter);
+    const totalPages = normalizedLimit > 0 ? Math.max(Math.ceil(totalDocs / normalizedLimit), 1) : 1;
+    const requestedPage = Number.parseInt(page, 10);
+    const safePage = normalizedLimit > 0
+      ? Math.min(Math.max(Number.isNaN(requestedPage) ? 1 : requestedPage, 1), totalPages)
+      : 1;
+    const skip = normalizedLimit > 0 ? (safePage - 1) * normalizedLimit : 0;
+
+    const sortFields = {
+      createdAt: 'createdAt',
+      updatedAt: 'updatedAt',
+      apellido: 'apellido',
+      nombre: 'nombre',
+      dni: 'dni',
+    };
+
+    const sortKey = sortFields[sortField] || 'createdAt';
+    const sortDirection = String(sortOrder).toLowerCase() === 'asc' ? 1 : -1;
+    const sort = { [sortKey]: sortDirection, _id: sortDirection };
+
+    const projection = buildProjection(fields);
+
+    let pacientesQuery = Paciente.find(filter, projection)
+      .sort(sort)
       .populate('obraSocial')
       .populate('centroSalud');
-    const payload = pacientes.map((paciente) => buildPacienteResponse(paciente));
-    res.json(payload);
+
+    if (normalizedLimit > 0) {
+      pacientesQuery = pacientesQuery.skip(skip).limit(normalizedLimit);
+    }
+
+    const [pacientesDocs, summaryResult] = await Promise.all([
+      pacientesQuery.exec(),
+      Paciente.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            particulares: {
+              $sum: {
+                $cond: [{ $eq: ['$tipoAtencion', 'particular'] }, 1, 0],
+              },
+            },
+            porCentro: {
+              $sum: {
+                $cond: [{ $eq: ['$tipoAtencion', 'centro'] }, 1, 0],
+              },
+            },
+            conContacto: {
+              $sum: {
+                $cond: [
+                  {
+                    $or: [
+                      { $gt: [{ $strLenCP: { $ifNull: ['$email', ''] } }, 0] },
+                      { $gt: [{ $strLenCP: { $ifNull: ['$telefono', ''] } }, 0] },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            centros: { $addToSet: '$centroSalud' },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            total: 1,
+            particulares: 1,
+            porCentro: 1,
+            conContacto: 1,
+            centrosActivos: {
+              $size: {
+                $filter: {
+                  input: '$centros',
+                  as: 'centro',
+                  cond: { $and: [{ $ne: ['$$centro', null] }] },
+                },
+              },
+            },
+          },
+        },
+      ]),
+    ]);
+
+    const summary = summaryResult[0] || SUMMARY_DEFAULT;
+
+    const pagination = {
+      page: safePage,
+      limit: normalizedLimit,
+      totalDocs,
+      totalPages,
+      hasPrevPage: normalizedLimit > 0 ? safePage > 1 : false,
+      hasNextPage: normalizedLimit > 0 ? safePage < totalPages : false,
+    };
+
+    res.json({
+      data: pacientesDocs.map((paciente) => buildPacienteResponse(paciente)),
+      pagination,
+      summary,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
