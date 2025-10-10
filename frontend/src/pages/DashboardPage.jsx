@@ -7,7 +7,7 @@ import obrasSocialesService from '../services/ObrasSocialesService';
 import centrosSaludService from '../services/CentrosSaludService';
 import turnosService from '../services/TurnosService';
 import DailyAgendaTimeline from '../components/DailyAgendaTimeline.jsx';
-import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers } from 'react-icons/fa';
+import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers, FaStar, FaExclamationTriangle } from 'react-icons/fa';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
@@ -63,6 +63,10 @@ function DashboardPage({ currentUser }) {
     facturasEstadoChartData: { labels: [], datasets: [] },
     moraObraSocialData: { labels: [], datasets: [] },
     montoMoraTotal: 0,
+    monthlyInsights: { entries: [], lastMonth: null, bestMonth: null, average: 0 },
+    estadoInsights: [],
+    obrasSocialesInsights: { entries: [], topEntry: null, totalTop5: 0, totalGeneral: 0 },
+    moraInsights: { entries: [], topEntry: null },
     turnosProximos: [],
     ocupacionSemanal: 0,
     minutosProgramadosSemana: 0,
@@ -86,6 +90,39 @@ function DashboardPage({ currentUser }) {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(number);
+  };
+
+  const formatCompactCurrency = (value) => {
+    if (!Number.isFinite(value)) {
+      return 'AR$ 0';
+    }
+    const absValue = Math.abs(value);
+    const formatted = new Intl.NumberFormat('es-AR', {
+      notation: 'compact',
+      maximumFractionDigits: absValue >= 100 ? 1 : 0,
+    }).format(value);
+    return `AR$ ${formatted}`;
+  };
+
+  const formatCompactNumber = (value) => {
+    if (!Number.isFinite(value)) {
+      return '0';
+    }
+    const absValue = Math.abs(value);
+    return new Intl.NumberFormat('es-AR', {
+      notation: 'compact',
+      maximumFractionDigits: absValue >= 100 ? 1 : 0,
+    }).format(value);
+  };
+
+  const formatPercentage = (value) => {
+    if (!Number.isFinite(value)) {
+      return '0%';
+    }
+    const decimals = Math.abs(value) >= 10 ? 0 : 1;
+    const multiplier = 10 ** decimals;
+    const rounded = Math.round(value * multiplier) / multiplier;
+    return `${rounded.toFixed(decimals)}%`;
   };
 
   const formatMinutes = (minutes) => {
@@ -223,6 +260,26 @@ function DashboardPage({ currentUser }) {
         borderWidth: 1,
       }],
     };
+    const monthlyEntries = sortedMonths.map((label) => ({
+      label,
+      total: monthlyData[label],
+    }));
+    const lastMonthEntry = monthlyEntries.length > 0 ? monthlyEntries[monthlyEntries.length - 1] : null;
+    const bestMonthEntry = monthlyEntries.reduce((best, entry) => {
+      if (!best || entry.total > best.total) {
+        return entry;
+      }
+      return best;
+    }, null);
+    const monthlyAverage = monthlyEntries.length > 0
+      ? monthlyEntries.reduce((sum, entry) => sum + entry.total, 0) / monthlyEntries.length
+      : 0;
+    const monthlyInsights = {
+      entries: monthlyEntries,
+      lastMonth: lastMonthEntry,
+      bestMonth: bestMonthEntry,
+      average: monthlyAverage,
+    };
 
     const totalParticulares = filteredFacturas
       .filter((factura) => !factura.centroSalud)
@@ -240,11 +297,20 @@ function DashboardPage({ currentUser }) {
     }, {});
 
     const estadoKeys = Object.keys(estadoCounts);
+    const totalEstados = estadoKeys.reduce((sum, key) => sum + estadoCounts[key], 0);
+    const estadoInsights = estadoKeys
+      .map((estado) => ({
+        key: estado,
+        label: ESTADO_LABELS[estado] || estado,
+        count: estadoCounts[estado],
+        percentage: totalEstados > 0 ? (estadoCounts[estado] / totalEstados) * 100 : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
     const facturasEstadoChartData = estadoKeys.length > 0
       ? {
           labels: estadoKeys.map((estado) => ESTADO_LABELS[estado] || estado),
           datasets: [{
-            label: '# de facturas',
+            label: 'Cantidad de facturas',
             data: estadoKeys.map((estado) => estadoCounts[estado]),
             backgroundColor: estadoKeys.map((estado) => ESTADO_COLOR_MAP[estado]?.background || 'rgba(0,0,0,0.15)'),
             borderColor: estadoKeys.map((estado) => ESTADO_COLOR_MAP[estado]?.border || 'rgba(0,0,0,0.3)'),
@@ -254,7 +320,7 @@ function DashboardPage({ currentUser }) {
       : {
           labels: ['Sin datos'],
           datasets: [{
-            label: '# de facturas',
+            label: 'Cantidad de facturas',
             data: [0],
             backgroundColor: ['rgba(108, 117, 125, 0.4)'],
             borderColor: ['rgba(108, 117, 125, 1)'],
@@ -300,8 +366,22 @@ function DashboardPage({ currentUser }) {
         };
 
     const montoMoraTotal = moraEntries.reduce((sum, [, monto]) => sum + monto, 0);
+    const moraInsights = {
+      entries: moraEntries.map(([nombre, monto]) => ({
+        nombre,
+        monto,
+        percentage: montoMoraTotal > 0 ? (monto / montoMoraTotal) * 100 : 0,
+      })),
+      topEntry: moraEntries.length > 0
+        ? {
+            nombre: moraEntries[0][0],
+            monto: moraEntries[0][1],
+            percentage: montoMoraTotal > 0 ? (moraEntries[0][1] / montoMoraTotal) * 100 : 0,
+          }
+        : null,
+    };
 
-    const obrasSocialesBarChartData = calculateObrasSocialesData(filteredFacturas);
+    const obrasSocialesSummary = buildObrasSocialesSummary(filteredFacturas);
 
     setData(prevData => ({
       ...prevData,
@@ -312,15 +392,19 @@ function DashboardPage({ currentUser }) {
       facturasPendientes,
       pieChartData,
       monthlyBarChartData,
+      monthlyInsights,
       centrosResumen,
       totalRetencionCentros,
       centrosActivos,
       netoParticulares: totalParticulares,
       netoCentros: totalNetoCentros,
       facturasEstadoChartData,
+      estadoInsights,
       moraObraSocialData,
       montoMoraTotal,
-      obrasSocialesBarChartData,
+      moraInsights,
+      obrasSocialesBarChartData: obrasSocialesSummary.chartData,
+      obrasSocialesInsights: obrasSocialesSummary.insights,
     }));
   }, [dateRange, centros]);
 
@@ -356,10 +440,11 @@ function DashboardPage({ currentUser }) {
     };
   };
 
-  const calculateObrasSocialesData = (facturas) => {
-    const obrasSocialesData = facturas.reduce((acc, f) => {
+  const buildObrasSocialesSummary = (facturas) => {
+    const facturasArray = Array.isArray(facturas) ? facturas : [];
+    const obrasSocialesData = facturasArray.reduce((acc, f) => {
       if (f.obraSocial?.nombre) {
-        acc[f.obraSocial.nombre] = (acc[f.obraSocial.nombre] || 0) + f.montoTotal;
+        acc[f.obraSocial.nombre] = (acc[f.obraSocial.nombre] || 0) + (f.montoTotal || 0);
       }
       return acc;
     }, {});
@@ -367,16 +452,32 @@ function DashboardPage({ currentUser }) {
     const sortedObrasSociales = Object.entries(obrasSocialesData)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5);
+    const totalGeneral = Object.values(obrasSocialesData).reduce((sum, monto) => sum + monto, 0);
+    const totalTop5 = sortedObrasSociales.reduce((sum, [, monto]) => sum + monto, 0);
+
+    const entries = sortedObrasSociales.map(([nombre, monto]) => ({
+      nombre,
+      monto,
+      percentage: totalGeneral > 0 ? (monto / totalGeneral) * 100 : 0,
+    }));
 
     return {
-      labels: sortedObrasSociales.map(([nombre]) => nombre),
-      datasets: [{
-        label: 'Monto Facturado',
-        data: sortedObrasSociales.map(([, monto]) => monto),
-        backgroundColor: 'rgba(52, 58, 64, 0.6)',
-        borderColor: 'rgba(52, 58, 64, 1)',
-        borderWidth: 1,
-      }],
+      chartData: {
+        labels: sortedObrasSociales.map(([nombre]) => nombre),
+        datasets: [{
+          label: 'Monto facturado',
+          data: sortedObrasSociales.map(([, monto]) => monto),
+          backgroundColor: 'rgba(52, 58, 64, 0.6)',
+          borderColor: 'rgba(52, 58, 64, 1)',
+          borderWidth: 1,
+        }],
+      },
+      insights: {
+        entries,
+        topEntry: entries.length > 0 ? entries[0] : null,
+        totalTop5,
+        totalGeneral,
+      },
     };
   };
 
@@ -446,6 +547,7 @@ function DashboardPage({ currentUser }) {
         const centrosResumen = calculateCentrosResumen(facturas, centros);
         const totalRetencionCentros = centrosResumen.reduce((sum, centro) => sum + centro.totalRetencion, 0);
         const centrosActivos = centrosResumen.filter((centro) => centro.totalFacturado > 0).length;
+        const obrasSocialesSummary = buildObrasSocialesSummary(facturas);
         setAllFacturas(facturas);
         setCentros(centros);
         setTurnos(turnosList);
@@ -460,7 +562,8 @@ function DashboardPage({ currentUser }) {
           totalRetencionCentros,
           pacientesByTipo,
           centrosResumen,
-          obrasSocialesBarChartData: calculateObrasSocialesData(facturas),
+          obrasSocialesBarChartData: obrasSocialesSummary.chartData,
+          obrasSocialesInsights: obrasSocialesSummary.insights,
           growthMetrics: calculateGrowthMetrics(facturas),
           turnosProximos: agendaMetrics.upcoming,
           ocupacionSemanal: agendaMetrics.ocupacion,
@@ -492,26 +595,81 @@ function DashboardPage({ currentUser }) {
     processAndSetData(allFacturas);
   };
   
-  const chartOptions = {
+  const tooltipCurrencyFormatter = (context) => {
+    const parsed = context.parsed || {};
+    const rawValue = Number.isFinite(parsed.y) ? parsed.y : parsed.x;
+    if (!Number.isFinite(rawValue)) {
+      return context.formattedValue;
+    }
+    const label = context.dataset?.label ? `${context.dataset.label}: ` : '';
+    return `${label}${formatNumber(rawValue)}`;
+  };
+
+  const tooltipCountFormatter = (context) => {
+    const parsed = context.parsed || {};
+    const rawValue = Number.isFinite(parsed.y) ? parsed.y : parsed.x;
+    if (!Number.isFinite(rawValue)) {
+      return context.formattedValue;
+    }
+    const label = context.dataset?.label ? `${context.dataset.label}: ` : '';
+    return `${label}${new Intl.NumberFormat('es-AR').format(rawValue)}`;
+  };
+
+  const currencyChartOptions = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'top' },
-      title: { display: false },
+      legend: { display: false },
+      tooltip: { callbacks: { label: tooltipCurrencyFormatter } },
     },
     scales: {
-      y: { beginAtZero: true },
+      y: {
+        beginAtZero: true,
+        ticks: { callback: (value) => formatCompactCurrency(value) },
+        grid: { color: 'rgba(15, 23, 42, 0.05)' },
+      },
+      x: {
+        grid: { color: 'rgba(15, 23, 42, 0.05)' },
+      },
     },
   };
-  
-  const horizontalChartOptions = {
+
+  const countChartOptions = {
     responsive: true,
-    indexAxis: 'y',
+    maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'top' },
-      title: { display: false },
+      legend: { display: false },
+      tooltip: { callbacks: { label: tooltipCountFormatter } },
     },
     scales: {
-      x: { beginAtZero: true },
+      y: {
+        beginAtZero: true,
+        ticks: { callback: (value) => formatCompactNumber(value) },
+        grid: { color: 'rgba(15, 23, 42, 0.05)' },
+      },
+      x: {
+        grid: { color: 'rgba(15, 23, 42, 0.05)' },
+      },
+    },
+  };
+
+  const horizontalCurrencyChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: tooltipCurrencyFormatter } },
+    },
+    scales: {
+      x: {
+        beginAtZero: true,
+        ticks: { callback: (value) => formatCompactCurrency(value) },
+        grid: { color: 'rgba(15, 23, 42, 0.05)' },
+      },
+      y: {
+        grid: { color: 'rgba(15, 23, 42, 0.05)' },
+      },
     },
   };
 
@@ -588,10 +746,42 @@ function DashboardPage({ currentUser }) {
       .slice(0, 5);
   }, [mananaDate, turnos]);
 
+  const userProfession = (currentUser?.profession && currentUser.profession.trim()) || '';
+  const monthlyInsights = data.monthlyInsights || { entries: [], lastMonth: null, bestMonth: null, average: 0 };
+  const estadoResumen = data.estadoInsights || [];
+  const totalFacturasEstados = estadoResumen.reduce((sum, estado) => sum + estado.count, 0);
+  const obrasSocialesResumen = data.obrasSocialesInsights || { entries: [], topEntry: null, totalTop5: 0, totalGeneral: 0 };
+  const moraResumen = data.moraInsights || { entries: [], topEntry: null };
+  const pagadasEntry = estadoResumen.find((item) => item.key === 'pagada');
+  const pagadasParcialEntry = estadoResumen.find((item) => item.key === 'pagada_parcial');
+  const pendientesEntry = estadoResumen.find((item) => item.key === 'pendiente');
+  const observadasEntry = estadoResumen.find((item) => item.key === 'observada');
+  const totalPagadasConParcial = (pagadasEntry?.count || 0) + (pagadasParcialEntry?.count || 0);
+  const sharePagadas = totalFacturasEstados > 0 ? (totalPagadasConParcial / totalFacturasEstados) * 100 : 0;
+  const estadoCritico = (pendientesEntry?.count || 0) >= (observadasEntry?.count || 0)
+    ? pendientesEntry
+    : observadasEntry;
+  const coberturaTop5 = obrasSocialesResumen.totalGeneral > 0
+    ? (obrasSocialesResumen.totalTop5 / obrasSocialesResumen.totalGeneral) * 100
+    : 0;
+  const estadoPrincipal = estadoResumen.length > 0 ? estadoResumen[0] : null;
+  const obrasSocialesEntries = obrasSocialesResumen.entries || [];
+  const moraEntriesResumen = moraResumen.entries || [];
+  const moraTopEntry = moraResumen.topEntry;
+  const moraSecondaryEntries = moraEntriesResumen.slice(1, 3);
+
   return (
     <div className="container mt-4">
       <div className="mb-4 text-center text-md-start">
         <h2 className="fw-bold">Hola, {userDisplayName} 👋</h2>
+        {userProfession ? (
+          <div className="d-inline-flex flex-wrap align-items-center gap-2 px-3 py-2 rounded-pill bg-primary-subtle text-primary fw-semibold my-3">
+            <span className="text-uppercase small text-primary fw-semibold">Tu profesión</span>
+            <span className="text-primary">{userProfession}</span>
+          </div>
+        ) : (
+          <p className="text-muted small my-3">Actualiza tu profesión desde el perfil para personalizar las métricas.</p>
+        )}
         <p className="text-muted mb-0">Este resumen ejecutivo reúne tus principales indicadores asistenciales y financieros.</p>
       </div>
       <div className="row g-3 mb-4">
@@ -958,67 +1148,306 @@ function DashboardPage({ currentUser }) {
           </div>
         </div>
         
-        {/* Gráfico de Barras de Facturación Mensual */}
-        <div className="col-xl-6 col-lg-12">
-          <div className="card shadow-sm h-100">
-            <div className="card-header">
-              Facturación Mensual
+        {/* Facturación mensual */}
+        <div className="col-12 col-xl-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white border-0 border-bottom">
+              <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+                <div>
+                  <h5 className="mb-0 d-flex align-items-center gap-2">
+                    <FaChartBar className="text-primary" /> Facturación mensual
+                  </h5>
+                  <small className="text-muted">Evolución de tus ingresos mes a mes.</small>
+                </div>
+                {monthlyInsights.lastMonth && (
+                  <span className="badge bg-primary text-white fw-semibold">
+                    Último registro: {monthlyInsights.lastMonth.label}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="card-body">
-              {Object.keys(data.monthlyBarChartData).length > 0 ? (
-                <Bar data={data.monthlyBarChartData} options={chartOptions} />
-              ) : (
-                <p className="text-center text-muted">No hay datos suficientes para el gráfico mensual.</p>
-              )}
+              <div className="row g-4 align-items-center">
+                <div className="col-12 col-lg-7">
+                  <div style={{ height: '260px' }}>
+                    {data.monthlyBarChartData.labels?.length > 0 ? (
+                      <Bar data={data.monthlyBarChartData} options={currencyChartOptions} />
+                    ) : (
+                      <div className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3">
+                        <p className="mb-0">No hay datos suficientes para el gráfico mensual.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="col-12 col-lg-5">
+                  <div className="bg-light rounded-3 p-3 h-100">
+                    <h6 className="text-uppercase text-muted small fw-semibold mb-3">Cómo leerlo</h6>
+                    {monthlyInsights.entries.length > 0 ? (
+                      <ul className="list-unstyled small mb-0">
+                        <li className="mb-3">
+                          <span className="fw-semibold text-dark d-block">
+                            {monthlyInsights.lastMonth
+                              ? `${monthlyInsights.lastMonth.label}: ${formatNumber(monthlyInsights.lastMonth.total)}`
+                              : 'Sin movimientos recientes'}
+                          </span>
+                          <span className="text-muted">Registro más reciente del período seleccionado.</span>
+                        </li>
+                        <li className="mb-3">
+                          <span className="fw-semibold text-dark d-block">{formatNumber(monthlyInsights.average)}</span>
+                          <span className="text-muted">Promedio mensual dentro del período.</span>
+                        </li>
+                        <li className="mb-0">
+                          <span className="fw-semibold text-dark d-block">
+                            {monthlyInsights.bestMonth
+                              ? `${monthlyInsights.bestMonth.label}: ${formatNumber(monthlyInsights.bestMonth.total)}`
+                              : 'Aún no hay un mes destacado'}
+                          </span>
+                          <span className="text-muted">Mes con mayor facturación registrada.</span>
+                        </li>
+                      </ul>
+                    ) : (
+                      <p className="text-muted small mb-0">
+                        Filtra por un período con facturación para visualizar tendencias mensuales.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Distribución por estado */}
-        <div className="col-xl-6 col-lg-12">
-          <div className="card shadow-sm h-100">
-            <div className="card-header">
-              <FaFileInvoiceDollar className="me-2" /> Facturas por estado
+        <div className="col-12 col-xl-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white border-0 border-bottom">
+              <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+                <div>
+                  <h5 className="mb-0 d-flex align-items-center gap-2">
+                    <FaFileInvoiceDollar className="text-secondary" /> Facturas por estado
+                  </h5>
+                  <small className="text-muted">Cantidad de facturas por etapa del proceso.</small>
+                </div>
+                {totalFacturasEstados > 0 && (
+                  <span className="badge bg-secondary text-white fw-semibold">
+                    Total analizado: {totalFacturasEstados}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="card-body">
-              {data.facturasEstadoChartData.labels?.length > 0 ? (
-                <Bar data={data.facturasEstadoChartData} options={chartOptions} />
-              ) : (
-                <p className="text-center text-muted">No hay información para mostrar la distribución de estados.</p>
-              )}
+              <div className="row g-4 align-items-center">
+                <div className="col-12 col-lg-7">
+                  <div style={{ height: '260px' }}>
+                    {data.facturasEstadoChartData.labels?.length > 0 ? (
+                      <Bar data={data.facturasEstadoChartData} options={countChartOptions} />
+                    ) : (
+                      <div className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3">
+                        <p className="mb-0">No hay información para mostrar la distribución de estados.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="col-12 col-lg-5">
+                  <div className="bg-light rounded-3 p-3 h-100">
+                    <h6 className="text-uppercase text-muted small fw-semibold mb-3">Cómo interpretarlo</h6>
+                    {totalFacturasEstados > 0 ? (
+                      <>
+                        <ul className="list-unstyled small mb-0">
+                          <li className="mb-3">
+                            <span className="fw-semibold text-dark d-block">
+                              {estadoPrincipal
+                                ? `${estadoPrincipal.label}: ${estadoPrincipal.count} (${formatPercentage(estadoPrincipal.percentage)})`
+                                : 'Sin facturas registradas'}
+                            </span>
+                            <span className="text-muted">Estado que concentra la mayor cantidad de comprobantes.</span>
+                          </li>
+                          <li className="mb-3">
+                            <span className="fw-semibold text-dark d-block">
+                              {`${totalPagadasConParcial} cobradas o parciales (${formatPercentage(sharePagadas)})`}
+                            </span>
+                            <span className="text-muted">Facturas cobradas o con cobro parcial dentro del período.</span>
+                          </li>
+                          <li className="mb-0">
+                            <span className="fw-semibold text-dark d-block">
+                              {estadoCritico
+                                ? `${estadoCritico.label}: ${estadoCritico.count} (${formatPercentage(estadoCritico.percentage)})`
+                                : 'No hay facturas pendientes ni observadas'}
+                            </span>
+                            <span className="text-muted">Estados que requieren seguimiento para acelerar el cobro.</span>
+                          </li>
+                        </ul>
+                        {estadoResumen.length > 0 && (
+                          <div className="d-flex flex-wrap gap-2 mt-3">
+                            {estadoResumen.slice(0, 4).map((estado) => (
+                              <span key={estado.key} className="badge bg-white border text-secondary">
+                                {estado.label}: {formatPercentage(estado.percentage)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-muted small mb-0">
+                        Aún no registras facturas en el período seleccionado.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Gráfico de Barras de Top Obras Sociales */}
-        <div className="col-xl-6 col-lg-12">
-          <div className="card shadow-sm h-100">
-            <div className="card-header">
-              Top 5 Obras Sociales
+        {/* Top 5 obras sociales */}
+        <div className="col-12 col-xl-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white border-0 border-bottom">
+              <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+                <div>
+                  <h5 className="mb-0 d-flex align-items-center gap-2">
+                    <FaStar className="text-warning" /> Top 5 obras sociales
+                  </h5>
+                  <small className="text-muted">Quiénes impulsan tu facturación con convenios.</small>
+                </div>
+                {obrasSocialesEntries.length > 0 && (
+                  <span className="badge bg-warning text-dark fw-semibold">
+                    El Top 5 concentra {formatPercentage(coberturaTop5)} del total
+                  </span>
+                )}
+              </div>
             </div>
             <div className="card-body">
-              {data.obrasSocialesBarChartData.labels?.length > 0 ? (
-                <Bar data={data.obrasSocialesBarChartData} options={horizontalChartOptions} />
-              ) : (
-                <p className="text-center text-muted">No hay datos suficientes para el gráfico de obras sociales.</p>
-              )}
+              <div className="row g-4 align-items-center">
+                <div className="col-12 col-lg-7">
+                  <div style={{ height: '260px' }}>
+                    {data.obrasSocialesBarChartData.labels?.length > 0 ? (
+                      <Bar data={data.obrasSocialesBarChartData} options={horizontalCurrencyChartOptions} />
+                    ) : (
+                      <div className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3">
+                        <p className="mb-0">No hay datos suficientes para el gráfico de obras sociales.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="col-12 col-lg-5">
+                  <div className="bg-light rounded-3 p-3 h-100">
+                    <h6 className="text-uppercase text-muted small fw-semibold mb-3">Lectura rápida</h6>
+                    {obrasSocialesEntries.length > 0 ? (
+                      <>
+                        <ul className="list-unstyled small mb-0">
+                          <li className="mb-3">
+                            <span className="fw-semibold text-dark d-block">
+                              {obrasSocialesResumen.topEntry
+                                ? `${obrasSocialesResumen.topEntry.nombre}: ${formatNumber(obrasSocialesResumen.topEntry.monto)} (${formatPercentage(obrasSocialesResumen.topEntry.percentage)})`
+                                : 'Sin obras sociales registradas'}
+                            </span>
+                            <span className="text-muted">Principal obra social facturada.</span>
+                          </li>
+                          <li className="mb-3">
+                            <span className="fw-semibold text-dark d-block">{formatNumber(obrasSocialesResumen.totalTop5 || 0)}</span>
+                            <span className="text-muted">Monto combinado de las cinco primeras.</span>
+                          </li>
+                          <li className="mb-0">
+                            <span className="fw-semibold text-dark d-block">
+                              {obrasSocialesResumen.totalGeneral > 0
+                                ? `${formatPercentage(coberturaTop5)} del total facturado con obras sociales`
+                                : 'Aún no hay facturación con obras sociales'}
+                            </span>
+                            <span className="text-muted">Participación del Top 5 en tu facturación con convenios.</span>
+                          </li>
+                        </ul>
+                        <div className="d-flex flex-wrap gap-2 mt-3">
+                          {obrasSocialesEntries.slice(0, 3).map((entry) => (
+                            <span key={entry.nombre} className="badge bg-white border text-secondary">
+                              {entry.nombre}: {formatPercentage(entry.percentage)}
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted small mb-0">
+                        Cuando registres facturas con obras sociales, verás aquí a las principales.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Mora por obra social */}
-        <div className="col-xl-6 col-lg-12">
-          <div className="card shadow-sm h-100">
-            <div className="card-header">
-              Mora por obra social
+        <div className="col-12 col-xl-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white border-0 border-bottom">
+              <div className="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+                <div>
+                  <h5 className="mb-0 d-flex align-items-center gap-2">
+                    <FaExclamationTriangle className="text-danger" /> Mora por obra social
+                  </h5>
+                  <small className="text-muted">Saldo vencido según cada obra social.</small>
+                </div>
+                <span className="badge bg-danger text-white fw-semibold">
+                  Total vencido: {formatNumber(data.montoMoraTotal)}
+                </span>
+              </div>
             </div>
             <div className="card-body">
-              <p className="text-muted">Saldo vencido total: <strong>{formatNumber(data.montoMoraTotal)}</strong></p>
-              {data.moraObraSocialData.labels?.length > 0 ? (
-                <Bar data={data.moraObraSocialData} options={horizontalChartOptions} />
-              ) : (
-                <p className="text-center text-muted">No registras deudas vencidas con obras sociales.</p>
-              )}
+              <div className="row g-4 align-items-center">
+                <div className="col-12 col-lg-7">
+                  <div style={{ height: '260px' }}>
+                    {data.moraObraSocialData.labels?.length > 0 ? (
+                      <Bar data={data.moraObraSocialData} options={horizontalCurrencyChartOptions} />
+                    ) : (
+                      <div className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3">
+                        <p className="mb-0">No registras deudas vencidas con obras sociales.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="col-12 col-lg-5">
+                  <div className="bg-light rounded-3 p-3 h-100">
+                    <h6 className="text-uppercase text-muted small fw-semibold mb-3">Puntos clave</h6>
+                    {moraEntriesResumen.length > 0 ? (
+                      <ul className="list-unstyled small mb-0">
+                        <li className="mb-3">
+                          <span className="fw-semibold text-dark d-block">{formatNumber(data.montoMoraTotal)}</span>
+                          <span className="text-muted">Saldo vencido acumulado en el período.</span>
+                        </li>
+                        <li className="mb-3">
+                          <span className="fw-semibold text-dark d-block">
+                            {moraTopEntry
+                              ? `${moraTopEntry.nombre}: ${formatNumber(moraTopEntry.monto)} (${formatPercentage(moraTopEntry.percentage)})`
+                              : 'Sin mora registrada'}
+                          </span>
+                          <span className="text-muted">Obra social con mayor deuda.</span>
+                        </li>
+                        <li className="mb-0">
+                          <span className="fw-semibold text-dark d-block">
+                            {moraSecondaryEntries.length > 0
+                              ? 'Otros saldos a controlar'
+                              : 'El resto de las obras sociales están al día'}
+                          </span>
+                          {moraSecondaryEntries.length > 0 && (
+                            <div className="d-flex flex-wrap gap-2 mt-2">
+                              {moraSecondaryEntries.map((entry) => (
+                                <span key={entry.nombre} className="badge bg-white border text-secondary">
+                                  {entry.nombre}: {formatPercentage(entry.percentage)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </li>
+                      </ul>
+                    ) : (
+                      <p className="text-muted small mb-0">
+                        ¡Excelente! No registras obras sociales con mora en el período consultado.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
