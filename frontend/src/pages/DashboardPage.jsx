@@ -533,16 +533,18 @@ function DashboardPage({ currentUser }) {
         const horizon = new Date(now);
         horizon.setDate(horizon.getDate() + 30);
 
-        const [facturas, pacientes, obrasSociales, centros, turnosList] = await Promise.all([
+        const [facturas, pacientesResponse, obrasSociales, centros, turnosResponse] = await Promise.all([
           facturasService.getFacturas(),
-          pacientesService.getPacientes(),
+          pacientesService.getPacientes({ limit: 0 }),
           obrasSocialesService.getObrasSociales(),
           centrosSaludService.getCentros(),
           turnosService.getTurnos({ desde: now.toISOString(), hasta: horizon.toISOString() }),
         ]);
+        const pacientesData = Array.isArray(pacientesResponse?.data) ? pacientesResponse.data : [];
+        const pacientesSummary = pacientesResponse?.summary || {};
         const pacientesByTipo = {
-          particulares: pacientes.filter((p) => p.tipoAtencion !== 'centro').length,
-          centro: pacientes.filter((p) => p.tipoAtencion === 'centro').length,
+          particulares: pacientesSummary.particulares ?? pacientesData.filter((p) => p.tipoAtencion !== 'centro').length,
+          centro: pacientesSummary.porCentro ?? pacientesData.filter((p) => p.tipoAtencion === 'centro').length,
         };
         const centrosResumen = calculateCentrosResumen(facturas, centros);
         const totalRetencionCentros = centrosResumen.reduce((sum, centro) => sum + centro.totalRetencion, 0);
@@ -550,12 +552,15 @@ function DashboardPage({ currentUser }) {
         const obrasSocialesSummary = buildObrasSocialesSummary(facturas);
         setAllFacturas(facturas);
         setCentros(centros);
-        setTurnos(turnosList);
-        const agendaMetrics = buildAgendaMetrics(turnosList);
+        const turnosData = Array.isArray(turnosResponse?.agenda)
+          ? turnosResponse.agenda
+          : (Array.isArray(turnosResponse?.data) ? turnosResponse.data : []);
+        setTurnos(turnosData);
+        const agendaMetrics = buildAgendaMetrics(turnosData);
         // Los datos de pacientes y obras sociales no necesitan filtrarse por fecha
         setData(prevData => ({
           ...prevData,
-          totalPacientes: pacientes.length,
+          totalPacientes: pacientesSummary.total ?? pacientesData.length,
           totalObrasSociales: obrasSociales.length,
           totalCentros: centros.length,
           centrosActivos,
@@ -751,24 +756,10 @@ function DashboardPage({ currentUser }) {
   const estadoResumen = data.estadoInsights || [];
   const totalFacturasEstados = estadoResumen.reduce((sum, estado) => sum + estado.count, 0);
   const obrasSocialesResumen = data.obrasSocialesInsights || { entries: [], topEntry: null, totalTop5: 0, totalGeneral: 0 };
-  const moraResumen = data.moraInsights || { entries: [], topEntry: null };
-  const pagadasEntry = estadoResumen.find((item) => item.key === 'pagada');
-  const pagadasParcialEntry = estadoResumen.find((item) => item.key === 'pagada_parcial');
-  const pendientesEntry = estadoResumen.find((item) => item.key === 'pendiente');
-  const observadasEntry = estadoResumen.find((item) => item.key === 'observada');
-  const totalPagadasConParcial = (pagadasEntry?.count || 0) + (pagadasParcialEntry?.count || 0);
-  const sharePagadas = totalFacturasEstados > 0 ? (totalPagadasConParcial / totalFacturasEstados) * 100 : 0;
-  const estadoCritico = (pendientesEntry?.count || 0) >= (observadasEntry?.count || 0)
-    ? pendientesEntry
-    : observadasEntry;
   const coberturaTop5 = obrasSocialesResumen.totalGeneral > 0
     ? (obrasSocialesResumen.totalTop5 / obrasSocialesResumen.totalGeneral) * 100
     : 0;
-  const estadoPrincipal = estadoResumen.length > 0 ? estadoResumen[0] : null;
   const obrasSocialesEntries = obrasSocialesResumen.entries || [];
-  const moraEntriesResumen = moraResumen.entries || [];
-  const moraTopEntry = moraResumen.topEntry;
-  const moraSecondaryEntries = moraEntriesResumen.slice(1, 3);
 
   return (
     <div className="container mt-4">

@@ -52,6 +52,7 @@ function ObrasSocialesPage() {
       const data = await ObrasSocialesService.getObrasSociales();
       setObrasSociales(data);
     } catch (error) {
+      console.error('No se pudieron cargar las obras sociales.', error);
       showError('No se pudieron cargar las obras sociales.');
     } finally {
       setListLoading(false);
