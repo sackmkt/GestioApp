@@ -20,6 +20,34 @@ const ATENCION_LABELS = {
   centro: 'Derivado por centro de salud',
 };
 
+const ITEMS_PER_PAGE = 16;
+
+const buildPageNumbers = (totalPages, currentPage) => {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = [1];
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) {
+    pages.push('start-ellipsis');
+  }
+
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+
+  if (end < totalPages - 1) {
+    pages.push('end-ellipsis');
+  }
+
+  pages.push(totalPages);
+
+  return pages;
+};
+
 const toBase64 = (file) => new Promise((resolve, reject) => {
   if (!file) {
     resolve(null);
@@ -76,6 +104,7 @@ function PacientesPage() {
   const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const documentFileInputRef = useRef(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchPacientes = useCallback(async () => {
     try {
@@ -171,6 +200,37 @@ function PacientesPage() {
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
   };
+
+  const totalPacientes = filteredPacientes.length;
+  const totalPages = Math.max(Math.ceil(totalPacientes / ITEMS_PER_PAGE), 1);
+  const paginatedPacientes = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredPacientes.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredPacientes, currentPage]);
+
+  const pageNumbers = useMemo(
+    () => buildPageNumbers(totalPages, currentPage),
+    [totalPages, currentPage],
+  );
+
+  const showingFrom = totalPacientes === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const showingTo = totalPacientes === 0 ? 0 : Math.min(currentPage * ITEMS_PER_PAGE, totalPacientes);
+
+  const handlePageChange = (page) => {
+    if (typeof page === 'number' && page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [normalizedSearch, pacientes.length]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const resetForm = () => {
     setFormData(EMPTY_FORM);
@@ -674,6 +734,13 @@ function PacientesPage() {
 
       <div className="card shadow-sm d-none d-md-block">
         <div className="card-body p-0">
+          <div className="d-flex flex-column flex-sm-row justify-content-sm-between align-items-sm-center px-3 pt-3">
+            <span className="text-muted small">
+              {totalPacientes === 0
+                ? 'Sin pacientes para mostrar.'
+                : `Mostrando ${showingFrom}-${showingTo} de ${totalPacientes} pacientes`}
+            </span>
+          </div>
           <table className="table table-striped table-hover mb-0">
             <thead className="table-dark">
               <tr>
@@ -702,7 +769,7 @@ function PacientesPage() {
                   </td>
                 </tr>
               ) : (
-                filteredPacientes.map((paciente) => (
+                paginatedPacientes.map((paciente) => (
                   <tr key={paciente._id}>
                   <td>{paciente.nombre} {paciente.apellido}</td>
                   <td>{paciente.dni}</td>
@@ -755,6 +822,46 @@ function PacientesPage() {
               )}
             </tbody>
           </table>
+          {totalPacientes > ITEMS_PER_PAGE && (
+            <nav className="d-flex justify-content-center py-3" aria-label="Paginación de pacientes">
+              <ul className="pagination mb-0">
+                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                  <button
+                    type="button"
+                    className="page-link"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    Anterior
+                  </button>
+                </li>
+                {pageNumbers.map((page, index) => (
+                  <li
+                    key={`${page}-${index}`}
+                    className={`page-item ${page === currentPage ? 'active' : ''} ${typeof page === 'string' ? 'disabled' : ''}`}
+                  >
+                    {typeof page === 'string' ? (
+                      <span className="page-link">…</span>
+                    ) : (
+                      <button type="button" className="page-link" onClick={() => handlePageChange(page)}>
+                        {page}
+                      </button>
+                    )}
+                  </li>
+                ))}
+                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                  <button
+                    type="button"
+                    className="page-link"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          )}
         </div>
       </div>
 
@@ -774,7 +881,7 @@ function PacientesPage() {
             </div>
           )}
           {!listLoading &&
-            filteredPacientes.map((paciente) => (
+            paginatedPacientes.map((paciente) => (
               <div className="col-12" key={paciente._id}>
                 <div className="card shadow-sm">
                   <div className="card-body">
@@ -829,6 +936,46 @@ function PacientesPage() {
               </div>
             ))}
         </div>
+        {totalPacientes > ITEMS_PER_PAGE && (
+          <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de pacientes móvil">
+            <ul className="pagination mb-0">
+              <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </button>
+              </li>
+              {pageNumbers.map((page, index) => (
+                <li
+                  key={`${page}-mobile-${index}`}
+                  className={`page-item ${page === currentPage ? 'active' : ''} ${typeof page === 'string' ? 'disabled' : ''}`}
+                >
+                  {typeof page === 'string' ? (
+                    <span className="page-link">…</span>
+                  ) : (
+                    <button type="button" className="page-link" onClick={() => handlePageChange(page)}>
+                      {page}
+                    </button>
+                  )}
+                </li>
+              ))}
+              <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </button>
+              </li>
+            </ul>
+          </nav>
+        )}
       </div>
     </div>
   );

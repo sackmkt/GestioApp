@@ -1167,7 +1167,7 @@ function FacturasPage() {
                         <tr className={factura.pagado ? 'table-success' : ''}>
                           <td>
                             {puntoVentaDisplay !== '—' || numeroFacturaDisplay !== '—'
-                              ? `PV ${puntoVentaDisplay} · N° ${numeroFacturaDisplay}`
+                              ? `PV ${puntoVentaDisplay} - N° ${numeroFacturaDisplay}`
                               : '—'}
                           </td>
                           <td>{factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</td>
@@ -1496,7 +1496,7 @@ function FacturasPage() {
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start">
                           <div>
-                            <h5 className="card-title mb-1">Factura PV {puntoVentaDisplay} · N° {numeroFacturaDisplay}</h5>
+                            <h5 className="card-title mb-1">Factura PV {puntoVentaDisplay} - N° {numeroFacturaDisplay}</h5>
                             <p className="mb-1"><strong>Paciente:</strong> {factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</p>
                             <p className="mb-1"><strong>Monto:</strong> {formatCurrency(factura.montoTotal)}</p>
                             <p className="mb-1"><strong>Emitida:</strong> {formatDate(factura.fechaEmision)}</p>
