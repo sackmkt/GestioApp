@@ -24,22 +24,38 @@ const InsightPanel = ({ visible, title, onClose, children }) => {
   const panelTitleId = `${sanitizedId || 'panel'}-title`;
 
   return (
-    <aside
-      className="insight-panel"
+    <div
+      className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+      style={{ backgroundColor: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1050 }}
       role="dialog"
       aria-modal="false"
       aria-labelledby={panelTitleId}
     >
-      <div className="d-flex align-items-start justify-content-between mb-3">
-        <h6 id={panelTitleId} className="mb-0 fw-semibold text-dark">
-          {title}
-        </h6>
-        <button
-          type="button"
-          className="btn-close"
-          aria-label="Cerrar panel de información"
-          onClick={onClose}
-        />
+      <div
+        className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div
+          className="modal-content shadow-lg border-0"
+          role="document"
+          style={{
+            backgroundColor: 'rgba(255, 255, 255, 0.98)',
+            backdropFilter: 'blur(12px)',
+          }}
+        >
+          <div className="modal-header">
+            <h5 id={modalTitleId} className="modal-title mb-0">
+              {title}
+            </h5>
+            <button type="button" className="btn-close" aria-label="Cerrar" onClick={onClose} />
+          </div>
+          <div className="modal-body">{children}</div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-primary" onClick={onClose}>
+              Entendido
+            </button>
+          </div>
+        </div>
       </div>
       <div className="insight-panel-content">{children}</div>
     </aside>
