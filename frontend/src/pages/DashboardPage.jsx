@@ -11,6 +11,50 @@ import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDou
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
+const InfoModal = ({ show, title, onClose, children }) => {
+  if (!show) {
+    return null;
+  }
+
+  const sanitizedId = `${title || ''}`
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+  const modalTitleId = `${sanitizedId || 'modal'}-title`;
+
+  return (
+    <div
+      className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+      style={{ backgroundColor: 'rgba(33, 37, 41, 0.65)', zIndex: 1050 }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={modalTitleId}
+      onClick={onClose}
+    >
+      <div
+        className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-content shadow-lg">
+          <div className="modal-header">
+            <h5 id={modalTitleId} className="modal-title mb-0">
+              {title}
+            </h5>
+            <button type="button" className="btn-close" aria-label="Cerrar" onClick={onClose} />
+          </div>
+          <div className="modal-body">{children}</div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-primary" onClick={onClose}>
+              Entendido
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ESTADO_LABELS = {
   pendiente: 'Pendiente',
   presentada: 'Presentada',
@@ -77,11 +121,65 @@ function DashboardPage({ currentUser }) {
     },
   });
   const [turnos, setTurnos] = useState([]);
+  const [showMonthlyInfo, setShowMonthlyInfo] = useState(false);
+  const [showEstadoInfo, setShowEstadoInfo] = useState(false);
+  const [showTopObrasInfo, setShowTopObrasInfo] = useState(false);
+  const [showMoraInfo, setShowMoraInfo] = useState(false);
 
   const [dateRange, setDateRange] = useState({
     startDate: '',
     endDate: '',
   });
+
+  useEffect(() => {
+    const anyModalOpen = showMonthlyInfo || showEstadoInfo || showTopObrasInfo || showMoraInfo;
+    if (typeof document !== 'undefined') {
+      if (anyModalOpen) {
+        document.body.classList.add('modal-open');
+      } else {
+        document.body.classList.remove('modal-open');
+      }
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('modal-open');
+      }
+    };
+  }, [showMonthlyInfo, showEstadoInfo, showTopObrasInfo, showMoraInfo]);
+
+  const closeAllModals = useCallback(() => {
+    setShowMonthlyInfo(false);
+    setShowEstadoInfo(false);
+    setShowTopObrasInfo(false);
+    setShowMoraInfo(false);
+  }, []);
+
+  const openMonthlyModal = useCallback(() => {
+    closeAllModals();
+    setShowMonthlyInfo(true);
+  }, [closeAllModals]);
+
+  const openEstadoModal = useCallback(() => {
+    closeAllModals();
+    setShowEstadoInfo(true);
+  }, [closeAllModals]);
+
+  const openTopObrasModal = useCallback(() => {
+    closeAllModals();
+    setShowTopObrasInfo(true);
+  }, [closeAllModals]);
+
+  const openMoraModal = useCallback(() => {
+    closeAllModals();
+    setShowMoraInfo(true);
+  }, [closeAllModals]);
+
+  const handleChartKeyDown = (event, action) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      action();
+    }
+  };
 
   const formatNumber = (number) => {
     return new Intl.NumberFormat('es-AR', {
@@ -773,16 +871,19 @@ function DashboardPage({ currentUser }) {
   return (
     <div className="container mt-4">
       <div className="mb-4 text-center text-md-start">
-        <h2 className="fw-bold">Hola, {userDisplayName} 👋</h2>
-        {userProfession ? (
-          <div className="d-inline-flex flex-wrap align-items-center gap-2 px-3 py-2 rounded-pill bg-primary-subtle text-primary fw-semibold my-3">
-            <span className="text-uppercase small text-primary fw-semibold">Tu profesión</span>
-            <span className="text-primary">{userProfession}</span>
-          </div>
-        ) : (
-          <p className="text-muted small my-3">Actualiza tu profesión desde el perfil para personalizar las métricas.</p>
+        <div className="d-flex flex-column flex-sm-row align-items-center justify-content-center justify-content-sm-start gap-3">
+          <h2 className="fw-bold mb-0">Hola, {userDisplayName} 👋</h2>
+          {userProfession ? (
+            <div className="d-inline-flex flex-wrap align-items-center gap-2 px-3 py-2 rounded-pill bg-primary-subtle text-primary fw-semibold">
+              <span className="text-uppercase small text-primary fw-semibold">Tu profesión</span>
+              <span className="text-primary">{userProfession}</span>
+            </div>
+          ) : null}
+        </div>
+        {!userProfession && (
+          <p className="text-muted small mt-3 mb-2">Actualiza tu profesión desde el perfil para personalizar las métricas.</p>
         )}
-        <p className="text-muted mb-0">Este resumen ejecutivo reúne tus principales indicadores asistenciales y financieros.</p>
+        <p className="text-muted mb-0 mt-3 mt-sm-2">Este resumen ejecutivo reúne tus principales indicadores asistenciales y financieros.</p>
       </div>
       <div className="row g-3 mb-4">
         <div className="col-xl-3 col-md-6">
@@ -1167,52 +1268,33 @@ function DashboardPage({ currentUser }) {
               </div>
             </div>
             <div className="card-body">
-              <div className="row g-4 align-items-center">
-                <div className="col-12 col-lg-7">
-                  <div style={{ height: '260px' }}>
-                    {data.monthlyBarChartData.labels?.length > 0 ? (
+              {data.monthlyBarChartData.labels?.length > 0 ? (
+                <>
+                  <div
+                    className="rounded-3 bg-light-subtle border border-light-subtle px-3 py-3"
+                    role="button"
+                    tabIndex={0}
+                    onClick={openMonthlyModal}
+                    onKeyDown={(event) => handleChartKeyDown(event, openMonthlyModal)}
+                    style={{ cursor: 'pointer' }}
+                    aria-label="Ver interpretación de la facturación mensual"
+                  >
+                    <div style={{ height: '260px' }}>
                       <Bar data={data.monthlyBarChartData} options={currencyChartOptions} />
-                    ) : (
-                      <div className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3">
-                        <p className="mb-0">No hay datos suficientes para el gráfico mensual.</p>
-                      </div>
-                    )}
+                    </div>
                   </div>
+                  <p className="text-muted small text-center mt-3 mb-0">
+                    Haz clic en el gráfico para ver la interpretación recomendada.
+                  </p>
+                </>
+              ) : (
+                <div
+                  className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3"
+                  style={{ minHeight: '260px' }}
+                >
+                  <p className="mb-0">No hay datos suficientes para el gráfico mensual.</p>
                 </div>
-                <div className="col-12 col-lg-5">
-                  <div className="bg-light rounded-3 p-3 h-100">
-                    <h6 className="text-uppercase text-muted small fw-semibold mb-3">Cómo leerlo</h6>
-                    {monthlyInsights.entries.length > 0 ? (
-                      <ul className="list-unstyled small mb-0">
-                        <li className="mb-3">
-                          <span className="fw-semibold text-dark d-block">
-                            {monthlyInsights.lastMonth
-                              ? `${monthlyInsights.lastMonth.label}: ${formatNumber(monthlyInsights.lastMonth.total)}`
-                              : 'Sin movimientos recientes'}
-                          </span>
-                          <span className="text-muted">Registro más reciente del período seleccionado.</span>
-                        </li>
-                        <li className="mb-3">
-                          <span className="fw-semibold text-dark d-block">{formatNumber(monthlyInsights.average)}</span>
-                          <span className="text-muted">Promedio mensual dentro del período.</span>
-                        </li>
-                        <li className="mb-0">
-                          <span className="fw-semibold text-dark d-block">
-                            {monthlyInsights.bestMonth
-                              ? `${monthlyInsights.bestMonth.label}: ${formatNumber(monthlyInsights.bestMonth.total)}`
-                              : 'Aún no hay un mes destacado'}
-                          </span>
-                          <span className="text-muted">Mes con mayor facturación registrada.</span>
-                        </li>
-                      </ul>
-                    ) : (
-                      <p className="text-muted small mb-0">
-                        Filtra por un período con facturación para visualizar tendencias mensuales.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -1236,65 +1318,33 @@ function DashboardPage({ currentUser }) {
               </div>
             </div>
             <div className="card-body">
-              <div className="row g-4 align-items-center">
-                <div className="col-12 col-lg-7">
-                  <div style={{ height: '260px' }}>
-                    {data.facturasEstadoChartData.labels?.length > 0 ? (
+              {data.facturasEstadoChartData.labels?.length > 0 ? (
+                <>
+                  <div
+                    className="rounded-3 bg-light-subtle border border-light-subtle px-3 py-3"
+                    role="button"
+                    tabIndex={0}
+                    onClick={openEstadoModal}
+                    onKeyDown={(event) => handleChartKeyDown(event, openEstadoModal)}
+                    style={{ cursor: 'pointer' }}
+                    aria-label="Ver interpretación de facturas por estado"
+                  >
+                    <div style={{ height: '260px' }}>
                       <Bar data={data.facturasEstadoChartData} options={countChartOptions} />
-                    ) : (
-                      <div className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3">
-                        <p className="mb-0">No hay información para mostrar la distribución de estados.</p>
-                      </div>
-                    )}
+                    </div>
                   </div>
+                  <p className="text-muted small text-center mt-3 mb-0">
+                    Haz clic en el gráfico para ver cómo interpretar la distribución por estado.
+                  </p>
+                </>
+              ) : (
+                <div
+                  className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3"
+                  style={{ minHeight: '260px' }}
+                >
+                  <p className="mb-0">No hay información para mostrar la distribución de estados.</p>
                 </div>
-                <div className="col-12 col-lg-5">
-                  <div className="bg-light rounded-3 p-3 h-100">
-                    <h6 className="text-uppercase text-muted small fw-semibold mb-3">Cómo interpretarlo</h6>
-                    {totalFacturasEstados > 0 ? (
-                      <>
-                        <ul className="list-unstyled small mb-0">
-                          <li className="mb-3">
-                            <span className="fw-semibold text-dark d-block">
-                              {estadoPrincipal
-                                ? `${estadoPrincipal.label}: ${estadoPrincipal.count} (${formatPercentage(estadoPrincipal.percentage)})`
-                                : 'Sin facturas registradas'}
-                            </span>
-                            <span className="text-muted">Estado que concentra la mayor cantidad de comprobantes.</span>
-                          </li>
-                          <li className="mb-3">
-                            <span className="fw-semibold text-dark d-block">
-                              {`${totalPagadasConParcial} cobradas o parciales (${formatPercentage(sharePagadas)})`}
-                            </span>
-                            <span className="text-muted">Facturas cobradas o con cobro parcial dentro del período.</span>
-                          </li>
-                          <li className="mb-0">
-                            <span className="fw-semibold text-dark d-block">
-                              {estadoCritico
-                                ? `${estadoCritico.label}: ${estadoCritico.count} (${formatPercentage(estadoCritico.percentage)})`
-                                : 'No hay facturas pendientes ni observadas'}
-                            </span>
-                            <span className="text-muted">Estados que requieren seguimiento para acelerar el cobro.</span>
-                          </li>
-                        </ul>
-                        {estadoResumen.length > 0 && (
-                          <div className="d-flex flex-wrap gap-2 mt-3">
-                            {estadoResumen.slice(0, 4).map((estado) => (
-                              <span key={estado.key} className="badge bg-white border text-secondary">
-                                {estado.label}: {formatPercentage(estado.percentage)}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-muted small mb-0">
-                        Aún no registras facturas en el período seleccionado.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -1318,61 +1368,33 @@ function DashboardPage({ currentUser }) {
               </div>
             </div>
             <div className="card-body">
-              <div className="row g-4 align-items-center">
-                <div className="col-12 col-lg-7">
-                  <div style={{ height: '260px' }}>
-                    {data.obrasSocialesBarChartData.labels?.length > 0 ? (
+              {data.obrasSocialesBarChartData.labels?.length > 0 ? (
+                <>
+                  <div
+                    className="rounded-3 bg-light-subtle border border-light-subtle px-3 py-3"
+                    role="button"
+                    tabIndex={0}
+                    onClick={openTopObrasModal}
+                    onKeyDown={(event) => handleChartKeyDown(event, openTopObrasModal)}
+                    style={{ cursor: 'pointer' }}
+                    aria-label="Ver detalle del Top 5 de obras sociales"
+                  >
+                    <div style={{ height: '260px' }}>
                       <Bar data={data.obrasSocialesBarChartData} options={horizontalCurrencyChartOptions} />
-                    ) : (
-                      <div className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3">
-                        <p className="mb-0">No hay datos suficientes para el gráfico de obras sociales.</p>
-                      </div>
-                    )}
+                    </div>
                   </div>
+                  <p className="text-muted small text-center mt-3 mb-0">
+                    Haz clic en el gráfico para conocer qué destaca a cada obra social del Top 5.
+                  </p>
+                </>
+              ) : (
+                <div
+                  className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3"
+                  style={{ minHeight: '260px' }}
+                >
+                  <p className="mb-0">No hay datos suficientes para el gráfico de obras sociales.</p>
                 </div>
-                <div className="col-12 col-lg-5">
-                  <div className="bg-light rounded-3 p-3 h-100">
-                    <h6 className="text-uppercase text-muted small fw-semibold mb-3">Lectura rápida</h6>
-                    {obrasSocialesEntries.length > 0 ? (
-                      <>
-                        <ul className="list-unstyled small mb-0">
-                          <li className="mb-3">
-                            <span className="fw-semibold text-dark d-block">
-                              {obrasSocialesResumen.topEntry
-                                ? `${obrasSocialesResumen.topEntry.nombre}: ${formatNumber(obrasSocialesResumen.topEntry.monto)} (${formatPercentage(obrasSocialesResumen.topEntry.percentage)})`
-                                : 'Sin obras sociales registradas'}
-                            </span>
-                            <span className="text-muted">Principal obra social facturada.</span>
-                          </li>
-                          <li className="mb-3">
-                            <span className="fw-semibold text-dark d-block">{formatNumber(obrasSocialesResumen.totalTop5 || 0)}</span>
-                            <span className="text-muted">Monto combinado de las cinco primeras.</span>
-                          </li>
-                          <li className="mb-0">
-                            <span className="fw-semibold text-dark d-block">
-                              {obrasSocialesResumen.totalGeneral > 0
-                                ? `${formatPercentage(coberturaTop5)} del total facturado con obras sociales`
-                                : 'Aún no hay facturación con obras sociales'}
-                            </span>
-                            <span className="text-muted">Participación del Top 5 en tu facturación con convenios.</span>
-                          </li>
-                        </ul>
-                        <div className="d-flex flex-wrap gap-2 mt-3">
-                          {obrasSocialesEntries.slice(0, 3).map((entry) => (
-                            <span key={entry.nombre} className="badge bg-white border text-secondary">
-                              {entry.nombre}: {formatPercentage(entry.percentage)}
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-muted small mb-0">
-                        Cuando registres facturas con obras sociales, verás aquí a las principales.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -1394,65 +1416,195 @@ function DashboardPage({ currentUser }) {
               </div>
             </div>
             <div className="card-body">
-              <div className="row g-4 align-items-center">
-                <div className="col-12 col-lg-7">
-                  <div style={{ height: '260px' }}>
-                    {data.moraObraSocialData.labels?.length > 0 ? (
+              {data.moraObraSocialData.labels?.length > 0 ? (
+                <>
+                  <div
+                    className="rounded-3 bg-light-subtle border border-light-subtle px-3 py-3"
+                    role="button"
+                    tabIndex={0}
+                    onClick={openMoraModal}
+                    onKeyDown={(event) => handleChartKeyDown(event, openMoraModal)}
+                    style={{ cursor: 'pointer' }}
+                    aria-label="Ver detalle de la mora por obra social"
+                  >
+                    <div style={{ height: '260px' }}>
                       <Bar data={data.moraObraSocialData} options={horizontalCurrencyChartOptions} />
-                    ) : (
-                      <div className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3">
-                        <p className="mb-0">No registras deudas vencidas con obras sociales.</p>
-                      </div>
-                    )}
+                    </div>
                   </div>
+                  <p className="text-muted small text-center mt-3 mb-0">
+                    Haz clic en el gráfico para ver los puntos clave de la mora por obra social.
+                  </p>
+                </>
+              ) : (
+                <div
+                  className="h-100 d-flex align-items-center justify-content-center text-center text-muted px-3"
+                  style={{ minHeight: '260px' }}
+                >
+                  <p className="mb-0">No registras deudas vencidas con obras sociales.</p>
                 </div>
-                <div className="col-12 col-lg-5">
-                  <div className="bg-light rounded-3 p-3 h-100">
-                    <h6 className="text-uppercase text-muted small fw-semibold mb-3">Puntos clave</h6>
-                    {moraEntriesResumen.length > 0 ? (
-                      <ul className="list-unstyled small mb-0">
-                        <li className="mb-3">
-                          <span className="fw-semibold text-dark d-block">{formatNumber(data.montoMoraTotal)}</span>
-                          <span className="text-muted">Saldo vencido acumulado en el período.</span>
-                        </li>
-                        <li className="mb-3">
-                          <span className="fw-semibold text-dark d-block">
-                            {moraTopEntry
-                              ? `${moraTopEntry.nombre}: ${formatNumber(moraTopEntry.monto)} (${formatPercentage(moraTopEntry.percentage)})`
-                              : 'Sin mora registrada'}
-                          </span>
-                          <span className="text-muted">Obra social con mayor deuda.</span>
-                        </li>
-                        <li className="mb-0">
-                          <span className="fw-semibold text-dark d-block">
-                            {moraSecondaryEntries.length > 0
-                              ? 'Otros saldos a controlar'
-                              : 'El resto de las obras sociales están al día'}
-                          </span>
-                          {moraSecondaryEntries.length > 0 && (
-                            <div className="d-flex flex-wrap gap-2 mt-2">
-                              {moraSecondaryEntries.map((entry) => (
-                                <span key={entry.nombre} className="badge bg-white border text-secondary">
-                                  {entry.nombre}: {formatPercentage(entry.percentage)}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </li>
-                      </ul>
-                    ) : (
-                      <p className="text-muted small mb-0">
-                        ¡Excelente! No registras obras sociales con mora en el período consultado.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
 
       </div>
+
+      <InfoModal show={showMonthlyInfo} title="Facturación mensual" onClose={closeAllModals}>
+        <p className="text-muted">Evolución de tus ingresos mes a mes.</p>
+        {monthlyInsights.entries.length > 0 ? (
+          <ul className="list-unstyled small mb-0">
+            <li className="mb-3">
+              <span className="fw-semibold text-dark d-block">
+                {monthlyInsights.lastMonth
+                  ? `${monthlyInsights.lastMonth.label}: ${formatNumber(monthlyInsights.lastMonth.total)}`
+                  : 'Sin movimientos recientes'}
+              </span>
+              <span className="text-muted">Registro más reciente del período seleccionado.</span>
+            </li>
+            <li className="mb-3">
+              <span className="fw-semibold text-dark d-block">{formatNumber(monthlyInsights.average)}</span>
+              <span className="text-muted">Promedio mensual dentro del período.</span>
+            </li>
+            <li className="mb-0">
+              <span className="fw-semibold text-dark d-block">
+                {monthlyInsights.bestMonth
+                  ? `${monthlyInsights.bestMonth.label}: ${formatNumber(monthlyInsights.bestMonth.total)}`
+                  : 'Aún no hay un mes destacado'}
+              </span>
+              <span className="text-muted">Mes con mayor facturación registrada.</span>
+            </li>
+          </ul>
+        ) : (
+          <p className="text-muted small mb-0">
+            Filtra por un período con facturación para visualizar tendencias mensuales.
+          </p>
+        )}
+      </InfoModal>
+
+      <InfoModal show={showEstadoInfo} title="Facturas por estado" onClose={closeAllModals}>
+        <p className="text-muted">Cantidad de facturas por etapa del proceso.</p>
+        {totalFacturasEstados > 0 ? (
+          <>
+            <ul className="list-unstyled small mb-0">
+              <li className="mb-3">
+                <span className="fw-semibold text-dark d-block">
+                  {estadoPrincipal
+                    ? `${estadoPrincipal.label}: ${estadoPrincipal.count} (${formatPercentage(estadoPrincipal.percentage)})`
+                    : 'Sin facturas registradas'}
+                </span>
+                <span className="text-muted">Estado que concentra la mayor cantidad de comprobantes.</span>
+              </li>
+              <li className="mb-3">
+                <span className="fw-semibold text-dark d-block">
+                  {`${totalPagadasConParcial} cobradas o parciales (${formatPercentage(sharePagadas)})`}
+                </span>
+                <span className="text-muted">Facturas cobradas o con cobro parcial dentro del período.</span>
+              </li>
+              <li className="mb-0">
+                <span className="fw-semibold text-dark d-block">
+                  {estadoCritico
+                    ? `${estadoCritico.label}: ${estadoCritico.count} (${formatPercentage(estadoCritico.percentage)})`
+                    : 'No hay facturas pendientes ni observadas'}
+                </span>
+                <span className="text-muted">Estados que requieren seguimiento para acelerar el cobro.</span>
+              </li>
+            </ul>
+            {estadoResumen.length > 0 && (
+              <div className="d-flex flex-wrap gap-2 mt-3">
+                {estadoResumen.slice(0, 4).map((estado) => (
+                  <span key={estado.key} className="badge bg-white border text-secondary">
+                    {estado.label}: {formatPercentage(estado.percentage)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-muted small mb-0">Aún no registras facturas en el período seleccionado.</p>
+        )}
+      </InfoModal>
+
+      <InfoModal show={showTopObrasInfo} title="Top 5 obras sociales" onClose={closeAllModals}>
+        <p className="text-muted">Quiénes impulsan tu facturación con convenios.</p>
+        {obrasSocialesEntries.length > 0 ? (
+          <>
+            <ul className="list-unstyled small mb-0">
+              <li className="mb-3">
+                <span className="fw-semibold text-dark d-block">
+                  {obrasSocialesResumen.topEntry
+                    ? `${obrasSocialesResumen.topEntry.nombre}: ${formatNumber(obrasSocialesResumen.topEntry.monto)} (${formatPercentage(obrasSocialesResumen.topEntry.percentage)})`
+                    : 'Sin obras sociales registradas'}
+                </span>
+                <span className="text-muted">Principal obra social facturada.</span>
+              </li>
+              <li className="mb-3">
+                <span className="fw-semibold text-dark d-block">{formatNumber(obrasSocialesResumen.totalTop5 || 0)}</span>
+                <span className="text-muted">Monto combinado de las cinco primeras.</span>
+              </li>
+              <li className="mb-0">
+                <span className="fw-semibold text-dark d-block">
+                  {obrasSocialesResumen.totalGeneral > 0
+                    ? `${formatPercentage(coberturaTop5)} del total facturado con obras sociales`
+                    : 'Aún no hay facturación con obras sociales'}
+                </span>
+                <span className="text-muted">Participación del Top 5 en tu facturación con convenios.</span>
+              </li>
+            </ul>
+            <div className="d-flex flex-wrap gap-2 mt-3">
+              {obrasSocialesEntries.slice(0, 3).map((entry) => (
+                <span key={entry.nombre} className="badge bg-white border text-secondary">
+                  {entry.nombre}: {formatPercentage(entry.percentage)}
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-muted small mb-0">
+            Cuando registres facturas con obras sociales, verás aquí a las principales.
+          </p>
+        )}
+      </InfoModal>
+
+      <InfoModal show={showMoraInfo} title="Mora por obra social" onClose={closeAllModals}>
+        <p className="text-muted">Saldo vencido según cada obra social.</p>
+        {moraEntriesResumen.length > 0 ? (
+          <ul className="list-unstyled small mb-0">
+            <li className="mb-3">
+              <span className="fw-semibold text-dark d-block">{formatNumber(data.montoMoraTotal)}</span>
+              <span className="text-muted">Saldo vencido acumulado en el período.</span>
+            </li>
+            <li className="mb-3">
+              <span className="fw-semibold text-dark d-block">
+                {moraTopEntry
+                  ? `${moraTopEntry.nombre}: ${formatNumber(moraTopEntry.monto)} (${formatPercentage(moraTopEntry.percentage)})`
+                  : 'Sin mora registrada'}
+              </span>
+              <span className="text-muted">Obra social con mayor deuda.</span>
+            </li>
+            <li className="mb-0">
+              <span className="fw-semibold text-dark d-block">
+                {moraSecondaryEntries.length > 0
+                  ? 'Otros saldos a controlar'
+                  : 'El resto de las obras sociales están al día'}
+              </span>
+              {moraSecondaryEntries.length > 0 && (
+                <div className="d-flex flex-wrap gap-2 mt-2">
+                  {moraSecondaryEntries.map((entry) => (
+                    <span key={entry.nombre} className="badge bg-white border text-secondary">
+                      {entry.nombre}: {formatPercentage(entry.percentage)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </li>
+          </ul>
+        ) : (
+          <p className="text-muted small mb-0">
+            ¡Excelente! No registras obras sociales con mora en el período consultado.
+          </p>
+        )}
+      </InfoModal>
+
     </div>
   );
 }
