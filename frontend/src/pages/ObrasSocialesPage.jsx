@@ -2,6 +2,34 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ObrasSocialesService from '../services/ObrasSocialesService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
 
+const ITEMS_PER_PAGE = 16;
+
+const buildPageNumbers = (totalPages, currentPage) => {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = [1];
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) {
+    pages.push('start-ellipsis');
+  }
+
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+
+  if (end < totalPages - 1) {
+    pages.push('end-ellipsis');
+  }
+
+  pages.push(totalPages);
+
+  return pages;
+};
+
 function ObrasSocialesPage() {
   const { showError, showSuccess, showInfo } = useFeedback();
   const [obrasSociales, setObrasSociales] = useState([]);
@@ -16,6 +44,7 @@ function ObrasSocialesPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [deleteLoadingId, setDeleteLoadingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchObrasSociales = useCallback(async () => {
     try {
@@ -127,6 +156,37 @@ function ObrasSocialesPage() {
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
   };
+
+  const totalObras = filteredObrasSociales.length;
+  const totalPages = Math.max(Math.ceil(totalObras / ITEMS_PER_PAGE), 1);
+  const paginatedObrasSociales = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredObrasSociales.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredObrasSociales, currentPage]);
+
+  const pageNumbers = useMemo(
+    () => buildPageNumbers(totalPages, currentPage),
+    [totalPages, currentPage],
+  );
+
+  const showingFrom = totalObras === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const showingTo = totalObras === 0 ? 0 : Math.min(currentPage * ITEMS_PER_PAGE, totalObras);
+
+  const handlePageChange = (page) => {
+    if (typeof page === 'number' && page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [normalizedSearch, obrasSociales.length]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <div className="container mt-4">
@@ -242,6 +302,13 @@ function ObrasSocialesPage() {
       {/* Tabla para dispositivos grandes (desktop) */}
       <div className="card shadow-sm d-none d-md-block">
         <div className="card-body">
+          <div className="d-flex flex-column flex-sm-row justify-content-sm-between align-items-sm-center mb-3">
+            <span className="text-muted small">
+              {totalObras === 0
+                ? 'Sin obras sociales para mostrar.'
+                : `Mostrando ${showingFrom}-${showingTo} de ${totalObras} obras sociales`}
+            </span>
+          </div>
           <table className="table table-striped table-hover mb-0">
             <thead className="table-dark">
               <tr>
@@ -269,7 +336,7 @@ function ObrasSocialesPage() {
                   </td>
                 </tr>
               ) : (
-                filteredObrasSociales.map((os) => (
+                paginatedObrasSociales.map((os) => (
                   <tr key={os._id}>
                     <td>{os.nombre}</td>
                     <td>{os.cuit || '—'}</td>
@@ -307,6 +374,46 @@ function ObrasSocialesPage() {
               )}
             </tbody>
           </table>
+          {totalObras > ITEMS_PER_PAGE && (
+            <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de obras sociales">
+              <ul className="pagination mb-0">
+                <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                  <button
+                    type="button"
+                    className="page-link"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    Anterior
+                  </button>
+                </li>
+                {pageNumbers.map((page, index) => (
+                  <li
+                    key={`${page}-${index}`}
+                    className={`page-item ${page === currentPage ? 'active' : ''} ${typeof page === 'string' ? 'disabled' : ''}`}
+                  >
+                    {typeof page === 'string' ? (
+                      <span className="page-link">…</span>
+                    ) : (
+                      <button type="button" className="page-link" onClick={() => handlePageChange(page)}>
+                        {page}
+                      </button>
+                    )}
+                  </li>
+                ))}
+                <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                  <button
+                    type="button"
+                    className="page-link"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          )}
         </div>
       </div>
 
@@ -326,47 +433,87 @@ function ObrasSocialesPage() {
               <div className="alert alert-light text-center mb-0">{emptyObrasMessage}</div>
             </div>
           )}
-          {!listLoading &&
-            filteredObrasSociales.map((os) => (
-            <div className="col-12" key={os._id}>
-              <div className="card shadow-sm">
-                <div className="card-body">
-                  <h5 className="card-title">{os.nombre}</h5>
-                  <p className="card-text mb-1"><strong>CUIT/CUIL:</strong> {os.cuit || '—'}</p>
-                  <p className="card-text mb-1"><strong>Teléfono:</strong> {os.telefono}</p>
-                  <p className="card-text"><strong>Email:</strong> {os.email}</p>
-                  <div className="d-flex justify-content-end gap-2 mt-3">
-                    <button
-                      className="btn btn-warning btn-sm me-2"
-                      onClick={() => handleEdit(os)}
-                      disabled={formLoading || Boolean(deleteLoadingId)}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleDelete(os._id)}
-                      disabled={deleteLoadingId === os._id || formLoading}
-                    >
-                      {deleteLoadingId === os._id ? (
-                        <>
-                          <span
-                            className="spinner-border spinner-border-sm me-2"
-                            role="status"
-                            aria-hidden="true"
-                          ></span>
-                          Eliminando...
-                        </>
-                      ) : (
-                        'Eliminar'
-                      )}
-                    </button>
+          {!listLoading
+            && paginatedObrasSociales.map((os) => (
+              <div className="col-12" key={os._id}>
+                <div className="card shadow-sm">
+                  <div className="card-body">
+                    <h5 className="card-title">{os.nombre}</h5>
+                    <p className="card-text mb-1"><strong>CUIT/CUIL:</strong> {os.cuit || '—'}</p>
+                    <p className="card-text mb-1"><strong>Teléfono:</strong> {os.telefono}</p>
+                    <p className="card-text"><strong>Email:</strong> {os.email}</p>
+                    <div className="d-flex justify-content-end gap-2 mt-3">
+                      <button
+                        className="btn btn-warning btn-sm me-2"
+                        onClick={() => handleEdit(os)}
+                        disabled={formLoading || Boolean(deleteLoadingId)}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleDelete(os._id)}
+                        disabled={deleteLoadingId === os._id || formLoading}
+                      >
+                        {deleteLoadingId === os._id ? (
+                          <>
+                            <span
+                              className="spinner-border spinner-border-sm me-2"
+                              role="status"
+                              aria-hidden="true"
+                            ></span>
+                            Eliminando...
+                          </>
+                        ) : (
+                          'Eliminar'
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
             ))}
         </div>
+        {totalObras > ITEMS_PER_PAGE && (
+          <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de obras sociales móvil">
+            <ul className="pagination mb-0">
+              <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </button>
+              </li>
+              {pageNumbers.map((page, index) => (
+                <li
+                  key={`${page}-mobile-${index}`}
+                  className={`page-item ${page === currentPage ? 'active' : ''} ${typeof page === 'string' ? 'disabled' : ''}`}
+                >
+                  {typeof page === 'string' ? (
+                    <span className="page-link">…</span>
+                  ) : (
+                    <button type="button" className="page-link" onClick={() => handlePageChange(page)}>
+                      {page}
+                    </button>
+                  )}
+                </li>
+              ))}
+              <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </button>
+              </li>
+            </ul>
+          </nav>
+        )}
       </div>
     </div>
   );

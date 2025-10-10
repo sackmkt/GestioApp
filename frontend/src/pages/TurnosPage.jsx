@@ -67,6 +67,34 @@ const obtenerFechaLocalISO = (date = new Date()) => {
   return `${year}-${month}-${day}`;
 };
 
+const ITEMS_PER_PAGE = 16;
+
+const buildPageNumbers = (totalPages, currentPage) => {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = [1];
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) {
+    pages.push('start-ellipsis');
+  }
+
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+
+  if (end < totalPages - 1) {
+    pages.push('end-ellipsis');
+  }
+
+  pages.push(totalPages);
+
+  return pages;
+};
+
 const TurnosPage = () => {
   const { showError, showSuccess, showInfo } = useFeedback();
   const [turnos, setTurnos] = useState([]);
@@ -89,6 +117,8 @@ const TurnosPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [agendaViewMode, setAgendaViewMode] = useState('day');
   const [agendaDate, setAgendaDate] = useState(obtenerFechaLocalISO());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [futurePage, setFuturePage] = useState(1);
 
   useEffect(() => {
     const obtenerDatos = async () => {
@@ -155,6 +185,68 @@ const TurnosPage = () => {
   const emptyMessage = hasSearch
     ? 'No se encontraron turnos que coincidan con la búsqueda.'
     : 'No hay turnos para los filtros seleccionados.';
+
+  const totalTurnos = filteredTurnos.length;
+  const totalPages = Math.max(Math.ceil(totalTurnos / ITEMS_PER_PAGE), 1);
+  const paginatedTurnos = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTurnos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredTurnos, currentPage]);
+
+  const pageNumbers = useMemo(
+    () => buildPageNumbers(totalPages, currentPage),
+    [totalPages, currentPage],
+  );
+
+  const showingFrom = totalTurnos === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const showingTo = totalTurnos === 0 ? 0 : Math.min(currentPage * ITEMS_PER_PAGE, totalTurnos);
+
+  const totalFutureTurnos = proximosTurnos.length;
+  const totalFuturePages = Math.max(Math.ceil(totalFutureTurnos / ITEMS_PER_PAGE), 1);
+  const paginatedProximosTurnos = useMemo(() => {
+    const startIndex = (futurePage - 1) * ITEMS_PER_PAGE;
+    return proximosTurnos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [proximosTurnos, futurePage]);
+
+  const futurePageNumbers = useMemo(
+    () => buildPageNumbers(totalFuturePages, futurePage),
+    [totalFuturePages, futurePage],
+  );
+
+  const futureShowingFrom = totalFutureTurnos === 0 ? 0 : (futurePage - 1) * ITEMS_PER_PAGE + 1;
+  const futureShowingTo = totalFutureTurnos === 0 ? 0 : Math.min(futurePage * ITEMS_PER_PAGE, totalFutureTurnos);
+
+  const handlePageChange = (page) => {
+    if (typeof page === 'number' && page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const handleFuturePageChange = (page) => {
+    if (typeof page === 'number' && page >= 1 && page <= totalFuturePages) {
+      setFuturePage(page);
+    }
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [normalizedSearch, filtros.estado, filtros.rango, turnos.length]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    setFuturePage(1);
+  }, [totalFutureTurnos]);
+
+  useEffect(() => {
+    if (futurePage > totalFuturePages) {
+      setFuturePage(totalFuturePages);
+    }
+  }, [futurePage, totalFuturePages]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -507,6 +599,14 @@ const TurnosPage = () => {
           ) : filteredTurnos.length === 0 ? (
             <p className="mb-0">{emptyMessage}</p>
           ) : (
+            <>
+              <div className="d-flex flex-column flex-sm-row justify-content-sm-between align-items-sm-center mb-3">
+                <span className="text-muted small">
+                  {totalTurnos === 0
+                    ? 'Sin turnos para mostrar.'
+                    : `Mostrando ${showingFrom}-${showingTo} de ${totalTurnos} turnos`}
+                </span>
+              </div>
             <table className="table table-hover align-middle">
               <thead className="table-light">
                 <tr>
@@ -520,7 +620,7 @@ const TurnosPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredTurnos.map((turno) => (
+                {paginatedTurnos.map((turno) => (
                   <tr key={turno._id}>
                     <td>
                       <strong>{turno.paciente?.nombre} {turno.paciente?.apellido}</strong>
@@ -599,6 +699,47 @@ const TurnosPage = () => {
                 ))}
               </tbody>
             </table>
+              {totalTurnos > ITEMS_PER_PAGE && (
+                <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de turnos">
+                  <ul className="pagination mb-0">
+                    <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                      <button
+                        type="button"
+                        className="page-link"
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        Anterior
+                      </button>
+                    </li>
+                    {pageNumbers.map((page, index) => (
+                      <li
+                        key={`${page}-${index}`}
+                        className={`page-item ${page === currentPage ? 'active' : ''} ${typeof page === 'string' ? 'disabled' : ''}`}
+                      >
+                        {typeof page === 'string' ? (
+                          <span className="page-link">…</span>
+                        ) : (
+                          <button type="button" className="page-link" onClick={() => handlePageChange(page)}>
+                            {page}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                    <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                      <button
+                        type="button"
+                        className="page-link"
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        Siguiente
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -612,7 +753,7 @@ const TurnosPage = () => {
         )}
         {!loading && filteredTurnos.length === 0 && <p>{emptyMessage}</p>}
         <div className="row g-3">
-          {filteredTurnos.map((turno) => (
+          {paginatedTurnos.map((turno) => (
             <div className="col-12" key={turno._id}>
               <div className="card shadow-sm">
                 <div className="card-body">
@@ -696,16 +837,63 @@ const TurnosPage = () => {
             </div>
           ))}
         </div>
+        {totalTurnos > ITEMS_PER_PAGE && (
+          <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de turnos móvil">
+            <ul className="pagination mb-0">
+              <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </button>
+              </li>
+              {pageNumbers.map((page, index) => (
+                <li
+                  key={`${page}-mobile-${index}`}
+                  className={`page-item ${page === currentPage ? 'active' : ''} ${typeof page === 'string' ? 'disabled' : ''}`}
+                >
+                  {typeof page === 'string' ? (
+                    <span className="page-link">…</span>
+                  ) : (
+                    <button type="button" className="page-link" onClick={() => handlePageChange(page)}>
+                      {page}
+                    </button>
+                  )}
+                </li>
+              ))}
+              <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <button
+                  type="button"
+                  className="page-link"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </button>
+              </li>
+            </ul>
+          </nav>
+        )}
       </div>
 
       <div className="card shadow-sm mt-4">
         <div className="card-body">
-          <h5 className="card-title">Turnos futuros</h5>
-          {proximosTurnos.length === 0 ? (
+          <div className="d-flex flex-column flex-sm-row justify-content-sm-between align-items-sm-center mb-3">
+            <h5 className="card-title mb-0">Turnos futuros</h5>
+            <span className="text-muted small">
+              {totalFutureTurnos === 0
+                ? 'Sin turnos próximos.'
+                : `Mostrando ${futureShowingFrom}-${futureShowingTo} de ${totalFutureTurnos} turnos futuros`}
+            </span>
+          </div>
+          {totalFutureTurnos === 0 ? (
             <p className="mb-0">No hay turnos próximos agendados.</p>
           ) : (
             <ul className="list-group list-group-flush">
-              {proximosTurnos.slice(0, 5).map((turno) => (
+              {paginatedProximosTurnos.map((turno) => (
                 <li className="list-group-item d-flex justify-content-between align-items-center" key={turno._id}>
                   <div>
                     <strong>{turno.paciente?.nombre} {turno.paciente?.apellido}</strong>
@@ -715,6 +903,46 @@ const TurnosPage = () => {
                 </li>
               ))}
             </ul>
+          )}
+          {totalFutureTurnos > ITEMS_PER_PAGE && (
+            <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de turnos futuros">
+              <ul className="pagination mb-0">
+                <li className={`page-item ${futurePage === 1 ? 'disabled' : ''}`}>
+                  <button
+                    type="button"
+                    className="page-link"
+                    onClick={() => handleFuturePageChange(futurePage - 1)}
+                    disabled={futurePage === 1}
+                  >
+                    Anterior
+                  </button>
+                </li>
+                {futurePageNumbers.map((page, index) => (
+                  <li
+                    key={`${page}-future-${index}`}
+                    className={`page-item ${page === futurePage ? 'active' : ''} ${typeof page === 'string' ? 'disabled' : ''}`}
+                  >
+                    {typeof page === 'string' ? (
+                      <span className="page-link">…</span>
+                    ) : (
+                      <button type="button" className="page-link" onClick={() => handleFuturePageChange(page)}>
+                        {page}
+                      </button>
+                    )}
+                  </li>
+                ))}
+                <li className={`page-item ${futurePage === totalFuturePages ? 'disabled' : ''}`}>
+                  <button
+                    type="button"
+                    className="page-link"
+                    onClick={() => handleFuturePageChange(futurePage + 1)}
+                    disabled={futurePage === totalFuturePages}
+                  >
+                    Siguiente
+                  </button>
+                </li>
+              </ul>
+            </nav>
           )}
         </div>
       </div>
