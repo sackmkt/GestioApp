@@ -26,7 +26,7 @@ const InfoModal = ({ show, title, onClose, children }) => {
   return (
     <div
       className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
-      style={{ backgroundColor: 'rgba(33, 37, 41, 0.65)', zIndex: 1050 }}
+      style={{ backgroundColor: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', zIndex: 1050 }}
       role="dialog"
       aria-modal="true"
       aria-labelledby={modalTitleId}
@@ -36,7 +36,14 @@ const InfoModal = ({ show, title, onClose, children }) => {
         className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="modal-content shadow-lg">
+        <div
+          className="modal-content shadow-lg border-0"
+          role="document"
+          style={{
+            backgroundColor: 'rgba(255, 255, 255, 0.98)',
+            backdropFilter: 'blur(12px)',
+          }}
+        >
           <div className="modal-header">
             <h5 id={modalTitleId} className="modal-title mb-0">
               {title}
