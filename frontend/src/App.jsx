@@ -126,8 +126,8 @@ function App() {
     return (
       <>
         <header className="gestio-header sticky-top py-3">
-          <div className="container-fluid gestio-header-inner d-flex align-items-center justify-content-between gap-3">
-            <div className="d-flex align-items-center gap-3 gestio-header-brand">
+          <div className="container-fluid d-flex align-items-center justify-content-between gap-3">
+            <div className="d-flex align-items-center gap-3">
               {isAuthenticated && (
                 <button
                   type="button"
@@ -143,7 +143,7 @@ function App() {
                 <span className="gestio-brand-name">GESTIO</span>
               </NavLink>
             </div>
-            <ul className="navbar-nav gestio-header-actions flex-row align-items-center gap-3">
+            <ul className="navbar-nav flex-row align-items-center gap-3">
               {isAuthenticated ? (
                 <>
                   <li className="nav-item d-none d-sm-block">
