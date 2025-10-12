@@ -1,5 +1,78 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+
+const toPositiveNumber = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const MAX_LOGIN_ATTEMPTS = toPositiveNumber(process.env.MAX_LOGIN_ATTEMPTS, 5);
+const LOGIN_ATTEMPT_WINDOW_MINUTES = toPositiveNumber(process.env.LOGIN_ATTEMPT_WINDOW_MINUTES, 15);
+const LOGIN_LOCK_TIME_MINUTES = toPositiveNumber(process.env.LOGIN_LOCK_TIME_MINUTES, 15);
+
+const LOGIN_ATTEMPTS = new Map();
+
+const toLoginAttemptKey = (username = '') => username.trim().toLowerCase();
+
+const getLockMessage = (lockUntil, now = Date.now()) => {
+  const remainingMs = Math.max(0, lockUntil - now);
+  const remainingMinutes = Math.ceil(remainingMs / 60000) || 1;
+  const suffix = remainingMinutes === 1 ? '' : 's';
+  return `Demasiados intentos fallidos. Inténtalo nuevamente en ${remainingMinutes} minuto${suffix}.`;
+};
+
+const sendLockResponse = (res, lockUntil) => {
+  const now = Date.now();
+  const remainingMs = Math.max(0, lockUntil - now);
+  const retryAfterSeconds = Math.ceil(remainingMs / 1000) || 1;
+  res.set('Retry-After', String(retryAfterSeconds));
+  return res.status(423).json({ message: getLockMessage(lockUntil, now) });
+};
+
+const registerFailedLoginAttempt = (key) => {
+  const now = Date.now();
+  const windowMs = LOGIN_ATTEMPT_WINDOW_MINUTES * 60 * 1000;
+  const lockTimeMs = LOGIN_LOCK_TIME_MINUTES * 60 * 1000;
+
+  const attempt = LOGIN_ATTEMPTS.get(key);
+
+  if (!attempt) {
+    const freshAttempt = { count: 1, firstAttempt: now };
+    LOGIN_ATTEMPTS.set(key, freshAttempt);
+    return freshAttempt;
+  }
+
+  if (attempt.lockUntil && attempt.lockUntil <= now) {
+    const freshAttempt = { count: 1, firstAttempt: now };
+    LOGIN_ATTEMPTS.set(key, freshAttempt);
+    return freshAttempt;
+  }
+
+  if (!attempt.lockUntil && attempt.firstAttempt + windowMs < now) {
+    const freshAttempt = { count: 1, firstAttempt: now };
+    LOGIN_ATTEMPTS.set(key, freshAttempt);
+    return freshAttempt;
+  }
+
+  const updatedAttempt = {
+    count: (attempt.count || 0) + 1,
+    firstAttempt: attempt.firstAttempt,
+  };
+
+  if (updatedAttempt.count >= MAX_LOGIN_ATTEMPTS) {
+    updatedAttempt.lockUntil = now + lockTimeMs;
+  } else {
+    updatedAttempt.lockUntil = undefined;
+  }
+
+  LOGIN_ATTEMPTS.set(key, updatedAttempt);
+  return updatedAttempt;
+};
+
+const resetLoginAttempts = (key) => {
+  LOGIN_ATTEMPTS.delete(key);
+};
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: '1h',
@@ -97,13 +170,40 @@ exports.registerUser = async (req, res) => {
 exports.loginUser = async (req, res) => {
   const { username, password } = req.body;
 
+  const sanitizedUsername = typeof username === 'string' ? username.trim() : '';
+
+  if (!sanitizedUsername || !password) {
+    return res.status(400).json({ message: 'Usuario y contraseña son obligatorios' });
+  }
+
+  const key = toLoginAttemptKey(sanitizedUsername);
+  const attempt = LOGIN_ATTEMPTS.get(key);
+  const windowMs = LOGIN_ATTEMPT_WINDOW_MINUTES * 60 * 1000;
+
+  if (attempt?.lockUntil && attempt.lockUntil > Date.now()) {
+    return sendLockResponse(res, attempt.lockUntil);
+  }
+
+  if (attempt?.lockUntil && attempt.lockUntil <= Date.now()) {
+    resetLoginAttempts(key);
+  } else if (attempt && !attempt.lockUntil && attempt.firstAttempt + windowMs < Date.now()) {
+    resetLoginAttempts(key);
+  }
+
   try {
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ username: sanitizedUsername });
 
     if (user && (await user.matchPassword(password))) {
+      resetLoginAttempts(key);
       const sanitizedUser = await User.findById(user._id).select('-password');
       res.json(buildUserResponse(sanitizedUser));
     } else {
+      const updatedAttempt = registerFailedLoginAttempt(key);
+
+      if (updatedAttempt.lockUntil && updatedAttempt.lockUntil > Date.now()) {
+        return sendLockResponse(res, updatedAttempt.lockUntil);
+      }
+
       res.status(401).json({ message: 'Usuario o contraseña incorrectos' });
     }
   } catch (error) {
