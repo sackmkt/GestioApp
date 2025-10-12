@@ -9,8 +9,33 @@ const toPositiveNumber = (value, fallback) => {
 const MAX_LOGIN_ATTEMPTS = toPositiveNumber(process.env.MAX_LOGIN_ATTEMPTS, 5);
 const LOGIN_ATTEMPT_WINDOW_MINUTES = toPositiveNumber(process.env.LOGIN_ATTEMPT_WINDOW_MINUTES, 15);
 const LOGIN_LOCK_TIME_MINUTES = toPositiveNumber(process.env.LOGIN_LOCK_TIME_MINUTES, 15);
+const LOGIN_ATTEMPT_CLEANUP_INTERVAL_MINUTES = toPositiveNumber(
+  process.env.LOGIN_ATTEMPT_CLEANUP_INTERVAL_MINUTES,
+  5,
+);
 
 const LOGIN_ATTEMPTS = new Map();
+let lastLoginAttemptCleanup = 0;
+
+const cleanupLoginAttempts = (now = Date.now()) => {
+  const cleanupIntervalMs = LOGIN_ATTEMPT_CLEANUP_INTERVAL_MINUTES * 60 * 1000;
+
+  if (now - lastLoginAttemptCleanup < cleanupIntervalMs) {
+    return;
+  }
+
+  lastLoginAttemptCleanup = now;
+  const windowMs = LOGIN_ATTEMPT_WINDOW_MINUTES * 60 * 1000;
+
+  for (const [key, attempt] of LOGIN_ATTEMPTS.entries()) {
+    const lockExpired = attempt.lockUntil && attempt.lockUntil <= now;
+    const windowExpired = !attempt.lockUntil && attempt.firstAttempt + windowMs <= now;
+
+    if (lockExpired || windowExpired) {
+      LOGIN_ATTEMPTS.delete(key);
+    }
+  }
+};
 
 const toLoginAttemptKey = (username = '') => username.trim().toLowerCase();
 
@@ -175,6 +200,8 @@ exports.loginUser = async (req, res) => {
   if (!sanitizedUsername || !password) {
     return res.status(400).json({ message: 'Usuario y contraseña son obligatorios' });
   }
+
+  cleanupLoginAttempts();
 
   const key = toLoginAttemptKey(sanitizedUsername);
   const attempt = LOGIN_ATTEMPTS.get(key);
