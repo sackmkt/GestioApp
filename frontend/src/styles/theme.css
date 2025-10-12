@@ -9,6 +9,7 @@
   --gestio-surface-alt: rgba(255, 255, 255, 0.85);
   --gestio-border: rgba(15, 23, 42, 0.08);
   --gestio-gradient: linear-gradient(135deg, #e0f2fe, #ede9fe 45%, #fce7f3);
+  --gestio-header-height: 4.5rem;
 }
 
 html, body {
@@ -25,42 +26,121 @@ body.modal-open {
   overflow: hidden;
 }
 
-.navbar.gestio-navbar {
+.gestio-header {
   background: var(--gestio-surface-alt);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--gestio-border);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  z-index: 1040;
 }
 
-.gestio-navbar .nav-link {
+.gestio-header .navbar-brand {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gestio-dark);
+  gap: 0.75rem;
+}
+
+.gestio-logo {
+  height: 40px;
+}
+
+.gestio-brand-name {
+  font-size: 1.1rem;
+  letter-spacing: 0.12em;
+}
+
+.gestio-header .btn-icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border-width: 1.5px;
+  padding: 0;
+}
+
+.gestio-header .btn-icon .navbar-toggler-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.gestio-header .nav-link {
   color: var(--gestio-muted);
   font-weight: 500;
   transition: color 0.2s ease, transform 0.2s ease;
 }
 
-.gestio-navbar .nav-link.active,
-.gestio-navbar .nav-link:hover,
-.gestio-navbar .nav-link:focus {
+.gestio-header .nav-link.active,
+.gestio-header .nav-link:hover,
+.gestio-header .nav-link:focus,
+.gestio-sidebar .nav-link.active,
+.gestio-sidebar .nav-link:hover,
+.gestio-sidebar .nav-link:focus {
   color: var(--gestio-primary);
   transform: translateY(-1px);
 }
 
-.gestio-navbar .navbar-brand {
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--gestio-dark);
-}
-
-.gestio-navbar .navbar-toggler {
-  border-color: transparent;
-}
-
-.gestio-navbar .navbar-toggler:focus {
+.gestio-header .btn-icon:focus {
   box-shadow: none;
 }
 
-.gestio-navbar .navbar-toggler-icon {
+.gestio-header .navbar-toggler-icon,
+.gestio-sidebar .navbar-toggler-icon {
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(15,23,42,0.8)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+.gestio-sidebar {
+  position: fixed;
+  top: var(--gestio-header-height);
+  left: 0;
+  right: 0;
+  background: var(--gestio-surface);
+  border-bottom: 1px solid var(--gestio-border);
+  box-shadow: 0 25px 40px rgba(15, 23, 42, 0.16);
+  padding: 1rem 1.5rem;
+  transform: translateY(calc(-100% - 1.5rem));
+  transition: transform 0.3s ease;
+  z-index: 1030;
+  max-height: calc(100vh - var(--gestio-header-height));
+  overflow-y: auto;
+}
+
+.gestio-sidebar .nav-link {
+  padding: 0.85rem 0;
+  font-weight: 600;
+  color: var(--gestio-muted);
+}
+
+.gestio-sidebar .nav-link + .nav-link {
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.gestio-sidebar.open {
+  transform: translateY(0);
+}
+
+.gestio-sidebar-backdrop {
+  position: fixed;
+  top: var(--gestio-header-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 1020;
+}
+
+.gestio-sidebar-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.gestio-app-body {
+  transition: margin-left 0.3s ease;
 }
 
 .gestio-main {
@@ -160,6 +240,37 @@ footer.gestio-footer a {
 
   .card .card-body {
     padding: 1.25rem;
+  }
+}
+
+@media (min-width: 992px) {
+  .gestio-sidebar {
+    top: 0;
+    bottom: 0;
+    right: auto;
+    width: 280px;
+    padding: calc(var(--gestio-header-height) + 1rem) 2rem 2rem;
+    border-right: 1px solid var(--gestio-border);
+    border-bottom: none;
+    transform: translateX(-100%);
+    max-height: none;
+  }
+
+  .gestio-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .gestio-sidebar .nav-link {
+    padding: 0.9rem 0;
+  }
+
+  .gestio-sidebar-backdrop {
+    top: 0;
+    opacity: 0;
+  }
+
+  .gestio-app.sidebar-open .gestio-app-body {
+    margin-left: 280px;
   }
 }
 

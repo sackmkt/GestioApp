@@ -33,7 +33,7 @@ function App() {
     const storedUser = localStorage.getItem('user');
     return storedUser ? JSON.parse(storedUser) : null;
   });
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const inactivityTimerRef = useRef(null);
 
   useEffect(() => {
@@ -114,53 +114,47 @@ function App() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setIsMenuOpen(false);
+      setIsSidebarOpen(false);
     }
   }, [isAuthenticated]);
 
   const navLinkClassName = ({ isActive }) => `nav-link ${isActive ? 'active' : ''}`;
 
   const NavContent = () => {
-    const closeMenu = () => setIsMenuOpen(false);
+    const closeMenu = () => setIsSidebarOpen(false);
 
     return (
-      <nav className="navbar navbar-expand-lg gestio-navbar sticky-top py-3">
-        <div className="container">
-          <NavLink className="navbar-brand d-flex align-items-center" to={isAuthenticated ? '/dashboard' : '/'} onClick={closeMenu}>
-            <img src={GestioLogo} alt="Gestio Logo" style={{ height: '40px', marginRight: '12px' }} />
-            <span>GESTIO</span>
-          </NavLink>
-          <button
-            className="navbar-toggler"
-            type="button"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            aria-controls="navbarNav"
-            aria-expanded={isMenuOpen}
-            aria-label="Toggle navigation"
-          >
-            <span className="navbar-toggler-icon"></span>
-          </button>
-          <div className={`collapse navbar-collapse ${isMenuOpen ? 'show' : ''}`} id="navbarNav">
-            <ul className="navbar-nav me-auto align-items-lg-center">
+      <>
+        <header className="gestio-header sticky-top py-3">
+          <div className="container-fluid d-flex align-items-center justify-content-between gap-3">
+            <div className="d-flex align-items-center gap-3">
               {isAuthenticated && (
-                NAVIGATION_ITEMS.map((item) => (
-                  <li className="nav-item" key={item.to}>
-                    <NavLink className={navLinkClassName} to={item.to} onClick={closeMenu}>
-                      {item.label}
-                    </NavLink>
-                  </li>
-                ))
+                <button
+                  type="button"
+                  className="btn btn-icon btn-outline-primary gestio-menu-toggle"
+                  aria-label="Abrir menú"
+                  onClick={() => setIsSidebarOpen((prev) => !prev)}
+                >
+                  <span className="navbar-toggler-icon" />
+                </button>
               )}
-            </ul>
-            <ul className="navbar-nav ms-auto align-items-lg-center gap-lg-3">
+              <NavLink className="navbar-brand d-flex align-items-center" to={isAuthenticated ? '/dashboard' : '/'} onClick={closeMenu}>
+                <img src={GestioLogo} alt="Gestio Logo" className="gestio-logo" />
+                <span className="gestio-brand-name">GESTIO</span>
+              </NavLink>
+            </div>
+            <ul className="navbar-nav flex-row align-items-center gap-3">
               {isAuthenticated ? (
                 <>
+                  <li className="nav-item d-none d-sm-block">
+                    <span className="text-muted small text-uppercase fw-semibold">{userDisplayName}</span>
+                  </li>
                   <li className="nav-item">
                     <NavLink className={navLinkClassName} to="/profile" onClick={closeMenu}>
-                      Perfil
+                      Ver perfil
                     </NavLink>
                   </li>
-                  <li className="nav-item mt-3 mt-lg-0">
+                  <li className="nav-item">
                     <button onClick={() => { closeMenu(); handleLogout(); }} className="btn btn-primary px-4">
                       Cerrar sesión
                     </button>
@@ -182,36 +176,52 @@ function App() {
               )}
             </ul>
           </div>
-        </div>
-      </nav>
+        </header>
+
+        {isAuthenticated && (
+          <>
+            <div className={`gestio-sidebar-backdrop ${isSidebarOpen ? 'show' : ''}`} onClick={closeMenu} />
+            <aside className={`gestio-sidebar ${isSidebarOpen ? 'open' : ''}`}>
+              <nav className="nav flex-column">
+                {NAVIGATION_ITEMS.map((item) => (
+                  <NavLink key={item.to} className={navLinkClassName} to={item.to} onClick={closeMenu}>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+            </aside>
+          </>
+        )}
+      </>
     );
   };
 
   return (
-    <div className="d-flex flex-column min-vh-100">
+    <div className={`gestio-app d-flex flex-column min-vh-100 ${isSidebarOpen ? 'sidebar-open' : ''}`}>
       <NavContent />
-      <main className="flex-grow-1 gestio-main py-5">
-        <div className="container">
-          {isAuthenticated && (
-            <header className="mb-4 text-center text-lg-start">
-              <p className="text-uppercase text-muted fw-semibold mb-3 fs-5 d-flex flex-column flex-sm-row align-items-center gap-2 justify-content-center justify-content-lg-start">
-                <span>Hola, {userDisplayName}</span>
-                {userProfessionLabel ? (
-                  <span className="badge rounded-pill bg-light text-primary border border-primary-subtle px-3 py-2 fw-semibold">
-                    {userProfessionLabel}
-                  </span>
-                ) : null}
-              </p>
-              <h1 className="display-5 fw-bold mb-3" style={{ color: '#0f172a' }}>
-                Gestión clínica sin fricciones
-              </h1>
-              <p className="text-muted mb-0 col-lg-6 p-0">
-                Visualiza tus pacientes, agenda y facturación desde un mismo panel.
-              </p>
-            </header>
-          )}
-          <div className="gestio-content">
-            <Routes>
+      <div className="gestio-app-body flex-grow-1 d-flex">
+        <main className="flex-grow-1 gestio-main py-5">
+          <div className="container">
+            {isAuthenticated && (
+              <header className="mb-4 text-center text-lg-start">
+                <p className="text-uppercase text-muted fw-semibold mb-3 fs-5 d-flex flex-column flex-sm-row align-items-center gap-2 justify-content-center justify-content-lg-start">
+                  <span>Hola, {userDisplayName}</span>
+                  {userProfessionLabel ? (
+                    <span className="badge rounded-pill bg-light text-primary border border-primary-subtle px-3 py-2 fw-semibold">
+                      {userProfessionLabel}
+                    </span>
+                  ) : null}
+                </p>
+                <h1 className="display-5 fw-bold mb-3" style={{ color: '#0f172a' }}>
+                  Gestión clínica sin fricciones
+                </h1>
+                <p className="text-muted mb-0 col-lg-6 p-0">
+                  Visualiza tus pacientes, agenda y facturación desde un mismo panel.
+                </p>
+              </header>
+            )}
+            <div className="gestio-content">
+              <Routes>
               {!isAuthenticated && (
                 <>
                   <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />
@@ -253,10 +263,11 @@ function App() {
                   <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
                 </>
               )}
-            </Routes>
+              </Routes>
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
       <footer className="gestio-footer py-4 mt-auto">
         <div className="container d-flex flex-column flex-md-row align-items-center justify-content-between gap-2">
           <span>© {new Date().getFullYear()} Gestio. Todos los derechos reservados.</span>
