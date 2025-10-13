@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, useDeferredValue } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import PacientesService from '../services/PacientesService';
 import ObrasSocialesService from '../services/ObrasSocialesService';
@@ -22,9 +22,6 @@ const ATENCION_LABELS = {
 };
 
 const ITEMS_PER_PAGE = 16;
-const MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024;
-const ALLOWED_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/pjpeg'];
-const ALLOWED_DOCUMENT_EXTENSIONS = ['pdf', 'jpg', 'jpeg'];
 
 const DEFAULT_PAGINATION = {
   page: 1,
@@ -80,19 +77,6 @@ const toBase64 = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
-const isAllowedDocumentFile = (file) => {
-  if (!file) {
-    return false;
-  }
-  const mime = (file.type || '').toLowerCase();
-  if (ALLOWED_DOCUMENT_MIME_TYPES.includes(mime)) {
-    return true;
-  }
-
-  const extension = file.name?.split('.')?.pop()?.toLowerCase() || '';
-  return ALLOWED_DOCUMENT_EXTENSIONS.includes(extension);
-};
-
 const formatFileSize = (bytes) => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return '—';
@@ -145,8 +129,7 @@ function PacientesPage() {
   const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
   const [summary, setSummary] = useState(DEFAULT_SUMMARY);
 
-  const deferredSearchTerm = useDeferredValue(searchTerm);
-  const trimmedSearch = deferredSearchTerm.trim();
+  const trimmedSearch = searchTerm.trim();
   const hasSearch = Boolean(trimmedSearch);
 
   const fetchPacientes = useCallback(async (pageToLoad = 1) => {
@@ -471,35 +454,6 @@ function PacientesPage() {
 
   const handleDocumentFileChange = (event) => {
     const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
-    if (!file) {
-      setDocumentError(null);
-      setDocumentForm((prev) => ({ ...prev, archivo: null }));
-      return;
-    }
-
-    if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
-      const message = 'El archivo no puede superar los 20 MB.';
-      setDocumentError(message);
-      showError(message);
-      setDocumentForm((prev) => ({ ...prev, archivo: null }));
-      if (documentFileInputRef.current) {
-        documentFileInputRef.current.value = '';
-      }
-      return;
-    }
-
-    if (!isAllowedDocumentFile(file)) {
-      const message = 'Solo se permiten archivos PDF o JPG de hasta 20 MB.';
-      setDocumentError(message);
-      showError(message);
-      setDocumentForm((prev) => ({ ...prev, archivo: null }));
-      if (documentFileInputRef.current) {
-        documentFileInputRef.current.value = '';
-      }
-      return;
-    }
-
-    setDocumentError(null);
     setDocumentForm((prev) => ({ ...prev, archivo: file }));
   };
 
@@ -910,7 +864,7 @@ function PacientesPage() {
                   className="form-control"
                   onChange={handleDocumentFileChange}
                   ref={documentFileInputRef}
-                  accept=".pdf,.jpg,.jpeg,image/jpeg"
+                  accept=".pdf,image/*,.doc,.docx,.xls,.xlsx"
                   required
                 />
               </div>

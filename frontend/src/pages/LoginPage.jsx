@@ -11,12 +11,7 @@ function LoginPage({ onAuthChange }) {
   });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-
-  const togglePasswordVisibility = () => {
-    setShowPassword((prev) => !prev);
-  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -88,26 +83,16 @@ function LoginPage({ onAuthChange }) {
             </div>
             <div className="auth-form-group">
               <label htmlFor="loginPassword">Contraseña</label>
-              <div className="auth-password-field">
-                <input
-                  id="loginPassword"
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="auth-input auth-input--password"
-                  autoComplete="current-password"
-                  required
-                />
-                <button
-                  type="button"
-                  className="auth-toggle-visibility"
-                  onClick={togglePasswordVisibility}
-                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {showPassword ? 'Ocultar' : 'Mostrar'}
-                </button>
-              </div>
+              <input
+                id="loginPassword"
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="auth-input"
+                autoComplete="current-password"
+                required
+              />
             </div>
             <div className="auth-links auth-links--align-end">
               <NavLink to="/forgot-password" className="auth-link">
