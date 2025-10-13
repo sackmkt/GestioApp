@@ -274,7 +274,7 @@ function App() {
       <nav className="navbar navbar-expand-lg gestio-navbar sticky-top py-3">
         <div className="container">
           <NavLink className="navbar-brand d-flex align-items-center" to={isAuthenticated ? '/dashboard' : '/'} onClick={closeMenu}>
-            <img src={GestioLogo} alt="Gestio Logo" style={{ height: '40px', marginRight: '12px' }} />
+            <img src={GestioLogo} alt="Gestio Logo" style={{ height: '56px', marginRight: '12px' }} />
             <span>GESTIO</span>
           </NavLink>
           <button
