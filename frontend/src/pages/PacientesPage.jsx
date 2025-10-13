@@ -321,6 +321,16 @@ function PacientesPage() {
     setSearchTerm(event.target.value);
   };
 
+  const handleClearSearch = () => {
+    setSearchTerm('');
+  };
+
+  const scrollToForm = () => {
+    window.requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const resetForm = () => {
     setFormData(EMPTY_FORM);
     setEditingId(null);
@@ -554,44 +564,94 @@ function PacientesPage() {
     <div className="container py-4">
       <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
         <div>
-          <h2 className="fw-bold mb-1">Pacientes</h2>
-          <p className="text-muted mb-0">Centraliza el seguimiento de tus pacientes y sus datos de contacto.</p>
+          <h2 className="fw-bold mb-1">Gestión de pacientes</h2>
+          <p className="text-muted mb-0">Centraliza el seguimiento de tus pacientes y accedé a su información clínica y administrativa en segundos.</p>
         </div>
-        <div className="mt-2 mt-lg-0">
-          <div className="d-flex flex-wrap gap-3 justify-content-start justify-content-lg-end">
-            <div className="text-center flex-fill flex-lg-grow-0">
-              <span className="text-muted small d-block">Total</span>
-              <strong className="fs-5">{summary.total}</strong>
+        <div className="d-flex flex-wrap gap-2 justify-content-start justify-content-lg-end">
+          {hasSearch && (
+            <button type="button" className="btn btn-outline-secondary" onClick={handleClearSearch}>
+              Limpiar búsqueda
+            </button>
+          )}
+          <button type="button" className="btn btn-primary" onClick={scrollToForm}>
+            {editingId ? 'Volver al formulario' : 'Nuevo paciente'}
+          </button>
+        </div>
+      </div>
+
+      <div className="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3 mb-4">
+        <div className="col">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <span className="text-muted text-uppercase small">Pacientes activos</span>
+              <h4 className="fw-bold mb-1">{summary.total}</h4>
+              <p className="text-muted small mb-0">Registros actuales en tu base</p>
             </div>
-            <div className="text-center flex-fill flex-lg-grow-0">
-              <span className="text-muted small d-block">Particulares</span>
-              <strong className="fs-5 text-success">{summary.particulares}</strong>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <span className="text-muted text-uppercase small">Atención particular</span>
+              <h4 className="fw-bold mb-1 text-success">{summary.particulares}</h4>
+              <p className="text-muted small mb-0">Pacientes que abonan sin derivación</p>
             </div>
-            <div className="text-center flex-fill flex-lg-grow-0">
-              <span className="text-muted small d-block">Por centros</span>
-              <strong className="fs-5 text-primary">{summary.porCentro}</strong>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <span className="text-muted text-uppercase small">Derivados por centros</span>
+              <h4 className="fw-bold mb-1 text-primary">{summary.porCentro}</h4>
+              <p className="text-muted small mb-0">{summary.centrosActivos} centros activos vinculados</p>
             </div>
-            <div className="text-center flex-fill flex-lg-grow-0">
-              <span className="text-muted small d-block">Con contacto</span>
-              <strong className="fs-5">{summary.conContacto}</strong>
+          </div>
+        </div>
+        <div className="col">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <span className="text-muted text-uppercase small">Datos de contacto</span>
+              <h4 className="fw-bold mb-1">{summary.conContacto}</h4>
+              <p className="text-muted small mb-0">Pacientes con email o teléfono cargado</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mb-4">
-        <label htmlFor="pacientesSearch" className="form-label visually-hidden">Buscar pacientes</label>
-        <div className="input-group">
-          <span className="input-group-text" id="pacientesSearchIcon" aria-hidden="true">🔍</span>
-          <input
-            id="pacientesSearch"
-            type="search"
-            className="form-control"
-            placeholder="Buscar por nombre, apellido o DNI"
-            value={searchTerm}
-            onChange={handleSearchChange}
-            aria-describedby="pacientesSearchIcon"
-          />
+      <div className="row g-3 align-items-stretch mb-4">
+        <div className="col-lg-8">
+          <label htmlFor="pacientesSearch" className="form-label visually-hidden">Buscar pacientes</label>
+          <div className="input-group input-group-lg">
+            <span className="input-group-text" id="pacientesSearchIcon" aria-hidden="true">🔍</span>
+            <input
+              id="pacientesSearch"
+              type="search"
+              className="form-control"
+              placeholder="Buscar por nombre, apellido, DNI o contacto"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              aria-describedby="pacientesSearchIcon"
+            />
+            {hasSearch && (
+              <button type="button" className="btn btn-outline-secondary" onClick={handleClearSearch}>
+                Limpiar
+              </button>
+            )}
+          </div>
+          <div className="small text-muted mt-2">
+            {totalPacientes === 0
+              ? 'Aún no hay pacientes cargados.'
+              : `Mostrando ${showingFrom}-${showingTo} de ${totalPacientes} pacientes`}
+          </div>
+        </div>
+        <div className="col-lg-4">
+          <div className="card h-100 border-0 shadow-sm bg-light">
+            <div className="card-body">
+              <h6 className="text-uppercase text-muted mb-2">Consejo rápido</h6>
+              <p className="small text-muted mb-2">Podés filtrar por DNI, email o teléfono para ubicar pacientes al instante.</p>
+              <p className="small text-muted mb-0">Seleccioná un paciente para adjuntar estudios y registrar nuevas observaciones.</p>
+            </div>
+          </div>
         </div>
       </div>
 
