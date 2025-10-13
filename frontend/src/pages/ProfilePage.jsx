@@ -90,6 +90,11 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+  const [passwordVisibility, setPasswordVisibility] = useState({
+    currentPassword: false,
+    newPassword: false,
+    confirmPassword: false,
+  });
 
   useEffect(() => {
     if (!currentUser) {
@@ -144,6 +149,13 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
   const handlePasswordInputChange = (event) => {
     const { name, value } = event.target;
     setPasswordForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const togglePasswordVisibility = (field) => {
+    setPasswordVisibility((prev) => ({
+      ...prev,
+      [field]: !prev[field],
+    }));
   };
 
   const professionDisplay = useMemo(() => {
@@ -674,39 +686,66 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
               <form onSubmit={handlePasswordSubmit} className="row g-3">
                 <div className="col-12">
                   <label className="form-label">Contraseña actual</label>
-                  <input
-                    type="password"
-                    name="currentPassword"
-                    value={passwordForm.currentPassword}
-                    onChange={handlePasswordInputChange}
-                    className="form-control"
-                    autoComplete="current-password"
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      type={passwordVisibility.currentPassword ? 'text' : 'password'}
+                      name="currentPassword"
+                      value={passwordForm.currentPassword}
+                      onChange={handlePasswordInputChange}
+                      className="form-control"
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => togglePasswordVisibility('currentPassword')}
+                    >
+                      {passwordVisibility.currentPassword ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  </div>
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Nueva contraseña</label>
-                  <input
-                    type="password"
-                    name="newPassword"
-                    value={passwordForm.newPassword}
-                    onChange={handlePasswordInputChange}
-                    className="form-control"
-                    autoComplete="new-password"
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      type={passwordVisibility.newPassword ? 'text' : 'password'}
+                      name="newPassword"
+                      value={passwordForm.newPassword}
+                      onChange={handlePasswordInputChange}
+                      className="form-control"
+                      autoComplete="new-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => togglePasswordVisibility('newPassword')}
+                    >
+                      {passwordVisibility.newPassword ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  </div>
                 </div>
                 <div className="col-md-6">
                   <label className="form-label">Confirmar nueva contraseña</label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    value={passwordForm.confirmPassword}
-                    onChange={handlePasswordInputChange}
-                    className="form-control"
-                    autoComplete="new-password"
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      type={passwordVisibility.confirmPassword ? 'text' : 'password'}
+                      name="confirmPassword"
+                      value={passwordForm.confirmPassword}
+                      onChange={handlePasswordInputChange}
+                      className="form-control"
+                      autoComplete="new-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => togglePasswordVisibility('confirmPassword')}
+                    >
+                      {passwordVisibility.confirmPassword ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  </div>
                 </div>
                 <div className="col-12 d-flex justify-content-end">
                   <button type="submit" className="btn btn-primary" disabled={isPasswordSubmitting}>
