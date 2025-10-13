@@ -24,8 +24,18 @@ const logout = () => {
 };
 
 const getToken = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
-  return user?.token;
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) {
+      return null;
+    }
+    const user = JSON.parse(raw);
+    return user?.token || null;
+  } catch (error) {
+    console.warn('No se pudo obtener el token almacenado.', error);
+    localStorage.removeItem('user');
+    return null;
+  }
 };
 
 const authService = {

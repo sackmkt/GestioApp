@@ -12,11 +12,31 @@ import CompleteProfilePage from './pages/CompleteProfilePage';
 import ProfilePage from './pages/ProfilePage';
 import GestioLogo from './assets/GestioLogo.png';
 import authService from './services/authService';
+import userService from './services/UserService';
 import { useFeedback } from './context/FeedbackContext.jsx';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'v1.0.0';
 const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
 const SECTION_USAGE_STORAGE_KEY = 'gestio:section-usage';
+
+const getStoredUser = () => {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+  } catch (error) {
+    console.warn('No se pudo recuperar la sesión almacenada.', error);
+  }
+
+  localStorage.removeItem('user');
+  return null;
+};
 
 const resolveSectionFromPath = (pathname) => {
   if (typeof pathname !== 'string') {
@@ -57,26 +77,25 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const { showInfo, showSuccess } = useFeedback();
-  const [currentUser, setCurrentUser] = useState(() => {
-    const storedUser = localStorage.getItem('user');
-    return storedUser ? JSON.parse(storedUser) : null;
-  });
+  const [currentUser, setCurrentUser] = useState(() => getStoredUser());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const inactivityTimerRef = useRef(null);
-
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
-    }
-  }, []);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
 
   const handleAuthChange = useCallback((userData) => {
     if (userData) {
-      localStorage.setItem('user', JSON.stringify(userData));
+      try {
+        localStorage.setItem('user', JSON.stringify(userData));
+      } catch (error) {
+        console.warn('No se pudo persistir la sesión en el almacenamiento local.', error);
+      }
       setCurrentUser(userData);
     } else {
-      localStorage.removeItem('user');
+      try {
+        localStorage.removeItem('user');
+      } catch (error) {
+        console.warn('No se pudo limpiar la sesión almacenada.', error);
+      }
       setCurrentUser(null);
     }
   }, []);
@@ -88,6 +107,8 @@ function App() {
 
       if (reason === 'timeout') {
         showInfo('Por seguridad, tu sesión se cerró tras 20 minutos sin actividad. Inicia sesión nuevamente para continuar.');
+      } else if (reason === 'sessionExpired') {
+        showInfo('Tu sesión expiró. Por favor, inicia sesión nuevamente para continuar.');
       } else {
         showSuccess('Sesión cerrada correctamente. ¡Hasta pronto!');
       }
@@ -109,6 +130,81 @@ function App() {
     return currentUser.username;
   }, [currentUser]);
   const userProfessionLabel = (currentUser?.profession && currentUser.profession.trim()) || 'Profesional de la salud';
+
+  useEffect(() => {
+    const syncUserFromStorage = (event) => {
+      if (event.key !== 'user') {
+        return;
+      }
+
+      if (!event.newValue) {
+        setCurrentUser(null);
+        navigate('/login');
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(event.newValue);
+        setCurrentUser(parsed);
+      } catch (error) {
+        console.warn('No se pudo sincronizar la sesión con otra pestaña.', error);
+        setCurrentUser(null);
+        navigate('/login');
+      }
+    };
+
+    window.addEventListener('storage', syncUserFromStorage);
+    return () => window.removeEventListener('storage', syncUserFromStorage);
+  }, [navigate]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const restoreSession = async () => {
+      const storedUser = getStoredUser();
+
+      if (!storedUser || !storedUser.token) {
+        if (isMounted) {
+          setIsRestoringSession(false);
+        }
+        return;
+      }
+
+      if (isMounted) {
+        setCurrentUser(storedUser);
+      }
+
+      try {
+        const profile = await userService.getProfile();
+        if (!isMounted) {
+          return;
+        }
+        handleAuthChange({ ...profile, token: storedUser.token });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        if (error?.response?.status === 401) {
+          handleLogout({ reason: 'sessionExpired' });
+        } else {
+          console.warn('No se pudo verificar la sesión con el servidor.', error);
+          showInfo('Trabajamos sin conexión temporalmente. Tus datos locales siguen disponibles.');
+          handleAuthChange(storedUser);
+        }
+      } finally {
+        if (isMounted) {
+          setIsRestoringSession(false);
+        }
+      }
+    };
+
+    restoreSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [handleAuthChange, handleLogout, showInfo]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -235,6 +331,17 @@ function App() {
       </nav>
     );
   };
+
+  if (isRestoringSession) {
+    return (
+      <div className="d-flex align-items-center justify-content-center min-vh-100">
+        <div className="text-center">
+          <div className="spinner-border text-primary mb-3" role="status" aria-hidden="true"></div>
+          <p className="text-muted mb-0">Preparando tu sesión...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="d-flex flex-column min-vh-100">

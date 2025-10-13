@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { FaPhoneAlt, FaWhatsapp, FaSms } from 'react-icons/fa';
 import '../styles/daily-agenda-timeline.css';
+import '../styles/contact-actions.css';
 
 const ESTADO_META = {
   programado: { label: 'Programado', color: '#0d6efd' },
@@ -252,15 +253,15 @@ const DailyAgendaTimeline = ({
                     <span className="daily-agenda__contact text-muted">{event.contact.phoneLabel}</span>
                   )}
                   {event.contact && (
-                    <div className="daily-agenda__actions">
+                    <div className="daily-agenda__actions contact-actions">
                       {event.contact.tel && (
-                        <a className="daily-agenda__action daily-agenda__action--call" href={event.contact.tel} aria-label={`Llamar a ${event.paciente}`}>
+                        <a className="daily-agenda__action contact-action contact-action--call" href={event.contact.tel} aria-label={`Llamar a ${event.paciente}`}>
                           <FaPhoneAlt />
                         </a>
                       )}
                       {event.contact.whatsapp && (
                         <a
-                          className="daily-agenda__action daily-agenda__action--whatsapp"
+                          className="daily-agenda__action contact-action contact-action--whatsapp"
                           href={event.contact.whatsapp}
                           target="_blank"
                           rel="noreferrer"
@@ -270,7 +271,7 @@ const DailyAgendaTimeline = ({
                         </a>
                       )}
                       {event.contact.sms && (
-                        <a className="daily-agenda__action daily-agenda__action--sms" href={event.contact.sms} aria-label={`Enviar SMS a ${event.paciente}`}>
+                        <a className="daily-agenda__action contact-action contact-action--sms" href={event.contact.sms} aria-label={`Enviar SMS a ${event.paciente}`}>
                           <FaSms />
                         </a>
                       )}

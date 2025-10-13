@@ -10,6 +10,7 @@ const DEFAULT_PAGE_LIMIT = 16;
 const MAX_PAGE_LIMIT = 100;
 const AGENDA_MAX_LIMIT = 200;
 const UPCOMING_LIMIT = 10;
+const PATIENT_PUBLIC_FIELDS = 'nombre apellido dni email telefono telefonoMovil';
 
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -81,7 +82,7 @@ router.post('/', protect, async (req, res) => {
     });
 
     await nuevoTurno.save();
-    const turnoConPaciente = await nuevoTurno.populate('paciente', 'nombre apellido dni');
+    const turnoConPaciente = await nuevoTurno.populate('paciente', PATIENT_PUBLIC_FIELDS);
     res.status(201).json(turnoConPaciente);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -186,7 +187,7 @@ router.get('/', protect, async (req, res) => {
 
     let turnosQuery = Turno.find(filtro)
       .sort(sort)
-      .populate('paciente', 'nombre apellido dni');
+      .populate('paciente', PATIENT_PUBLIC_FIELDS);
 
     if (normalizedLimit > 0) {
       turnosQuery = turnosQuery.skip(skip).limit(normalizedLimit);
@@ -199,7 +200,7 @@ router.get('/', protect, async (req, res) => {
     const agendaQuery = Turno.find(filtro)
       .sort(sort)
       .limit(agendaLimit)
-      .populate('paciente', 'nombre apellido dni');
+      .populate('paciente', PATIENT_PUBLIC_FIELDS);
 
     const upcomingFilter = { ...filtro };
     if (filtro.fecha) {
@@ -215,7 +216,7 @@ router.get('/', protect, async (req, res) => {
     const upcomingQuery = Turno.find(upcomingFilter)
       .sort(sort)
       .limit(UPCOMING_LIMIT)
-      .populate('paciente', 'nombre apellido dni');
+      .populate('paciente', PATIENT_PUBLIC_FIELDS);
 
     const [turnos, agendaTurnos, upcomingTurnos] = await Promise.all([
       turnosQuery.exec(),
@@ -249,7 +250,7 @@ router.get('/:id', protect, async (req, res) => {
     const turno = await Turno.findOne({
       _id: req.params.id,
       user: req.user._id,
-    }).populate('paciente', 'nombre apellido dni');
+    }).populate('paciente', PATIENT_PUBLIC_FIELDS);
 
     if (!turno) {
       return res.status(404).json({ error: 'Turno no encontrado o no autorizado' });
@@ -332,7 +333,7 @@ router.put('/:id', protect, async (req, res) => {
     );
 
     await turno.save();
-    const turnoActualizado = await turno.populate('paciente', 'nombre apellido dni');
+    const turnoActualizado = await turno.populate('paciente', PATIENT_PUBLIC_FIELDS);
     res.json(turnoActualizado);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -347,7 +348,7 @@ router.patch('/:id/recordatorio', protect, async (req, res) => {
       { _id: req.params.id, user: req.user._id },
       { recordatorioEnviado: !!recordatorioEnviado },
       { new: true }
-    ).populate('paciente', 'nombre apellido dni');
+    ).populate('paciente', PATIENT_PUBLIC_FIELDS);
 
     if (!turnoActualizado) {
       return res.status(404).json({ error: 'Turno no encontrado o no autorizado' });

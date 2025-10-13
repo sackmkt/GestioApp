@@ -1,0 +1,72 @@
+.contact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.contact-actions--compact {
+  gap: 0.4rem;
+}
+
+.contact-actions--end {
+  justify-content: flex-end;
+}
+
+.contact-action {
+  --contact-action-color: var(--bs-primary, #0d6efd);
+  --contact-action-bg: rgba(13, 110, 253, 0.08);
+  --contact-action-border: rgba(13, 110, 253, 0.24);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--contact-action-border);
+  background-color: var(--contact-action-bg);
+  color: var(--contact-action-color);
+  font-size: 0.95rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  text-decoration: none;
+}
+
+.contact-actions--compact .contact-action {
+  width: 2.1rem;
+  height: 2.1rem;
+  font-size: 0.85rem;
+}
+
+.contact-action:hover,
+.contact-action:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+  text-decoration: none;
+}
+
+.contact-action:focus-visible {
+  outline: 3px solid rgba(13, 110, 253, 0.35);
+  outline-offset: 2px;
+}
+
+.contact-action--call {
+  --contact-action-color: var(--bs-primary, #0d6efd);
+  --contact-action-bg: rgba(13, 110, 253, 0.1);
+  --contact-action-border: rgba(13, 110, 253, 0.35);
+}
+
+.contact-action--whatsapp {
+  --contact-action-color: #16a34a;
+  --contact-action-bg: rgba(22, 163, 74, 0.1);
+  --contact-action-border: rgba(22, 163, 74, 0.32);
+}
+
+.contact-action--sms {
+  --contact-action-color: #475569;
+  --contact-action-bg: rgba(148, 163, 184, 0.12);
+  --contact-action-border: rgba(148, 163, 184, 0.3);
+}
+
+.contact-action svg {
+  pointer-events: none;
+}
