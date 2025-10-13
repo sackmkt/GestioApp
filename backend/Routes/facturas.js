@@ -6,9 +6,50 @@ const CentroSalud = require('../models/CentroSalud');
 const ObraSocial = require('../models/ObraSocial');
 const { protect } = require('../middleware/authMiddleware');
 const storageService = require('../services/storageService');
-const { toCsv, formatDateTime } = require('../utils/csvUtils');
+const { generateExcelBuffer, formatDateTime } = require('../utils/exportUtils');
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+const ALLOWED_MIME_TYPES = new Map([
+  ['application/pdf', 'application/pdf'],
+  ['application/x-pdf', 'application/pdf'],
+  ['image/jpeg', 'image/jpeg'],
+  ['image/pjpeg', 'image/jpeg'],
+]);
+const ALLOWED_EXTENSIONS = new Map([
+  ['.pdf', 'application/pdf'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+]);
+
+const resolveExtension = (filename) => {
+  if (typeof filename !== 'string') {
+    return null;
+  }
+  const lastDotIndex = filename.lastIndexOf('.');
+  if (lastDotIndex === -1) {
+    return null;
+  }
+  return filename.slice(lastDotIndex).toLowerCase();
+};
+
+const resolveAllowedContentType = (archivo = {}) => {
+  const typeCandidates = [archivo.tipo, archivo.contentType]
+    .filter((candidate) => typeof candidate === 'string' && candidate.trim())
+    .map((candidate) => candidate.trim().toLowerCase());
+
+  for (const candidate of typeCandidates) {
+    if (ALLOWED_MIME_TYPES.has(candidate)) {
+      return ALLOWED_MIME_TYPES.get(candidate);
+    }
+  }
+
+  const extension = resolveExtension(archivo.nombre);
+  if (extension && ALLOWED_EXTENSIONS.has(extension)) {
+    return ALLOWED_EXTENSIONS.get(extension);
+  }
+
+  return null;
+};
 
 const createValidationError = (message) => {
   const error = new Error(message);
@@ -147,7 +188,7 @@ const formatDocumentListForExport = (documents) => {
         : '';
       return `${document.nombre}${description}`;
     })
-    .join(' | ');
+    .join('\n');
 };
 
 const resolveReferenceName = (reference) => {
@@ -253,9 +294,9 @@ const formatPaymentsForExport = (payments) => {
         fragments.push(`Nota: ${payment.nota}`);
       }
 
-      return fragments.join(' | ');
+      return fragments.join('\n');
     })
-    .join(' || ');
+    .join('\n\n');
 };
 
 const allowedUpdateFields = ['paciente', 'obraSocial', 'puntoVenta', 'numeroFactura', 'montoTotal', 'fechaEmision', 'fechaVencimiento', 'observaciones', 'centroSalud'];
@@ -417,7 +458,65 @@ router.get('/', protect, async (req, res) => {
 
 router.get('/export', protect, async (req, res) => {
   try {
-    const facturas = await Factura.find({ user: req.user._id })
+    const {
+      startDate,
+      endDate,
+      fechaDesde,
+      fechaHasta,
+      usuario,
+      usuarioId,
+      userId,
+    } = req.query;
+
+    const requestedUser = (usuarioId || userId || usuario || '').toString().trim();
+    if (requestedUser && !['me', 'actual', String(req.user._id)].includes(requestedUser)) {
+      return res.status(403).json({ error: 'No tienes permisos para exportar facturas de otros usuarios.' });
+    }
+
+    const filters = { user: req.user._id };
+
+    const startInput = (startDate || fechaDesde || '').toString().trim();
+    const endInput = (endDate || fechaHasta || '').toString().trim();
+
+    const parseDate = (value) => {
+      if (!value) {
+        return null;
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return null;
+      }
+      return date;
+    };
+
+    const start = parseDate(startInput);
+    const end = parseDate(endInput);
+
+    if (startInput && !start) {
+      return res.status(400).json({ error: 'La fecha desde indicada no es válida.' });
+    }
+
+    if (endInput && !end) {
+      return res.status(400).json({ error: 'La fecha hasta indicada no es válida.' });
+    }
+
+    if (start && end && start > end) {
+      return res.status(400).json({ error: 'La fecha desde no puede ser posterior a la fecha hasta.' });
+    }
+
+    if (start || end) {
+      filters.fechaEmision = {};
+      if (start) {
+        filters.fechaEmision.$gte = start;
+      }
+      if (end) {
+        const endOfDay = new Date(end);
+        endOfDay.setHours(23, 59, 59, 999);
+        filters.fechaEmision.$lte = endOfDay;
+      }
+    }
+
+    const facturas = await Factura.find(filters)
       .populate({
         path: 'paciente',
         select: 'nombre apellido dni',
@@ -427,7 +526,7 @@ router.get('/export', protect, async (req, res) => {
       .sort({ fechaEmision: -1, createdAt: -1 })
       .lean();
 
-    const facturasForCsv = (Array.isArray(facturas) ? facturas : []).map((factura) => {
+    const facturasForExport = (Array.isArray(facturas) ? facturas : []).map((factura) => {
       const pagos = Array.isArray(factura.pagos) ? factura.pagos : [];
       const montoCobrado = pagos.reduce((total, pago) => total + (Number(pago.monto) || 0), 0);
       const montoTotal = Number(factura.montoTotal) || 0;
@@ -444,7 +543,6 @@ router.get('/export', protect, async (req, res) => {
     });
 
     const columns = [
-      { header: 'ID', value: (factura) => factura._id },
       { header: 'Paciente', value: (factura) => resolvePacienteNombre(factura.paciente) },
       { header: 'DNI del paciente', value: (factura) => resolvePacienteDni(factura.paciente) },
       { header: 'Obra social', value: (factura) => resolveReferenceName(factura.obraSocial) },
@@ -480,12 +578,12 @@ router.get('/export', protect, async (req, res) => {
       { header: 'Actualizado el', value: (factura) => formatDateTime(factura.updatedAt) },
     ];
 
-    const csvContent = toCsv(facturasForCsv, columns);
-    const filename = `facturas-${new Date().toISOString().slice(0, 10)}.csv`;
+    const workbookBuffer = await generateExcelBuffer(facturasForExport, columns, { sheetName: 'Facturas' });
+    const filename = `facturas-${new Date().toISOString().slice(0, 10)}.xls`;
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Type', 'application/vnd.ms-excel');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.status(200).send(`\ufeff${csvContent}`);
+    res.status(200).send(workbookBuffer);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -699,12 +797,13 @@ router.post('/:id/documentos', protect, async (req, res) => {
     }
 
     if (buffer.length > MAX_FILE_SIZE_BYTES) {
-      return res.status(413).json({ error: 'El archivo supera el tamaño máximo permitido (10 MB).' });
+      return res.status(413).json({ error: 'El archivo supera el tamaño máximo permitido (20 MB).' });
     }
 
-    const contentType = typeof archivo.tipo === 'string' && archivo.tipo.trim() !== ''
-      ? archivo.tipo.trim()
-      : (typeof archivo.contentType === 'string' ? archivo.contentType.trim() : 'application/octet-stream');
+    const contentType = resolveAllowedContentType(archivo);
+    if (!contentType) {
+      return res.status(415).json({ error: 'Solo se permiten archivos PDF o JPG.' });
+    }
 
     const storagePayload = await storageService.uploadDocument({
       buffer,
