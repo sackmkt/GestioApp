@@ -126,7 +126,7 @@ const syncEstadoDesdePagos = (factura) => {
   }
 };
 
-const allowedUpdateFields = ['paciente', 'obraSocial', 'puntoVenta', 'numeroFactura', 'montoTotal', 'fechaEmision', 'fechaVencimiento', 'interes', 'observaciones', 'centroSalud'];
+const allowedUpdateFields = ['paciente', 'obraSocial', 'puntoVenta', 'numeroFactura', 'montoTotal', 'fechaEmision', 'fechaVencimiento', 'observaciones', 'centroSalud'];
 
 const resolveCentroSaludId = async ({ centroSaludId, pacienteId, userId }) => {
   if (centroSaludId === null || centroSaludId === '') {
@@ -220,13 +220,6 @@ router.post('/', protect, async (req, res) => {
       return res.status(400).json({ error: 'El monto total debe ser un número válido y no negativo.' });
     }
 
-    const interesValor = req.body.interes === undefined || req.body.interes === null || req.body.interes === ''
-      ? 0
-      : Number(req.body.interes);
-    if (!Number.isFinite(interesValor) || interesValor < 0) {
-      return res.status(400).json({ error: 'El interés no puede ser negativo.' });
-    }
-
     const facturaData = {
       paciente: pacienteId,
       obraSocial: obraSocialId,
@@ -235,7 +228,6 @@ router.post('/', protect, async (req, res) => {
       montoTotal: montoTotalValor,
       fechaEmision: req.body.fechaEmision,
       fechaVencimiento: req.body.fechaVencimiento || null,
-      interes: interesValor,
       observaciones: typeof req.body.observaciones === 'string' ? req.body.observaciones.trim() : '',
       centroSalud: centroSaludId || null,
       user: req.user._id,
@@ -348,15 +340,6 @@ router.put('/:id', protect, async (req, res) => {
           return res.status(400).json({ error: 'El monto total debe ser un número válido y no negativo.' });
         }
         factura.montoTotal = montoTotalValor;
-        continue;
-      }
-
-      if (field === 'interes') {
-        const interesValor = Number(req.body.interes);
-        if (!Number.isFinite(interesValor) || interesValor < 0) {
-          return res.status(400).json({ error: 'El interés no puede ser negativo.' });
-        }
-        factura.interes = interesValor;
         continue;
       }
 

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import PacientesService from '../services/PacientesService';
 import ObrasSocialesService from '../services/ObrasSocialesService';
 import CentrosSaludService from '../services/CentrosSaludService';
@@ -105,6 +106,7 @@ const formatDateTime = (value) => {
 
 function PacientesPage() {
   const { showError, showSuccess, showInfo } = useFeedback();
+  const location = useLocation();
   const [pacientes, setPacientes] = useState([]);
   const [obrasSociales, setObrasSociales] = useState([]);
   const [centrosSalud, setCentrosSalud] = useState([]);
@@ -121,6 +123,7 @@ function PacientesPage() {
   const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const documentFileInputRef = useRef(null);
+  const formRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
   const [summary, setSummary] = useState(DEFAULT_SUMMARY);
@@ -221,6 +224,26 @@ function PacientesPage() {
     fetchObrasSociales();
     fetchCentrosSalud();
   }, [fetchCentrosSalud, fetchObrasSociales]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const createParam = params.get('nuevo') || params.get('create');
+    if (!createParam) {
+      return;
+    }
+
+    setEditingId(null);
+    setFormData(EMPTY_FORM);
+
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+
+    params.delete('nuevo');
+    params.delete('create');
+    const remaining = params.toString();
+    window.history.replaceState({}, '', `${location.pathname}${remaining ? `?${remaining}` : ''}`);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     let cancelled = false;
@@ -578,7 +601,7 @@ function PacientesPage() {
         </div>
         <div className="card-body">
           {error && <div className="alert alert-danger">{error}</div>}
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} ref={formRef}>
             <fieldset disabled={formLoading} className="border-0 p-0">
               <div className="row g-3">
               <div className="col-md-6 col-lg-3">

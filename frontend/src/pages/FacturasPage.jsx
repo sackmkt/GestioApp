@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import facturasService from '../services/FacturasService';
 import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
@@ -35,7 +36,6 @@ const EMPTY_FORM = {
   fechaEmision: '',
   fechaVencimiento: '',
   estado: 'pendiente',
-  interes: '',
   observaciones: '',
   centroSalud: '',
 };
@@ -162,11 +162,12 @@ const esFacturaVencida = (factura) => {
 
 function FacturasPage() {
   const { showError, showSuccess, showInfo } = useFeedback();
+  const location = useLocation();
   const [facturas, setFacturas] = useState([]);
   const [pacientes, setPacientes] = useState([]);
   const [obrasSociales, setObrasSociales] = useState([]);
   const [centrosSalud, setCentrosSalud] = useState([]);
-  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [formData, setFormData] = useState(() => ({ ...EMPTY_FORM }));
   const [statusFilter, setStatusFilter] = useState('all');
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -183,15 +184,9 @@ function FacturasPage() {
   const [dateFilter, setDateFilter] = useState('last10Days');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [currentPage, setCurrentPage] = useState(1);
+  const formRef = useRef(null);
 
-  useEffect(() => {
-    fetchFacturas();
-    fetchPacientes();
-    fetchObrasSociales();
-    fetchCentrosSalud();
-  }, []);
-
-  const fetchFacturas = async () => {
+  const fetchFacturas = useCallback(async () => {
     try {
       const data = await facturasService.getFacturas();
       setFacturas(data);
@@ -199,9 +194,9 @@ function FacturasPage() {
       console.error('No se pudieron cargar las facturas.', fetchError);
       showError('No se pudieron cargar las facturas. Intenta nuevamente.');
     }
-  };
+  }, [showError]);
 
-  const fetchPacientes = async () => {
+  const fetchPacientes = useCallback(async () => {
     try {
       const response = await pacientesService.getPacientes({
         limit: 0,
@@ -212,9 +207,9 @@ function FacturasPage() {
       console.error('No se pudieron cargar los pacientes.', fetchError);
       showError('No se pudieron cargar los pacientes.');
     }
-  };
+  }, [showError]);
 
-  const fetchObrasSociales = async () => {
+  const fetchObrasSociales = useCallback(async () => {
     try {
       const data = await obrasSocialesService.getObrasSociales();
       setObrasSociales(data);
@@ -222,9 +217,9 @@ function FacturasPage() {
       console.error('No se pudieron cargar las obras sociales.', fetchError);
       showError('No se pudieron cargar las obras sociales.');
     }
-  };
+  }, [showError]);
 
-  const fetchCentrosSalud = async () => {
+  const fetchCentrosSalud = useCallback(async () => {
     try {
       const data = await centrosSaludService.getCentros();
       setCentrosSalud(data);
@@ -232,7 +227,39 @@ function FacturasPage() {
       console.error('No se pudieron cargar los centros de salud.', fetchError);
       showError('No se pudieron cargar los centros de salud.');
     }
-  };
+  }, [showError]);
+
+  useEffect(() => {
+    fetchFacturas();
+    fetchPacientes();
+    fetchObrasSociales();
+    fetchCentrosSalud();
+  }, [fetchCentrosSalud, fetchFacturas, fetchObrasSociales, fetchPacientes]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const createParam = params.get('nueva') || params.get('create');
+    if (!createParam) {
+      return;
+    }
+
+    setEditingId(null);
+    setFormData((prev) => ({
+      ...EMPTY_FORM,
+      fechaEmision: new Date().toISOString().substring(0, 10),
+      centroSalud: prev.centroSalud,
+    }));
+
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+
+    params.delete('nueva');
+    params.delete('create');
+    const remaining = params.toString();
+    window.history.replaceState({}, '', `${location.pathname}${remaining ? `?${remaining}` : ''}`);
+  }, [location.pathname, location.search]);
+
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -257,7 +284,7 @@ function FacturasPage() {
   };
 
   const resetForm = () => {
-    setFormData(EMPTY_FORM);
+    setFormData(() => ({ ...EMPTY_FORM }));
     setEditingId(null);
   };
 
@@ -270,7 +297,6 @@ function FacturasPage() {
       puntoVenta: Number(formData.puntoVenta),
       numeroFactura: Number(formData.numeroFactura),
       montoTotal: Number(formData.montoTotal),
-      interes: formData.interes === '' ? 0 : Number(formData.interes),
     };
 
     payload.fechaVencimiento = payload.fechaVencimiento || null;
@@ -285,11 +311,6 @@ function FacturasPage() {
 
     if (payload.puntoVenta < 0 || payload.numeroFactura < 0) {
       setError('El punto de venta y el número de factura no pueden ser negativos.');
-      return;
-    }
-
-    if (payload.interes < 0 || !Number.isFinite(payload.interes)) {
-      setError('El interés no puede ser negativo.');
       return;
     }
 
@@ -347,7 +368,6 @@ function FacturasPage() {
       fechaEmision: factura.fechaEmision ? new Date(factura.fechaEmision).toISOString().substring(0, 10) : '',
       fechaVencimiento: factura.fechaVencimiento ? new Date(factura.fechaVencimiento).toISOString().substring(0, 10) : '',
       estado,
-      interes: factura.interes ?? '',
       observaciones: factura.observaciones || '',
       centroSalud: factura.centroSalud?._id || '',
     });
@@ -881,7 +901,7 @@ function FacturasPage() {
               {error}
             </div>
           )}
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} ref={formRef}>
             <div className="row g-3">
               <div className="col-md-6 col-lg-4">
                 <label htmlFor="paciente" className="form-label">Paciente</label>
@@ -1010,20 +1030,6 @@ function FacturasPage() {
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="interes" className="form-label">Interés (%)</label>
-                <input
-                  type="number"
-                  id="interes"
-                  name="interes"
-                  className="form-control"
-                  placeholder="Ej. 5"
-                  value={formData.interes}
-                  onChange={handleChange}
-                  min="0"
-                  step="0.1"
-                />
               </div>
               <div className="col-12">
                 <label htmlFor="observaciones" className="form-label">Observaciones</label>
@@ -1238,7 +1244,6 @@ function FacturasPage() {
                                 <div className="col-md-4">
                                   <h6 className="text-uppercase text-muted">Detalle</h6>
                                   <p className="mb-1"><strong>Monto Total:</strong> {formatCurrency(factura.montoTotal)}</p>
-                                  <p className="mb-1"><strong>Interés:</strong> {factura.interes ? `${factura.interes}%` : '0%'}</p>
                                   <p className="mb-1"><strong>Monto Cobrado:</strong> {formatCurrency(montoCobrado)}</p>
                                   <p className="mb-1"><strong>Obra Social:</strong> {factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</p>
                                   <p className="mb-1"><strong>Centro:</strong> {factura.centroSalud ? `${factura.centroSalud.nombre} · Ret. ${factura.centroSalud.porcentajeRetencion}%` : 'Sin centro asociado'}</p>

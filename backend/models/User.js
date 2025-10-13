@@ -62,6 +62,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  dashboardPreferences: {
+    type: [String],
+    default: [],
+  },
 }, {
   timestamps: true,
 });

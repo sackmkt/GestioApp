@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import centrosSaludService from '../services/CentrosSaludService';
 import facturasService from '../services/FacturasService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
@@ -22,12 +22,7 @@ function CentrosSaludPage() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    fetchCentros();
-    fetchFacturas();
-  }, []);
-
-  const fetchCentros = async () => {
+  const fetchCentros = useCallback(async () => {
     try {
       const data = await centrosSaludService.getCentros();
       setCentros(data);
@@ -35,9 +30,9 @@ function CentrosSaludPage() {
       console.error('No se pudieron cargar los centros de salud.', err);
       showError('No se pudieron cargar los centros de salud.');
     }
-  };
+  }, [showError]);
 
-  const fetchFacturas = async () => {
+  const fetchFacturas = useCallback(async () => {
     try {
       const data = await facturasService.getFacturas();
       setFacturas(data);
@@ -45,7 +40,12 @@ function CentrosSaludPage() {
       console.error('No se pudo obtener la facturación vinculada a los centros.', err);
       showError('No se pudo obtener la facturación vinculada a los centros.');
     }
-  };
+  }, [showError]);
+
+  useEffect(() => {
+    fetchCentros();
+    fetchFacturas();
+  }, [fetchCentros, fetchFacturas]);
 
   const resumenCentros = useMemo(() => {
     const acumulado = centros.reduce((acc, centro) => {

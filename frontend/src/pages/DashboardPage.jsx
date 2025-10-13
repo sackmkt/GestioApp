@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import facturasService from '../services/FacturasService';
@@ -7,7 +8,8 @@ import obrasSocialesService from '../services/ObrasSocialesService';
 import centrosSaludService from '../services/CentrosSaludService';
 import turnosService from '../services/TurnosService';
 import DailyAgendaTimeline from '../components/DailyAgendaTimeline.jsx';
-import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers, FaStar, FaExclamationTriangle } from 'react-icons/fa';
+import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers, FaStar, FaExclamationTriangle, FaCalendarPlus, FaUserPlus, FaPhoneAlt, FaWhatsapp, FaSms } from 'react-icons/fa';
+import { DEFAULT_DASHBOARD_PREFERENCES, DASHBOARD_WIDGET_IDS, resolveDashboardPreferences } from '../constants/dashboardPreferences.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
@@ -28,6 +30,98 @@ const ESTADO_COLOR_MAP = {
 };
 
 const WEEKLY_AVAILABLE_MINUTES = 5 * 8 * 60; // 5 días hábiles de 8 horas
+const SECTION_USAGE_STORAGE_KEY = 'gestio:section-usage';
+
+const QUICK_ACTIONS_MAP = {
+  turnos: {
+    id: 'quick-action-turnos',
+    title: 'Crear turno de hoy',
+    description: 'Organiza tu agenda en segundos y confirma pacientes desde el panel.',
+    icon: FaCalendarPlus,
+    to: '/turnos?crear=hoy',
+    buttonLabel: 'Ir a la agenda',
+  },
+  pacientes: {
+    id: 'quick-action-pacientes',
+    title: 'Agregar paciente',
+    description: 'Carga nuevos pacientes y completa sus datos de contacto rápidamente.',
+    icon: FaUserPlus,
+    to: '/pacientes?nuevo=1',
+    buttonLabel: 'Registrar paciente',
+  },
+  facturas: {
+    id: 'quick-action-facturas',
+    title: 'Registrar factura',
+    description: 'Genera comprobantes y controla tus cobranzas desde un solo lugar.',
+    icon: FaFileInvoiceDollar,
+    to: '/facturas?nueva=1',
+    buttonLabel: 'Cargar factura',
+  },
+  obrasSociales: {
+    id: 'quick-action-obras',
+    title: 'Gestionar obra social',
+    description: 'Actualiza convenios y requisitos de cada obra social sin salir del panel.',
+    icon: FaUsers,
+    to: '/obras-sociales',
+    buttonLabel: 'Abrir obras sociales',
+  },
+  centrosSalud: {
+    id: 'quick-action-centros',
+    title: 'Sumar centro derivador',
+    description: 'Integra nuevos centros de salud y vincúlales pacientes en minutos.',
+    icon: FaHospital,
+    to: '/centros-salud',
+    buttonLabel: 'Gestionar centros',
+  },
+};
+
+const QUICK_ACTION_FALLBACK_ORDER = ['turnos', 'pacientes', 'facturas', 'obrasSociales', 'centrosSalud'];
+
+const sanitizeDialValue = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.replace(/[^+\d]/g, '');
+};
+
+const sanitizeWhatsappValue = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.replace(/\D/g, '');
+};
+
+const buildContactActions = (turno) => {
+  if (!turno) {
+    return null;
+  }
+
+  const rawPhone = typeof turno.paciente === 'object'
+    ? (turno.paciente?.telefono || turno.paciente?.telefonoMovil || '')
+    : (turno.telefonoPaciente || turno.telefono || '');
+
+  const trimmed = rawPhone?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const telValue = sanitizeDialValue(trimmed);
+  const whatsappValue = sanitizeWhatsappValue(trimmed);
+
+  const contact = {
+    phoneLabel: trimmed,
+    tel: telValue ? `tel:${telValue}` : null,
+    sms: telValue ? `sms:${telValue}` : null,
+    whatsapp: whatsappValue ? `https://wa.me/${whatsappValue}` : null,
+  };
+
+  if (!contact.tel && !contact.sms && !contact.whatsapp) {
+    return null;
+  }
+
+  return contact;
+};
 
 const getLocalDateKey = (date) => {
   if (!(date instanceof Date)) {
@@ -40,6 +134,7 @@ const getLocalDateKey = (date) => {
 };
 
 function DashboardPage({ currentUser }) {
+  const navigate = useNavigate();
   const [allFacturas, setAllFacturas] = useState([]);
   const [centros, setCentros] = useState([]);
   const [data, setData] = useState({
@@ -77,6 +172,65 @@ function DashboardPage({ currentUser }) {
     },
   });
   const [turnos, setTurnos] = useState([]);
+
+  const effectivePreferences = useMemo(() => {
+    const resolved = resolveDashboardPreferences(currentUser?.dashboardPreferences);
+    return resolved.filter((widget) => DASHBOARD_WIDGET_IDS.has(widget));
+  }, [currentUser?.dashboardPreferences]);
+  const activeWidgetsSet = useMemo(() => new Set(effectivePreferences), [effectivePreferences]);
+  const shouldShowWidget = useCallback((widgetId) => activeWidgetsSet.has(widgetId), [activeWidgetsSet]);
+  const hasUpperWidgets = useMemo(() => {
+    return [
+      'financialSummary',
+      'administrativeMetrics',
+      'collectionsHealth',
+      'centersSummary',
+      'agendaToday',
+      'turnosTomorrow',
+      'turnosUpcoming',
+    ].some((widget) => activeWidgetsSet.has(widget));
+  }, [activeWidgetsSet]);
+  const quickActions = (() => {
+    const fallback = QUICK_ACTION_FALLBACK_ORDER.map((id) => QUICK_ACTIONS_MAP[id]).filter(Boolean).slice(0, 3);
+
+    if (typeof window === 'undefined') {
+      return fallback;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(SECTION_USAGE_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const sortedIds = Object.entries(parsed)
+        .filter(([section]) => Object.prototype.hasOwnProperty.call(QUICK_ACTIONS_MAP, section))
+        .sort(([, aCount], [, bCount]) => Number(bCount) - Number(aCount))
+        .map(([section]) => section);
+
+      const combined = [...sortedIds, ...QUICK_ACTION_FALLBACK_ORDER];
+      const uniqueIds = [];
+
+      combined.forEach((sectionId) => {
+        if (QUICK_ACTIONS_MAP[sectionId] && !uniqueIds.includes(sectionId)) {
+          uniqueIds.push(sectionId);
+        }
+      });
+
+      if (uniqueIds.length === 0) {
+        return fallback;
+      }
+
+      return uniqueIds.slice(0, 3).map((sectionId) => QUICK_ACTIONS_MAP[sectionId]).filter(Boolean);
+    } catch (error) {
+      console.warn('No se pudieron leer las acciones rápidas personalizadas.', error);
+      return fallback;
+    }
+  })();
+
+  const handleQuickAction = useCallback((path) => {
+    if (!path) {
+      return;
+    }
+    navigate(path);
+  }, [navigate]);
 
   const [dateRange, setDateRange] = useState({
     startDate: '',
@@ -778,134 +932,165 @@ function DashboardPage({ currentUser }) {
         )}
         <p className="text-muted mb-0 mt-3 mt-sm-2">Este resumen ejecutivo reúne tus principales indicadores asistenciales y financieros.</p>
       </div>
-      <div className="row g-3 mb-4">
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <p className="text-muted mb-1">Facturación acumulada</p>
-              <h4 className="fw-bold mb-1">{formatNumber(data.totalFacturacion)}</h4>
-              <small className="text-muted">Incluye montos cobrados y pendientes del período seleccionado.</small>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <p className="text-muted mb-1">Pacientes activos</p>
-              <h4 className="fw-bold mb-1">{data.totalPacientes}</h4>
-              <small className="text-muted">Particulares: {data.pacientesByTipo.particulares} · Centros: {data.pacientesByTipo.centro}</small>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <p className="text-muted mb-1">Retención estimada a centros</p>
-              <h4 className="fw-bold mb-1">{formatNumber(data.totalRetencionCentros)}</h4>
-              <small className="text-muted">Centros con actividad: {data.centrosActivos}/{data.totalCentros}</small>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <p className="text-muted mb-1">Ocupación semanal</p>
-              <div className="d-flex align-items-baseline gap-2">
-                <FaClock className="text-primary" />
-                <h4 className="fw-bold mb-0">{Math.round(data.ocupacionSemanal)}%</h4>
+      {quickActions.length > 0 && (
+        <div className="row g-3 mb-4">
+          {quickActions.map((action) => {
+            const Icon = action.icon;
+            return (
+              <div key={action.id} className="col-md-4">
+                <div className="card shadow-sm border-0 h-100">
+                  <div className="card-body d-flex flex-column gap-3">
+                    <div className="d-flex align-items-center gap-3">
+                      <span className="display-6 text-primary d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle p-3">
+                        <Icon />
+                      </span>
+                      <h5 className="mb-0">{action.title}</h5>
+                    </div>
+                    <p className="text-muted small mb-0 flex-grow-1">{action.description}</p>
+                    <button type="button" className="btn btn-outline-primary align-self-start" onClick={() => handleQuickAction(action.to)}>
+                      {action.buttonLabel || 'Ver más'}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="progress mt-2" role="progressbar" aria-label="Ocupación semanal" aria-valuenow={Math.round(data.ocupacionSemanal)} aria-valuemin="0" aria-valuemax="100">
-                <div
-                  className={`progress-bar ${data.ocupacionSemanal >= 85 ? 'bg-danger' : data.ocupacionSemanal >= 60 ? 'bg-warning text-dark' : 'bg-success'}`}
-                  style={{ width: `${Math.min(Math.round(data.ocupacionSemanal), 100)}%` }}
-                ></div>
-              </div>
-              <small className="text-muted d-block mt-2">
-                Programados: {formatMinutes(data.minutosProgramadosSemana)} · Capacidad semanal: {formatMinutes(data.minutosDisponiblesSemana)}
-              </small>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      </div>
+      )}
 
-      {/* Sección del selector de fechas */}
-      <div className="card shadow-sm mb-4">
-        <div className="card-body">
-          <h5 className="card-title"><FaCalendarAlt className="me-2" /> Rango de Fechas</h5>
-          <div className="row g-3 align-items-end">
-            <div className="col-md-5">
-              <label htmlFor="startDate" className="form-label">Desde</label>
-              <input 
-                type="date" 
-                id="startDate" 
-                name="startDate" 
-                className="form-control"
-                value={dateRange.startDate}
-                onChange={handleDateChange} 
-              />
+      {shouldShowWidget('summaryHighlights') && (
+        <div className="row g-3 mb-4">
+          <div className="col-xl-3 col-md-6">
+            <div className="card shadow-sm border-0 h-100">
+              <div className="card-body">
+                <p className="text-muted mb-1">Facturación acumulada</p>
+                <h4 className="fw-bold mb-1">{formatNumber(data.totalFacturacion)}</h4>
+                <small className="text-muted">Incluye montos cobrados y pendientes del período seleccionado.</small>
+              </div>
             </div>
-            <div className="col-md-5">
-              <label htmlFor="endDate" className="form-label">Hasta</label>
-              <input 
-                type="date" 
-                id="endDate" 
-                name="endDate" 
-                className="form-control"
-                value={dateRange.endDate}
-                onChange={handleDateChange} 
-              />
+          </div>
+          <div className="col-xl-3 col-md-6">
+            <div className="card shadow-sm border-0 h-100">
+              <div className="card-body">
+                <p className="text-muted mb-1">Pacientes activos</p>
+                <h4 className="fw-bold mb-1">{data.totalPacientes}</h4>
+                <small className="text-muted">Particulares: {data.pacientesByTipo.particulares} · Centros: {data.pacientesByTipo.centro}</small>
+              </div>
             </div>
-            <div className="col-md-2">
-              <button 
-                className="btn btn-primary w-100"
-                onClick={applyDateFilter}
-              >
-                Aplicar Filtro
-              </button>
+          </div>
+          <div className="col-xl-3 col-md-6">
+            <div className="card shadow-sm border-0 h-100">
+              <div className="card-body">
+                <p className="text-muted mb-1">Retención estimada a centros</p>
+                <h4 className="fw-bold mb-1">{formatNumber(data.totalRetencionCentros)}</h4>
+                <small className="text-muted">Centros con actividad: {data.centrosActivos}/{data.totalCentros}</small>
+              </div>
+            </div>
+          </div>
+          <div className="col-xl-3 col-md-6">
+            <div className="card shadow-sm border-0 h-100">
+              <div className="card-body">
+                <p className="text-muted mb-1">Ocupación semanal</p>
+                <div className="d-flex align-items-baseline gap-2">
+                  <FaClock className="text-primary" />
+                  <h4 className="fw-bold mb-0">{Math.round(data.ocupacionSemanal)}%</h4>
+                </div>
+                <div className="progress mt-2" role="progressbar" aria-label="Ocupación semanal" aria-valuenow={Math.round(data.ocupacionSemanal)} aria-valuemin="0" aria-valuemax="100">
+                  <div
+                    className={`progress-bar ${data.ocupacionSemanal >= 85 ? 'bg-danger' : data.ocupacionSemanal >= 60 ? 'bg-warning text-dark' : 'bg-success'}`}
+                    style={{ width: `${Math.min(Math.round(data.ocupacionSemanal), 100)}%` }}
+                  ></div>
+                </div>
+                <small className="text-muted d-block mt-2">
+                  Programados: {formatMinutes(data.minutosProgramadosSemana)} · Capacidad semanal: {formatMinutes(data.minutosDisponiblesSemana)}
+                </small>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {shouldShowWidget('dateRange') && (
+        <div className="card shadow-sm mb-4">
+          <div className="card-body">
+            <h5 className="card-title"><FaCalendarAlt className="me-2" /> Rango de Fechas</h5>
+            <div className="row g-3 align-items-end">
+              <div className="col-md-5">
+                <label htmlFor="startDate" className="form-label">Desde</label>
+                <input
+                  type="date"
+                  id="startDate"
+                  name="startDate"
+                  className="form-control"
+                  value={dateRange.startDate}
+                  onChange={handleDateChange}
+                />
+              </div>
+              <div className="col-md-5">
+                <label htmlFor="endDate" className="form-label">Hasta</label>
+                <input
+                  type="date"
+                  id="endDate"
+                  name="endDate"
+                  className="form-control"
+                  value={dateRange.endDate}
+                  onChange={handleDateChange}
+                />
+              </div>
+              <div className="col-md-2">
+                <button
+                  className="btn btn-primary w-100"
+                  onClick={applyDateFilter}
+                >
+                  Aplicar Filtro
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
-      <div className="row g-4">
-        {/* Sección de Resumen Financiero */}
-        <div className="col-xl-4 col-lg-6">
-          <div className="card shadow-sm h-100">
-            <div className="card-header bg-primary text-white">
-              <FaMoneyBillWave className="me-2" /> Resumen Financiero
-            </div>
-            <div className="card-body">
-              <ul className="list-group list-group-flush">
-                <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Total Facturación
-                  <span className="fw-bold">{formatNumber(data.totalFacturacion)}</span>
-                </li>
-                <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Monto Pagado
-                  <span className="fw-bold text-success">{formatNumber(data.montoPagado)}</span>
-                </li>
-                <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Monto Pendiente
-                  <span className="fw-bold text-danger">{formatNumber(data.montoPendiente)}</span>
-                </li>
-                <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Ingresos netos de pacientes particulares
-                  <span className="fw-bold text-primary">{formatNumber(data.netoParticulares)}</span>
-                </li>
-                <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Ingresos netos de centros de salud
-                  <span className="fw-bold text-info">{formatNumber(data.netoCentros)}</span>
-                </li>
-                <li className="list-group-item d-flex justify-content-between align-items-center">
-                  Total retenido por centros
-                  <span className="fw-bold text-warning">{formatNumber(data.totalRetencionCentros)}</span>
-                </li>
-              </ul>
+      {hasUpperWidgets && (
+        <div className="row g-4">
+        {shouldShowWidget('financialSummary') && (
+          <div className="col-xl-4 col-lg-6">
+            <div className="card shadow-sm h-100">
+              <div className="card-header bg-primary text-white">
+                <FaMoneyBillWave className="me-2" /> Resumen Financiero
+              </div>
+              <div className="card-body">
+                <ul className="list-group list-group-flush">
+                  <li className="list-group-item d-flex justify-content-between align-items-center">
+                    Total Facturación
+                    <span className="fw-bold">{formatNumber(data.totalFacturacion)}</span>
+                  </li>
+                  <li className="list-group-item d-flex justify-content-between align-items-center">
+                    Monto Pagado
+                    <span className="fw-bold text-success">{formatNumber(data.montoPagado)}</span>
+                  </li>
+                  <li className="list-group-item d-flex justify-content-between align-items-center">
+                    Monto Pendiente
+                    <span className="fw-bold text-danger">{formatNumber(data.montoPendiente)}</span>
+                  </li>
+                  <li className="list-group-item d-flex justify-content-between align-items-center">
+                    Ingresos netos de pacientes particulares
+                    <span className="fw-bold text-primary">{formatNumber(data.netoParticulares)}</span>
+                  </li>
+                  <li className="list-group-item d-flex justify-content-between align-items-center">
+                    Ingresos netos de centros de salud
+                    <span className="fw-bold text-info">{formatNumber(data.netoCentros)}</span>
+                  </li>
+                  <li className="list-group-item d-flex justify-content-between align-items-center">
+                    Total retenido por centros
+                    <span className="fw-bold text-warning">{formatNumber(data.totalRetencionCentros)}</span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Sección de Métricas Administrativas */}
+        {shouldShowWidget('administrativeMetrics') && (
         <div className="col-lg-4 col-md-6">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-info text-white">
@@ -945,8 +1130,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Salud de la cobranza */}
+        {shouldShowWidget('collectionsHealth') && (
         <div className="col-lg-4 col-md-12">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-dark text-white">
@@ -972,8 +1158,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Resumen de Centros de Salud */}
+        {shouldShowWidget('centersSummary') && (
         <div className="col-xl-4 col-lg-6">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-warning text-dark">
@@ -1003,8 +1190,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Agenda diaria */}
+        {shouldShowWidget('agendaToday') && (
         <div className="col-12">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-info text-white">
@@ -1021,8 +1209,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Turnos de mañana */}
+        {shouldShowWidget('turnosTomorrow') && (
         <div className="col-xl-4 col-lg-6">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-primary text-white">
@@ -1042,18 +1231,41 @@ function DashboardPage({ currentUser }) {
                     const pacienteNombre = turno.paciente
                       ? `${turno.paciente.nombre || ''} ${turno.paciente.apellido || ''}`.trim() || 'Paciente'
                       : 'Paciente';
+                    const contact = buildContactActions(turno);
                     return (
                       <li key={turno._id} className="list-group-item">
                         <div className="d-flex justify-content-between align-items-start">
                           <div>
                             <strong>{pacienteNombre}</strong>
                             <div className="small text-muted">{turno.titulo || 'Consulta'}</div>
+                            {contact?.phoneLabel && (
+                              <div className="small text-muted">{contact.phoneLabel}</div>
+                            )}
                           </div>
                           <div className="text-end">
                             <div className="small fw-semibold">{horaLabel}</div>
                             <span className={`badge ${turno.estado === 'confirmado' ? 'bg-success' : turno.estado === 'cancelado' ? 'bg-danger' : 'bg-secondary'}`}>
                               {turno.estado || 'Programado'}
                             </span>
+                            {contact && (
+                              <div className="d-flex justify-content-end gap-2 mt-2">
+                                {contact.tel && (
+                                  <a className="btn btn-outline-primary btn-sm" href={contact.tel} title={`Llamar a ${pacienteNombre}`}>
+                                    <FaPhoneAlt />
+                                  </a>
+                                )}
+                                {contact.whatsapp && (
+                                  <a className="btn btn-outline-success btn-sm" href={contact.whatsapp} target="_blank" rel="noreferrer" title={`Enviar WhatsApp a ${pacienteNombre}`}>
+                                    <FaWhatsapp />
+                                  </a>
+                                )}
+                                {contact.sms && (
+                                  <a className="btn btn-outline-secondary btn-sm" href={contact.sms} title={`Enviar SMS a ${pacienteNombre}`}>
+                                    <FaSms />
+                                  </a>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </li>
@@ -1066,8 +1278,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Próximos turnos */}
+        {shouldShowWidget('turnosUpcoming') && (
         <div className="col-xl-4 col-lg-6">
           <div className="card shadow-sm h-100">
             <div className="card-header bg-secondary text-white">
@@ -1080,18 +1293,41 @@ function DashboardPage({ currentUser }) {
                     const pacienteNombre = turno.paciente
                       ? `${turno.paciente.nombre || ''} ${turno.paciente.apellido || ''}`.trim() || 'Paciente'
                       : turno.paciente || 'Paciente';
+                    const contact = buildContactActions(turno);
                     return (
                       <li key={turno._id} className="list-group-item">
                         <div className="d-flex justify-content-between align-items-start">
                           <div>
                             <strong>{pacienteNombre}</strong>
                             <div className="small text-muted">{turno.titulo || 'Consulta'}</div>
+                            {contact?.phoneLabel && (
+                              <div className="small text-muted">{contact.phoneLabel}</div>
+                            )}
                           </div>
                           <div className="text-end">
                             <div className="small fw-semibold">{formatDateTime(turno.fecha)}</div>
                             <span className={`badge ${turno.estado === 'confirmado' ? 'bg-success' : turno.estado === 'cancelado' ? 'bg-danger' : 'bg-secondary'}`}>
                               {turno.estado || 'Programado'}
                             </span>
+                            {contact && (
+                              <div className="d-flex justify-content-end gap-2 mt-2">
+                                {contact.tel && (
+                                  <a className="btn btn-outline-primary btn-sm" href={contact.tel} title={`Llamar a ${pacienteNombre}`}>
+                                    <FaPhoneAlt />
+                                  </a>
+                                )}
+                                {contact.whatsapp && (
+                                  <a className="btn btn-outline-success btn-sm" href={contact.whatsapp} target="_blank" rel="noreferrer" title={`Enviar WhatsApp a ${pacienteNombre}`}>
+                                    <FaWhatsapp />
+                                  </a>
+                                )}
+                                {contact.sms && (
+                                  <a className="btn btn-outline-secondary btn-sm" href={contact.sms} title={`Enviar SMS a ${pacienteNombre}`}>
+                                    <FaSms />
+                                  </a>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </li>
@@ -1104,8 +1340,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Sección de Métricas de Crecimiento */}
+        {shouldShowWidget('growth') && (
         <div className="col-12">
           <div className="card shadow-sm">
             <div className="card-header bg-success text-white">
@@ -1141,8 +1378,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
         
-        {/* Facturación mensual */}
+        {shouldShowWidget('monthlyRevenue') && (
         <div className="col-12 col-xl-6">
           <div className="card shadow-sm border-0 h-100">
             <div className="card-header bg-white border-0 border-bottom">
@@ -1180,8 +1418,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Distribución por estado */}
+        {shouldShowWidget('statusDistribution') && (
         <div className="col-12 col-xl-6">
           <div className="card shadow-sm border-0 h-100">
             <div className="card-header bg-white border-0 border-bottom">
@@ -1219,8 +1458,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Top 5 obras sociales */}
+        {shouldShowWidget('topObrasSociales') && (
         <div className="col-12 col-xl-6">
           <div className="card shadow-sm border-0 h-100">
             <div className="card-header bg-white border-0 border-bottom">
@@ -1258,8 +1498,9 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Mora por obra social */}
+        {shouldShowWidget('moraObrasSociales') && (
         <div className="col-12 col-xl-6">
           <div className="card shadow-sm border-0 h-100">
             <div className="card-header bg-white border-0 border-bottom">
@@ -1295,8 +1536,10 @@ function DashboardPage({ currentUser }) {
             </div>
           </div>
         </div>
+        )}
 
-      </div>
+        </div>
+      )}
     </div>
   );
 }
