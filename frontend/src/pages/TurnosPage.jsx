@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import turnosService from '../services/TurnosService';
 import PacientesService from '../services/PacientesService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
 import AgendaGantt from '../components/AgendaGantt.jsx';
+import { FaPhoneAlt, FaWhatsapp, FaSms } from 'react-icons/fa';
 
 const formatoFechaLocal = (fechaISO) => {
   if (!fechaISO) return '';
@@ -58,6 +60,16 @@ const estadoLabel = {
   cancelado: 'Cancelado',
 };
 
+const EMPTY_FORM = {
+  paciente: '',
+  titulo: '',
+  fecha: '',
+  duracionMinutos: 30,
+  estado: 'programado',
+  notas: '',
+  recordatorioHorasAntes: 24,
+};
+
 const obtenerFechaLocalISO = (date = new Date()) => {
   const local = new Date(date);
   local.setHours(0, 0, 0, 0);
@@ -76,6 +88,52 @@ const DEFAULT_PAGINATION = {
   totalPages: 1,
   hasNextPage: false,
   hasPrevPage: false,
+};
+
+const sanitizeDialValue = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.replace(/[^+\d]/g, '');
+};
+
+const sanitizeWhatsappValue = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.replace(/\D/g, '');
+};
+
+const buildContactLinks = (turno) => {
+  if (!turno) {
+    return null;
+  }
+
+  const rawPhone = typeof turno.paciente === 'object'
+    ? (turno.paciente?.telefono || turno.paciente?.telefonoMovil || '')
+    : (turno.telefonoPaciente || turno.telefono || '');
+
+  const trimmed = rawPhone?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const telValue = sanitizeDialValue(trimmed);
+  const whatsappValue = sanitizeWhatsappValue(trimmed);
+
+  const contact = {
+    phoneLabel: trimmed,
+    tel: telValue ? `tel:${telValue}` : null,
+    sms: telValue ? `sms:${telValue}` : null,
+    whatsapp: whatsappValue ? `https://wa.me/${whatsappValue}` : null,
+  };
+
+  if (!contact.tel && !contact.sms && !contact.whatsapp) {
+    return null;
+  }
+
+  return contact;
 };
 
 const buildPageNumbers = (totalPages, currentPage) => {
@@ -106,20 +164,13 @@ const buildPageNumbers = (totalPages, currentPage) => {
 
 const TurnosPage = () => {
   const { showError, showSuccess, showInfo } = useFeedback();
+  const location = useLocation();
   const [turnos, setTurnos] = useState([]);
   const [agendaTurnos, setAgendaTurnos] = useState([]);
   const [upcomingTurnos, setUpcomingTurnos] = useState([]);
   const [pacientes, setPacientes] = useState([]);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({
-    paciente: '',
-    titulo: '',
-    fecha: '',
-    duracionMinutos: 30,
-    estado: 'programado',
-    notas: '',
-    recordatorioHorasAntes: 24,
-  });
+  const [formData, setFormData] = useState(() => ({ ...EMPTY_FORM }));
   const [filtros, setFiltros] = useState({ estado: 'programado', rango: 'semana' });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -131,6 +182,7 @@ const TurnosPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [futurePage, setFuturePage] = useState(1);
   const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
+  const formRef = useRef(null);
 
   const trimmedSearch = searchTerm.trim();
   const hasSearch = trimmedSearch.length > 0;
@@ -150,6 +202,29 @@ const TurnosPage = () => {
     };
     obtenerDatos();
   }, [showError]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const createParam = params.get('crear') || params.get('create');
+    if (!createParam) {
+      return;
+    }
+
+    setEditingId(null);
+    setFormData(() => ({
+      ...EMPTY_FORM,
+      fecha: formatearFechaParaInput(new Date().toISOString()),
+    }));
+
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+
+    params.delete('crear');
+    params.delete('create');
+    const remaining = params.toString();
+    window.history.replaceState({}, '', `${location.pathname}${remaining ? `?${remaining}` : ''}`);
+  }, [location.pathname, location.search]);
 
   const loadTurnos = useCallback(async (pageToLoad = 1) => {
     setLoading(true);
@@ -306,15 +381,7 @@ const TurnosPage = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      paciente: '',
-      titulo: '',
-      fecha: '',
-      duracionMinutos: 30,
-      estado: 'programado',
-      notas: '',
-      recordatorioHorasAntes: 24,
-    });
+    setFormData(() => ({ ...EMPTY_FORM }));
     setEditingId(null);
   };
 
@@ -493,7 +560,7 @@ const TurnosPage = () => {
           </div>
         </div>
         <div className="card-body">
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} ref={formRef}>
             <fieldset disabled={saving} className="border-0 p-0">
               <div className="row g-3">
               <div className="col-md-6 col-lg-4">
@@ -963,15 +1030,47 @@ const TurnosPage = () => {
             <p className="mb-0">No hay turnos próximos agendados.</p>
           ) : (
             <ul className="list-group list-group-flush">
-              {paginatedProximosTurnos.map((turno) => (
-                <li className="list-group-item d-flex justify-content-between align-items-center" key={turno._id}>
-                  <div>
-                    <strong>{turno.paciente?.nombre} {turno.paciente?.apellido}</strong>
-                    <div className="text-muted small">{turno.titulo || 'Sin título'}</div>
-                  </div>
-                  <span>{formatoFechaLocal(turno.fecha)}</span>
-                </li>
-              ))}
+              {paginatedProximosTurnos.map((turno) => {
+                const pacienteNombre = turno.paciente
+                  ? `${turno.paciente.nombre || ''} ${turno.paciente.apellido || ''}`.trim() || 'Paciente'
+                  : 'Paciente';
+                const contact = buildContactLinks(turno);
+                return (
+                  <li className="list-group-item" key={turno._id}>
+                    <div className="d-flex justify-content-between align-items-start">
+                      <div>
+                        <strong>{pacienteNombre}</strong>
+                        <div className="text-muted small">{turno.titulo || 'Sin título'}</div>
+                        {contact?.phoneLabel && (
+                          <div className="text-muted small">{contact.phoneLabel}</div>
+                        )}
+                      </div>
+                      <div className="text-end">
+                        <span>{formatoFechaLocal(turno.fecha)}</span>
+                        {contact && (
+                          <div className="d-flex justify-content-end gap-2 mt-2">
+                            {contact.tel && (
+                              <a className="btn btn-outline-primary btn-sm" href={contact.tel} title={`Llamar a ${pacienteNombre}`}>
+                                <FaPhoneAlt />
+                              </a>
+                            )}
+                            {contact.whatsapp && (
+                              <a className="btn btn-outline-success btn-sm" href={contact.whatsapp} target="_blank" rel="noreferrer" title={`Enviar WhatsApp a ${pacienteNombre}`}>
+                                <FaWhatsapp />
+                              </a>
+                            )}
+                            {contact.sms && (
+                              <a className="btn btn-outline-secondary btn-sm" href={contact.sms} title={`Enviar SMS a ${pacienteNombre}`}>
+                                <FaSms />
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
           {totalFutureTurnos > ITEMS_PER_PAGE && (

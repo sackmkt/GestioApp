@@ -107,6 +107,22 @@ const generateToken = (id) => {
 const MAX_PROFILE_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
 const ALLOWED_AVATAR_IDS = new Set(['stethoscope', 'heartbeat', 'medkit', 'compass']);
+const ALLOWED_DASHBOARD_WIDGETS = new Set([
+  'summaryHighlights',
+  'dateRange',
+  'financialSummary',
+  'administrativeMetrics',
+  'collectionsHealth',
+  'centersSummary',
+  'agendaToday',
+  'turnosTomorrow',
+  'turnosUpcoming',
+  'growth',
+  'monthlyRevenue',
+  'statusDistribution',
+  'topObrasSociales',
+  'moraObrasSociales',
+]);
 
 const isSupportedDataUrl = (value = '') => {
   if (typeof value !== 'string') {
@@ -132,6 +148,29 @@ const getDataUrlSize = (value = '') => {
   return Math.ceil((base64Part.length * 3) / 4) - padding;
 };
 
+const sanitizeDashboardPreferences = (preferences) => {
+  if (!Array.isArray(preferences)) {
+    return null;
+  }
+
+  const unique = [];
+
+  preferences.forEach((item) => {
+    if (typeof item !== 'string') {
+      return;
+    }
+    const trimmed = item.trim();
+    if (!trimmed || !ALLOWED_DASHBOARD_WIDGETS.has(trimmed)) {
+      return;
+    }
+    if (!unique.includes(trimmed)) {
+      unique.push(trimmed);
+    }
+  });
+
+  return unique;
+};
+
 const buildUserResponse = (user, includeToken = true) => {
   const base = {
     _id: user._id,
@@ -146,6 +185,7 @@ const buildUserResponse = (user, includeToken = true) => {
     profileCompleted: user.profileCompleted || false,
     profileImage: user.profileImage || '',
     profileAvatar: user.profileAvatar || '',
+    dashboardPreferences: Array.isArray(user.dashboardPreferences) ? [...user.dashboardPreferences] : [],
   };
 
   if (!includeToken) {
@@ -251,7 +291,19 @@ exports.getProfile = async (req, res) => {
 };
 
 exports.updateProfile = async (req, res) => {
-  const { username, email, firstName, lastName, profession, country, province, city, profileImage, profileAvatar } = req.body;
+  const {
+    username,
+    email,
+    firstName,
+    lastName,
+    profession,
+    country,
+    province,
+    city,
+    profileImage,
+    profileAvatar,
+    dashboardPreferences: dashboardPreferencesInput,
+  } = req.body;
 
   try {
     const user = await User.findById(req.user._id);
@@ -309,6 +361,18 @@ exports.updateProfile = async (req, res) => {
 
     if (user.profileImage) {
       user.profileAvatar = '';
+    }
+
+    if (typeof dashboardPreferencesInput !== 'undefined') {
+      if (dashboardPreferencesInput === null) {
+        user.dashboardPreferences = [];
+      } else {
+        const sanitizedPreferences = sanitizeDashboardPreferences(dashboardPreferencesInput);
+        if (sanitizedPreferences === null) {
+          return res.status(400).json({ message: 'Las preferencias del panel deben ser un listado válido.' });
+        }
+        user.dashboardPreferences = sanitizedPreferences;
+      }
     }
 
     const mandatoryFields = [user.firstName, user.lastName, user.profession, user.country, user.province, user.city];

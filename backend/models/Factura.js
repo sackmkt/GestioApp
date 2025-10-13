@@ -11,7 +11,6 @@ const facturaSchema = new mongoose.Schema({
   montoTotal: { type: Number, required: true, min: 0 },
   fechaEmision: { type: Date, required: true },
   fechaVencimiento: { type: Date },
-  interes: { type: Number, default: 0, min: 0 },
   estado: { type: String, enum: ESTADOS_FACTURA, default: 'pendiente' },
   observaciones: { type: String, trim: true },
   pagos: [{

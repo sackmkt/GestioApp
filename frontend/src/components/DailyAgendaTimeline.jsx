@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { FaPhoneAlt, FaWhatsapp, FaSms } from 'react-icons/fa';
 import '../styles/daily-agenda-timeline.css';
 
 const ESTADO_META = {
@@ -82,6 +83,52 @@ const getLocalDateKey = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const sanitizeDialValue = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.replace(/[^+\d]/g, '');
+};
+
+const sanitizeWhatsappValue = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.replace(/\D/g, '');
+};
+
+const buildContactLinks = (turno) => {
+  if (!turno) {
+    return null;
+  }
+
+  const rawPhone = typeof turno.paciente === 'object'
+    ? (turno.paciente?.telefono || turno.paciente?.telefonoMovil || '')
+    : (turno.telefonoPaciente || turno.telefono || '');
+
+  const trimmed = rawPhone?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const telValue = sanitizeDialValue(trimmed);
+  const whatsappValue = sanitizeWhatsappValue(trimmed);
+
+  const contact = {
+    phoneLabel: trimmed,
+    tel: telValue ? `tel:${telValue}` : null,
+    sms: telValue ? `sms:${telValue}` : null,
+    whatsapp: whatsappValue ? `https://wa.me/${whatsappValue}` : null,
+  };
+
+  if (!contact.tel && !contact.sms && !contact.whatsapp) {
+    return null;
+  }
+
+  return contact;
+};
+
 const formatTimeRange = (startDate, durationMinutes) => {
   if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
     return '';
@@ -147,6 +194,7 @@ const DailyAgendaTimeline = ({
           estado: turno.estado || 'programado',
           titulo: turno.titulo || '',
           paciente: pacienteNombre || turno.paciente || 'Paciente',
+          contact: buildContactLinks(turno),
         };
       })
       .filter(Boolean)
@@ -200,6 +248,34 @@ const DailyAgendaTimeline = ({
                   <span className="daily-agenda__patient">{event.paciente}</span>
                   {event.titulo && <span className="daily-agenda__title">{event.titulo}</span>}
                   <span className="daily-agenda__status">{statusLabel}</span>
+                  {event.contact?.phoneLabel && (
+                    <span className="daily-agenda__contact text-muted">{event.contact.phoneLabel}</span>
+                  )}
+                  {event.contact && (
+                    <div className="daily-agenda__actions">
+                      {event.contact.tel && (
+                        <a className="daily-agenda__action daily-agenda__action--call" href={event.contact.tel} aria-label={`Llamar a ${event.paciente}`}>
+                          <FaPhoneAlt />
+                        </a>
+                      )}
+                      {event.contact.whatsapp && (
+                        <a
+                          className="daily-agenda__action daily-agenda__action--whatsapp"
+                          href={event.contact.whatsapp}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Enviar WhatsApp a ${event.paciente}`}
+                        >
+                          <FaWhatsapp />
+                        </a>
+                      )}
+                      {event.contact.sms && (
+                        <a className="daily-agenda__action daily-agenda__action--sms" href={event.contact.sms} aria-label={`Enviar SMS a ${event.paciente}`}>
+                          <FaSms />
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               </li>
             );

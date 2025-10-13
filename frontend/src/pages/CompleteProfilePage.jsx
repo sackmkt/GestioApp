@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import userService from '../services/UserService';
+import { DASHBOARD_WIDGET_OPTIONS, DEFAULT_DASHBOARD_PREFERENCES, resolveDashboardPreferences } from '../constants/dashboardPreferences.js';
 
 const professionOptions = [
   'Kinesiología',
@@ -24,6 +25,15 @@ const resolveProfessionSelection = (profession) => {
   return { selected: 'Otra', custom: profession };
 };
 
+const DASHBOARD_SELECTION_ERROR = 'Selecciona al menos un bloque para tu panel principal.';
+
+const sortDashboardPreferences = (widgets) => {
+  if (!Array.isArray(widgets) || widgets.length === 0) {
+    return [...DEFAULT_DASHBOARD_PREFERENCES];
+  }
+  return DEFAULT_DASHBOARD_PREFERENCES.filter((id) => widgets.includes(id));
+};
+
 function CompleteProfilePage({ currentUser, onProfileUpdated }) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -39,6 +49,7 @@ function CompleteProfilePage({ currentUser, onProfileUpdated }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [selectedWidgets, setSelectedWidgets] = useState(() => sortDashboardPreferences(resolveDashboardPreferences(currentUser?.dashboardPreferences)));
 
   useEffect(() => {
     if (!currentUser) {
@@ -63,6 +74,7 @@ function CompleteProfilePage({ currentUser, onProfileUpdated }) {
           city: profile.city || '',
         });
         setProfessionSelection(resolveProfessionSelection(profile.profession));
+        setSelectedWidgets(sortDashboardPreferences(resolveDashboardPreferences(profile.dashboardPreferences)));
       } catch (fetchError) {
         console.error('Error al cargar el perfil:', fetchError);
         setError('No pudimos cargar tu perfil. Intenta nuevamente.');
@@ -73,6 +85,12 @@ function CompleteProfilePage({ currentUser, onProfileUpdated }) {
 
     fetchProfile();
   }, [currentUser, navigate]);
+
+  useEffect(() => {
+    if (Array.isArray(selectedWidgets) && selectedWidgets.length > 0 && error === DASHBOARD_SELECTION_ERROR) {
+      setError('');
+    }
+  }, [error, selectedWidgets]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -91,6 +109,19 @@ function CompleteProfilePage({ currentUser, onProfileUpdated }) {
   const handleCustomProfessionChange = (event) => {
     const value = event.target.value;
     setProfessionSelection((prev) => ({ ...prev, custom: value }));
+  };
+
+  const handleWidgetToggle = (widgetId) => {
+    setSelectedWidgets((prev) => {
+      if (!Array.isArray(prev)) {
+        return sortDashboardPreferences([widgetId]);
+      }
+      if (prev.includes(widgetId)) {
+        return prev.filter((id) => id !== widgetId);
+      }
+      const updated = [...prev, widgetId];
+      return sortDashboardPreferences(updated);
+    });
   };
 
   const handleSubmit = async (event) => {
@@ -114,6 +145,11 @@ function CompleteProfilePage({ currentUser, onProfileUpdated }) {
       return;
     }
 
+    if (!Array.isArray(selectedWidgets) || selectedWidgets.length === 0) {
+      setError(DASHBOARD_SELECTION_ERROR);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -126,6 +162,7 @@ function CompleteProfilePage({ currentUser, onProfileUpdated }) {
         country: formData.country.trim(),
         province: formData.province.trim(),
         city: formData.city.trim(),
+        dashboardPreferences: selectedWidgets,
       });
 
       if (onProfileUpdated) {
@@ -278,6 +315,40 @@ function CompleteProfilePage({ currentUser, onProfileUpdated }) {
                       placeholder="Ej: La Plata"
                       required
                     />
+                  </div>
+                  <div className="col-12">
+                    <fieldset className="border rounded-3 p-3">
+                      <legend className="float-none w-auto px-2">Panel principal</legend>
+                      <p className="text-muted small mb-3">
+                        Personaliza qué indicadores verás en tu inicio. Siempre puedes cambiar esta selección desde tu perfil.
+                      </p>
+                      <div className="row g-3">
+                        {DASHBOARD_WIDGET_OPTIONS.map((option) => {
+                          const checkboxId = `complete-dashboard-widget-${option.id}`;
+                          const checked = Array.isArray(selectedWidgets) && selectedWidgets.includes(option.id);
+                          return (
+                            <div className="col-md-6 col-lg-4" key={option.id}>
+                              <div className="form-check d-flex align-items-start gap-2">
+                                <input
+                                  className="form-check-input mt-1"
+                                  type="checkbox"
+                                  id={checkboxId}
+                                  checked={checked}
+                                  onChange={() => handleWidgetToggle(option.id)}
+                                />
+                                <label className="form-check-label" htmlFor={checkboxId}>
+                                  <span className="d-block fw-semibold">{option.label}</span>
+                                  <span className="d-block text-muted small">{option.description}</span>
+                                </label>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {(!Array.isArray(selectedWidgets) || selectedWidgets.length === 0) && (
+                        <p className="text-danger small mt-3 mb-0">{DASHBOARD_SELECTION_ERROR}</p>
+                      )}
+                    </fieldset>
                   </div>
                 </div>
                 <button type="submit" className="btn btn-info text-white w-100 mt-4" disabled={isSubmitting}>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import PacientesPage from './pages/PacientesPage';
 import ObrasSocialesPage from './pages/ObrasSocialesPage';
 import FacturasPage from './pages/FacturasPage';
@@ -16,6 +16,33 @@ import { useFeedback } from './context/FeedbackContext.jsx';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'v1.0.0';
 const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
+const SECTION_USAGE_STORAGE_KEY = 'gestio:section-usage';
+
+const resolveSectionFromPath = (pathname) => {
+  if (typeof pathname !== 'string') {
+    return null;
+  }
+
+  if (pathname.startsWith('/turnos')) {
+    return 'turnos';
+  }
+  if (pathname.startsWith('/pacientes')) {
+    return 'pacientes';
+  }
+  if (pathname.startsWith('/facturas')) {
+    return 'facturas';
+  }
+  if (pathname.startsWith('/obras-sociales')) {
+    return 'obrasSociales';
+  }
+  if (pathname.startsWith('/centros-salud')) {
+    return 'centrosSalud';
+  }
+  if (pathname.startsWith('/dashboard') || pathname === '/') {
+    return 'dashboard';
+  }
+  return null;
+};
 
 const NAVIGATION_ITEMS = [
   { to: '/dashboard', label: 'Resumen' },
@@ -28,6 +55,7 @@ const NAVIGATION_ITEMS = [
 
 function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { showInfo, showSuccess } = useFeedback();
   const [currentUser, setCurrentUser] = useState(() => {
     const storedUser = localStorage.getItem('user');
@@ -119,6 +147,27 @@ function App() {
   }, [isAuthenticated]);
 
   const navLinkClassName = ({ isActive }) => `nav-link ${isActive ? 'active' : ''}`;
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    const section = resolveSectionFromPath(location.pathname);
+    if (!section) {
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(SECTION_USAGE_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const previousCount = Number(parsed[section]) || 0;
+      parsed[section] = previousCount + 1;
+      localStorage.setItem(SECTION_USAGE_STORAGE_KEY, JSON.stringify(parsed));
+    } catch (error) {
+      console.warn('No se pudieron registrar las estadísticas de navegación.', error);
+    }
+  }, [isAuthenticated, location.pathname]);
 
   const NavContent = () => {
     const closeMenu = () => setIsMenuOpen(false);
