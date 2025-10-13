@@ -6,14 +6,69 @@ const CentroSalud = require('../models/CentroSalud');
 const ObraSocial = require('../models/ObraSocial');
 const { protect } = require('../middleware/authMiddleware');
 const storageService = require('../services/storageService');
-const { toCsv, formatDateTime } = require('../utils/csvUtils');
+const { formatDateTime } = require('../utils/csvUtils');
+const { createExcelFileBuffer } = require('../utils/excelUtils');
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+const ALLOWED_FILE_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/pjpeg']);
+const ALLOWED_FILE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg']);
 
 const createValidationError = (message) => {
   const error = new Error(message);
   error.statusCode = 400;
   return error;
+};
+
+const resolveFileExtension = (filename) => {
+  if (typeof filename !== 'string') {
+    return '';
+  }
+  const lastDot = filename.lastIndexOf('.');
+  if (lastDot === -1) {
+    return '';
+  }
+  return filename.slice(lastDot).toLowerCase();
+};
+
+const isAllowedDocumentType = ({ contentType, filename }) => {
+  const normalizedType = typeof contentType === 'string' ? contentType.toLowerCase() : '';
+  if (ALLOWED_FILE_MIME_TYPES.has(normalizedType)) {
+    return true;
+  }
+
+  const extension = resolveFileExtension(filename);
+  return extension ? ALLOWED_FILE_EXTENSIONS.has(extension) : false;
+};
+
+const parseDateInput = (value, { endOfDay = false } = {}) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const dateFromString = new Date(value);
+  if (!Number.isNaN(dateFromString.getTime())) {
+    if (endOfDay) {
+      dateFromString.setHours(23, 59, 59, 999);
+    } else {
+      dateFromString.setHours(0, 0, 0, 0);
+    }
+    return dateFromString;
+  }
+
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue)) {
+    const dateFromNumber = new Date(numericValue);
+    if (!Number.isNaN(dateFromNumber.getTime())) {
+      if (endOfDay) {
+        dateFromNumber.setHours(23, 59, 59, 999);
+      } else {
+        dateFromNumber.setHours(0, 0, 0, 0);
+      }
+      return dateFromNumber;
+    }
+  }
+
+  return null;
 };
 
 const sanitizeBase64 = (value) => {
@@ -406,7 +461,8 @@ router.get('/', protect, async (req, res) => {
         populate: { path: 'centroSalud', select: 'nombre porcentajeRetencion' },
       })
       .populate('obraSocial', 'nombre')
-      .populate('centroSalud', 'nombre porcentajeRetencion');
+      .populate('centroSalud', 'nombre porcentajeRetencion')
+      .lean({ virtuals: true });
 
     const payload = facturas.map((factura) => buildFacturaResponse(factura));
     res.json(payload);
@@ -417,7 +473,41 @@ router.get('/', protect, async (req, res) => {
 
 router.get('/export', protect, async (req, res) => {
   try {
-    const facturas = await Factura.find({ user: req.user._id })
+    const {
+      fechaDesde,
+      fechaHasta,
+      usuarioId,
+      userId,
+      desde,
+      hasta,
+    } = req.query;
+
+    const requestedUserId = usuarioId || userId;
+    if (requestedUserId && requestedUserId !== String(req.user._id)) {
+      return res.status(403).json({ error: 'No tienes permisos para exportar información de otro usuario.' });
+    }
+
+    const filter = {
+      user: requestedUserId || req.user._id,
+    };
+
+    const fromDate = parseDateInput(fechaDesde ?? desde, { endOfDay: false });
+    const toDate = parseDateInput(fechaHasta ?? hasta, { endOfDay: true });
+
+    if (fromDate || toDate) {
+      filter.fechaEmision = {};
+      if (fromDate) {
+        filter.fechaEmision.$gte = fromDate;
+      }
+      if (toDate) {
+        filter.fechaEmision.$lte = toDate;
+      }
+      if (Object.keys(filter.fechaEmision).length === 0) {
+        delete filter.fechaEmision;
+      }
+    }
+
+    const facturas = await Factura.find(filter)
       .populate({
         path: 'paciente',
         select: 'nombre apellido dni',
@@ -427,7 +517,7 @@ router.get('/export', protect, async (req, res) => {
       .sort({ fechaEmision: -1, createdAt: -1 })
       .lean();
 
-    const facturasForCsv = (Array.isArray(facturas) ? facturas : []).map((factura) => {
+    const facturasForExport = (Array.isArray(facturas) ? facturas : []).map((factura) => {
       const pagos = Array.isArray(factura.pagos) ? factura.pagos : [];
       const montoCobrado = pagos.reduce((total, pago) => total + (Number(pago.monto) || 0), 0);
       const montoTotal = Number(factura.montoTotal) || 0;
@@ -444,7 +534,6 @@ router.get('/export', protect, async (req, res) => {
     });
 
     const columns = [
-      { header: 'ID', value: (factura) => factura._id },
       { header: 'Paciente', value: (factura) => resolvePacienteNombre(factura.paciente) },
       { header: 'DNI del paciente', value: (factura) => resolvePacienteDni(factura.paciente) },
       { header: 'Obra social', value: (factura) => resolveReferenceName(factura.obraSocial) },
@@ -480,12 +569,18 @@ router.get('/export', protect, async (req, res) => {
       { header: 'Actualizado el', value: (factura) => formatDateTime(factura.updatedAt) },
     ];
 
-    const csvContent = toCsv(facturasForCsv, columns);
-    const filename = `facturas-${new Date().toISOString().slice(0, 10)}.csv`;
+    const buffer = createExcelFileBuffer({
+      sheetName: 'Facturas',
+      columns,
+      rows: facturasForExport,
+    });
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    const filename = `facturas-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.status(200).send(`\ufeff${csvContent}`);
+    res.setHeader('Content-Length', buffer.length);
+    res.status(200).send(buffer);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -699,12 +794,16 @@ router.post('/:id/documentos', protect, async (req, res) => {
     }
 
     if (buffer.length > MAX_FILE_SIZE_BYTES) {
-      return res.status(413).json({ error: 'El archivo supera el tamaño máximo permitido (10 MB).' });
+      return res.status(413).json({ error: 'El archivo supera el tamaño máximo permitido (20 MB).' });
     }
 
     const contentType = typeof archivo.tipo === 'string' && archivo.tipo.trim() !== ''
       ? archivo.tipo.trim()
       : (typeof archivo.contentType === 'string' ? archivo.contentType.trim() : 'application/octet-stream');
+
+    if (!isAllowedDocumentType({ contentType, filename: archivo.nombre })) {
+      return res.status(415).json({ error: 'Solo se permiten archivos en formato PDF o JPG de hasta 20 MB.' });
+    }
 
     const storagePayload = await storageService.uploadDocument({
       buffer,

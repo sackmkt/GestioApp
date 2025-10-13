@@ -6,7 +6,8 @@ const Paciente = require('../models/Paciente');
 const CentroSalud = require('../models/CentroSalud');
 const { protect } = require('../middleware/authMiddleware');
 const storageService = require('../services/storageService');
-const { toCsv, formatDateTime } = require('../utils/csvUtils');
+const { formatDateTime } = require('../utils/csvUtils');
+const { createExcelFileBuffer } = require('../utils/excelUtils');
 
 const DEFAULT_PAGE_LIMIT = 16;
 const MAX_PAGE_LIMIT = 100;
@@ -56,7 +57,9 @@ const buildProjection = (fieldsParam) => {
   return fields.join(' ');
 };
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+const ALLOWED_FILE_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/pjpeg']);
+const ALLOWED_FILE_EXTENSIONS = new Set(['.pdf', '.jpg', '.jpeg']);
 
 const sanitizeBase64 = (value) => {
   if (typeof value !== 'string') {
@@ -77,6 +80,27 @@ const decodeBase64File = (base64String) => {
   } catch (error) {
     throw new Error('No se pudo decodificar el archivo adjunto.');
   }
+};
+
+const resolveFileExtension = (filename) => {
+  if (typeof filename !== 'string') {
+    return '';
+  }
+  const lastDot = filename.lastIndexOf('.');
+  if (lastDot === -1) {
+    return '';
+  }
+  return filename.slice(lastDot).toLowerCase();
+};
+
+const isAllowedDocumentType = ({ contentType, filename }) => {
+  const normalizedType = typeof contentType === 'string' ? contentType.toLowerCase() : '';
+  if (ALLOWED_FILE_MIME_TYPES.has(normalizedType)) {
+    return true;
+  }
+
+  const extension = resolveFileExtension(filename);
+  return extension ? ALLOWED_FILE_EXTENSIONS.has(extension) : false;
 };
 
 const buildDocumentResponse = (document, pacienteId) => {
@@ -110,11 +134,19 @@ const buildPacienteResponse = (pacienteDoc) => {
     return null;
   }
 
-  const plain = pacienteDoc.toObject({ virtuals: true });
-  plain.documentos = Array.isArray(plain.documentos)
-    ? plain.documentos.map((doc) => buildDocumentResponse(doc, pacienteDoc._id)).filter(Boolean)
+  const base = typeof pacienteDoc.toObject === 'function'
+    ? pacienteDoc.toObject({ virtuals: true })
+    : { ...pacienteDoc };
+
+  const pacienteId = base._id || pacienteDoc._id;
+  const documentos = Array.isArray(base.documentos)
+    ? base.documentos.map((doc) => buildDocumentResponse(doc, pacienteId)).filter(Boolean)
     : [];
-  return plain;
+
+  return {
+    ...base,
+    documentos,
+  };
 };
 
 const formatDocumentListForExport = (documents) => {
@@ -188,8 +220,8 @@ router.post('/', protect, async (req, res) => {
     });
 
     await nuevoPaciente.save();
-    await nuevoPaciente.populate('obraSocial');
-    await nuevoPaciente.populate('centroSalud');
+    await nuevoPaciente.populate('obraSocial', 'nombre');
+    await nuevoPaciente.populate('centroSalud', 'nombre porcentajeRetencion');
 
     res.status(201).json(buildPacienteResponse(nuevoPaciente));
   } catch (error) {
@@ -283,8 +315,9 @@ router.get('/', protect, async (req, res) => {
 
     let pacientesQuery = Paciente.find(filter, projection)
       .sort(sort)
-      .populate('obraSocial')
-      .populate('centroSalud');
+      .populate('obraSocial', 'nombre')
+      .populate('centroSalud', 'nombre porcentajeRetencion')
+      .lean({ virtuals: true });
 
     if (normalizedLimit > 0) {
       pacientesQuery = pacientesQuery.skip(skip).limit(normalizedLimit);
@@ -376,7 +409,6 @@ router.get('/export', protect, async (req, res) => {
       .lean();
 
     const columns = [
-      { header: 'ID', value: (paciente) => paciente._id },
       { header: 'Nombre', value: (paciente) => paciente.nombre || '' },
       { header: 'Apellido', value: (paciente) => paciente.apellido || '' },
       { header: 'DNI', value: (paciente) => paciente.dni || '' },
@@ -406,12 +438,18 @@ router.get('/export', protect, async (req, res) => {
       { header: 'Actualizado el', value: (paciente) => formatDateTime(paciente.updatedAt) },
     ];
 
-    const csvContent = toCsv(pacientes, columns);
-    const filename = `pacientes-${new Date().toISOString().slice(0, 10)}.csv`;
+    const buffer = createExcelFileBuffer({
+      sheetName: 'Pacientes',
+      columns,
+      rows: Array.isArray(pacientes) ? pacientes : [],
+    });
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    const filename = `pacientes-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.status(200).send(`\ufeff${csvContent}`);
+    res.setHeader('Content-Length', buffer.length);
+    res.status(200).send(buffer);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -420,8 +458,9 @@ router.get('/export', protect, async (req, res) => {
 router.get('/:id', protect, async (req, res) => {
   try {
     const paciente = await Paciente.findOne({ _id: req.params.id, user: req.user._id })
-      .populate('obraSocial')
-      .populate('centroSalud');
+      .populate('obraSocial', 'nombre')
+      .populate('centroSalud', 'nombre porcentajeRetencion')
+      .lean({ virtuals: true });
     if (!paciente) return res.status(404).json({ error: 'Paciente no encontrado o no autorizado' });
     res.json(buildPacienteResponse(paciente));
   } catch (error) {
@@ -438,8 +477,8 @@ router.put('/:id', protect, async (req, res) => {
       payload,
       { new: true, runValidators: true }
     )
-      .populate('obraSocial')
-      .populate('centroSalud');
+      .populate('obraSocial', 'nombre')
+      .populate('centroSalud', 'nombre porcentajeRetencion');
 
     if (!pacienteActualizado) return res.status(404).json({ error: 'Paciente no encontrado o no autorizado' });
     res.json(buildPacienteResponse(pacienteActualizado));
@@ -493,12 +532,16 @@ router.post('/:id/documentos', protect, async (req, res) => {
     }
 
     if (buffer.length > MAX_FILE_SIZE_BYTES) {
-      return res.status(413).json({ error: 'El archivo supera el tamaño máximo permitido (10 MB).' });
+      return res.status(413).json({ error: 'El archivo supera el tamaño máximo permitido (20 MB).' });
     }
 
     const contentType = typeof archivo.tipo === 'string' && archivo.tipo.trim() !== ''
       ? archivo.tipo.trim()
       : (typeof archivo.contentType === 'string' ? archivo.contentType.trim() : 'application/octet-stream');
+
+    if (!isAllowedDocumentType({ contentType, filename: archivo.nombre })) {
+      return res.status(415).json({ error: 'Solo se permiten archivos en formato PDF o JPG de hasta 20 MB.' });
+    }
 
     const storagePayload = await storageService.uploadDocument({
       buffer,

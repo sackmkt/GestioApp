@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react';
 import { useLocation } from 'react-router-dom';
 import facturasService from '../services/FacturasService';
 import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
 import centrosSaludService from '../services/CentrosSaludService';
+import authService from '../services/authService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
 
 const ESTADO_OPTIONS = [
@@ -48,6 +49,9 @@ const EMPTY_PAYMENT_FORM = {
 };
 
 const ITEMS_PER_PAGE = 16;
+const MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024;
+const ALLOWED_DOCUMENT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/pjpeg'];
+const ALLOWED_DOCUMENT_EXTENSIONS = ['pdf', 'jpg', 'jpeg'];
 
 const getMontoCobrado = (factura) => {
   if (!factura) {
@@ -137,6 +141,19 @@ const toBase64 = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+const isAllowedDocumentFile = (file) => {
+  if (!file) {
+    return false;
+  }
+  const mime = (file.type || '').toLowerCase();
+  if (ALLOWED_DOCUMENT_MIME_TYPES.includes(mime)) {
+    return true;
+  }
+
+  const extension = file.name?.split('.')?.pop()?.toLowerCase() || '';
+  return ALLOWED_DOCUMENT_EXTENSIONS.includes(extension);
+};
+
 const normalizeEstado = (factura) => {
   if (!factura) {
     return 'pendiente';
@@ -172,6 +189,7 @@ function FacturasPage() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSearchTerm, setFilterSearchTerm] = useState('');
+  const deferredFilterSearchTerm = useDeferredValue(filterSearchTerm);
   const [editingId, setEditingId] = useState(null);
   const [expandedFacturaId, setExpandedFacturaId] = useState(null);
   const [paymentForms, setPaymentForms] = useState({});
@@ -186,6 +204,7 @@ function FacturasPage() {
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [currentPage, setCurrentPage] = useState(1);
   const formRef = useRef(null);
+  const currentUserId = useMemo(() => authService.getStoredUser()?._id || null, []);
 
   const fetchFacturas = useCallback(async () => {
     try {
@@ -580,7 +599,7 @@ function FacturasPage() {
   const startDateTime = startDate ? startDate.getTime() : null;
   const endDateTime = endDate ? endDate.getTime() : null;
 
-  const appliedSearch = useMemo(() => filterSearchTerm.trim().toLowerCase(), [filterSearchTerm]);
+  const appliedSearch = useMemo(() => deferredFilterSearchTerm.trim().toLowerCase(), [deferredFilterSearchTerm]);
 
   const filteredFacturas = useMemo(() => {
     return facturas.filter((factura) => {
@@ -780,7 +799,38 @@ function FacturasPage() {
     }));
   };
 
+  const clearDocumentFile = (facturaId) => {
+    setDocumentForms((prev) => ({
+      ...prev,
+      [facturaId]: {
+        ...getDocumentForm(facturaId),
+        archivo: null,
+      },
+    }));
+    setDocumentInputKeys((prev) => ({
+      ...prev,
+      [facturaId]: (prev[facturaId] || 0) + 1,
+    }));
+  };
+
   const handleDocumentFileChange = (facturaId, file) => {
+    if (!file) {
+      clearDocumentFile(facturaId);
+      return;
+    }
+
+    if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
+      showError('El archivo no puede superar los 20 MB.');
+      clearDocumentFile(facturaId);
+      return;
+    }
+
+    if (!isAllowedDocumentFile(file)) {
+      showError('Solo se permiten archivos PDF o JPG de hasta 20 MB.');
+      clearDocumentFile(facturaId);
+      return;
+    }
+
     setDocumentForms((prev) => ({
       ...prev,
       [facturaId]: {
@@ -893,7 +943,18 @@ function FacturasPage() {
   const handleExportFacturas = async () => {
     try {
       setExportLoading(true);
-      const { blob, filename } = await facturasService.exportFacturas();
+      const exportFilters = {};
+      if (startDate) {
+        exportFilters.startDate = startDate.toISOString();
+      }
+      if (endDate) {
+        exportFilters.endDate = endDate.toISOString();
+      }
+      if (currentUserId) {
+        exportFilters.userId = currentUserId;
+      }
+
+      const { blob, filename } = await facturasService.exportFacturas(exportFilters);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -1491,6 +1552,7 @@ function FacturasPage() {
                                           id={`documentoArchivo-${factura._id}`}
                                           type="file"
                                           className="form-control"
+                                          accept=".pdf,.jpg,.jpeg,image/jpeg"
                                           onChange={(e) => handleDocumentFileChange(factura._id, e.target.files?.[0] || null)}
                                         />
                                       </div>
@@ -1713,6 +1775,7 @@ function FacturasPage() {
                                 id={`documentoArchivo-mobile-${factura._id}`}
                                 type="file"
                                 className="form-control"
+                                accept=".pdf,.jpg,.jpeg,image/jpeg"
                                 onChange={(e) => handleDocumentFileChange(factura._id, e.target.files?.[0] || null)}
                               />
                             </div>

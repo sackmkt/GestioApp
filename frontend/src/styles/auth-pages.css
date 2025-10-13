@@ -196,6 +196,37 @@
   cursor: not-allowed;
 }
 
+.auth-password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth-input--password {
+  padding-right: 5.5rem;
+}
+
+.auth-toggle-visibility {
+  position: absolute;
+  right: 0.75rem;
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.auth-toggle-visibility:hover,
+.auth-toggle-visibility:focus {
+  color: #1d4ed8;
+  background-color: rgba(37, 99, 235, 0.08);
+  outline: none;
+}
+
 .auth-alert--success {
   border-radius: 1rem;
   padding: 0.8rem 1rem;
