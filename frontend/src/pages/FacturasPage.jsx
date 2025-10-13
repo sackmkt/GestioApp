@@ -1172,18 +1172,19 @@ function FacturasPage() {
                     const estado = normalizeEstado(factura);
                     const badgeClass = ESTADO_BADGES[estado] || 'bg-secondary';
                     const isVencida = esFacturaVencida(factura);
-                    const puntoVentaDisplay = factura.puntoVenta !== null && factura.puntoVenta !== undefined ? factura.puntoVenta : '—';
-                    const numeroFacturaDisplay = factura.numeroFactura !== null && factura.numeroFactura !== undefined ? factura.numeroFactura : '—';
+                    const puntoVentaValue = Number.isFinite(factura.puntoVenta) ? factura.puntoVenta : null;
+                    const numeroFacturaValue = Number.isFinite(factura.numeroFactura) ? factura.numeroFactura : null;
+                    const puntoVentaDisplay = puntoVentaValue ?? '—';
+                    const numeroFacturaDisplay = numeroFacturaValue ?? '—';
+                    const facturaDisplay = puntoVentaValue !== null || numeroFacturaValue !== null
+                      ? [puntoVentaValue, numeroFacturaValue].filter((value) => value !== null).join('-')
+                      : '—';
                     const montoCobrado = getMontoCobrado(factura);
                     const saldoPendiente = getSaldoPendiente(factura);
                     return (
                       <React.Fragment key={factura._id}>
                         <tr className={factura.pagado ? 'table-success' : ''}>
-                          <td>
-                            {puntoVentaDisplay !== '—' || numeroFacturaDisplay !== '—'
-                              ? `PV ${puntoVentaDisplay} - N° ${numeroFacturaDisplay}`
-                              : '—'}
-                          </td>
+                          <td>{facturaDisplay}</td>
                           <td>{factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</td>
                           <td>{formatCurrency(factura.montoTotal)}</td>
                           <td>{formatDate(factura.fechaEmision)}</td>
@@ -1497,8 +1498,13 @@ function FacturasPage() {
                   const estado = normalizeEstado(factura);
                   const badgeClass = ESTADO_BADGES[estado] || 'bg-secondary';
                   const paymentForm = getPaymentForm(factura._id);
-                  const puntoVentaDisplay = factura.puntoVenta !== null && factura.puntoVenta !== undefined ? factura.puntoVenta : '—';
-                  const numeroFacturaDisplay = factura.numeroFactura !== null && factura.numeroFactura !== undefined ? factura.numeroFactura : '—';
+                  const puntoVentaValue = Number.isFinite(factura.puntoVenta) ? factura.puntoVenta : null;
+                  const numeroFacturaValue = Number.isFinite(factura.numeroFactura) ? factura.numeroFactura : null;
+                  const puntoVentaDisplay = puntoVentaValue ?? '—';
+                  const numeroFacturaDisplay = numeroFacturaValue ?? '—';
+                  const facturaDisplay = puntoVentaValue !== null || numeroFacturaValue !== null
+                    ? [puntoVentaValue, numeroFacturaValue].filter((value) => value !== null).join('-')
+                    : '—';
                   const montoCobrado = getMontoCobrado(factura);
                   const saldoPendiente = getSaldoPendiente(factura);
                   const isVencida = esFacturaVencida(factura);
@@ -1509,7 +1515,7 @@ function FacturasPage() {
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start">
                           <div>
-                            <h5 className="card-title mb-1">Factura PV {puntoVentaDisplay} - N° {numeroFacturaDisplay}</h5>
+                            <h5 className="card-title mb-1">Factura {facturaDisplay}</h5>
                             <p className="mb-1"><strong>Paciente:</strong> {factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</p>
                             <p className="mb-1"><strong>Monto:</strong> {formatCurrency(factura.montoTotal)}</p>
                             <p className="mb-1"><strong>Emitida:</strong> {formatDate(factura.fechaEmision)}</p>
