@@ -38,11 +38,28 @@ const getToken = () => {
   }
 };
 
+const requestPasswordReset = async (email) => {
+  const response = await axios.post(`${API_BASE_URL}/users/forgot-password`, {
+    email: email.trim().toLowerCase(),
+  });
+  return response.data;
+};
+
+const resetPassword = async ({ token, password }) => {
+  const response = await axios.post(`${API_BASE_URL}/users/reset-password`, {
+    token,
+    password,
+  });
+  return response.data;
+};
+
 const authService = {
   register,
   login,
   logout,
   getToken,
+  requestPasswordReset,
+  resetPassword,
 };
 
 export default authService;

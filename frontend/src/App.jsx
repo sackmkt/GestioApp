@@ -8,6 +8,8 @@ import TurnosPage from './pages/TurnosPage';
 import CentrosSaludPage from './pages/CentrosSaludPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import CompleteProfilePage from './pages/CompleteProfilePage';
 import ProfilePage from './pages/ProfilePage';
 import GestioLogo from './assets/GestioLogo.png';
@@ -368,6 +370,8 @@ function App() {
           )}
           <div className="gestio-content">
             <Routes>
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               {!isAuthenticated && (
                 <>
                   <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />

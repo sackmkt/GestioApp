@@ -82,6 +82,14 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
   const [imageError, setImageError] = useState('');
   const fileInputRef = useRef(null);
   const [selectedWidgets, setSelectedWidgets] = useState(() => sortDashboardPreferences(resolveDashboardPreferences(currentUser?.dashboardPreferences)));
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
 
   useEffect(() => {
     if (!currentUser) {
@@ -131,6 +139,11 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handlePasswordInputChange = (event) => {
+    const { name, value } = event.target;
+    setPasswordForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const professionDisplay = useMemo(() => {
@@ -320,6 +333,45 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
       console.error('Error al actualizar el perfil:', submitError);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (event) => {
+    event.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      setPasswordError('Completá todos los campos para cambiar tu contraseña.');
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError('La nueva contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('Las contraseñas nuevas no coinciden.');
+      return;
+    }
+
+    setIsPasswordSubmitting(true);
+
+    try {
+      await userService.changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordSuccess('Actualizamos tu contraseña correctamente.');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (submitError) {
+      const message =
+        submitError.response?.data?.message || 'No pudimos actualizar tu contraseña. Intenta nuevamente.';
+      setPasswordError(message);
+      console.error('Error al cambiar la contraseña:', submitError);
+    } finally {
+      setIsPasswordSubmitting(false);
     }
   };
 
@@ -607,6 +659,60 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
                 <button type="submit" className="btn btn-dark w-100 mt-4" disabled={isSubmitting}>
                   {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
                 </button>
+              </form>
+            </div>
+          </div>
+
+          <div className="card shadow-sm border-0 mt-4">
+            <div className="card-header bg-white">
+              <h5 className="mb-0">Seguridad</h5>
+            </div>
+            <div className="card-body">
+              <p className="text-muted">Actualizá tu contraseña regularmente para mantener tu cuenta protegida.</p>
+              {passwordError && <div className="alert alert-danger">{passwordError}</div>}
+              {passwordSuccess && <div className="alert alert-success">{passwordSuccess}</div>}
+              <form onSubmit={handlePasswordSubmit} className="row g-3">
+                <div className="col-12">
+                  <label className="form-label">Contraseña actual</label>
+                  <input
+                    type="password"
+                    name="currentPassword"
+                    value={passwordForm.currentPassword}
+                    onChange={handlePasswordInputChange}
+                    className="form-control"
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Nueva contraseña</label>
+                  <input
+                    type="password"
+                    name="newPassword"
+                    value={passwordForm.newPassword}
+                    onChange={handlePasswordInputChange}
+                    className="form-control"
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+                <div className="col-md-6">
+                  <label className="form-label">Confirmar nueva contraseña</label>
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    value={passwordForm.confirmPassword}
+                    onChange={handlePasswordInputChange}
+                    className="form-control"
+                    autoComplete="new-password"
+                    required
+                  />
+                </div>
+                <div className="col-12 d-flex justify-content-end">
+                  <button type="submit" className="btn btn-primary" disabled={isPasswordSubmitting}>
+                    {isPasswordSubmitting ? 'Actualizando…' : 'Cambiar contraseña'}
+                  </button>
+                </div>
               </form>
             </div>
           </div>

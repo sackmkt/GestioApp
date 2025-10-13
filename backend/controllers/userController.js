@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const emailService = require('../services/emailService');
 
 const toPositiveNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -411,9 +412,17 @@ exports.requestPasswordReset = async (req, res) => {
       user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000);
       await user.save();
 
-      console.info(
-        `Solicitud de restablecimiento de contraseña para ${user.email}. Token temporal: ${token}`,
-      );
+      try {
+        await emailService.sendPasswordResetEmail({ to: user.email, token });
+        console.info(
+          `Solicitud de restablecimiento de contraseña procesada para ${user.email}. Se envió un correo de restablecimiento.`,
+        );
+      } catch (emailError) {
+        console.error(
+          `No se pudo enviar el correo de restablecimiento de contraseña para ${user.email}.`,
+          emailError,
+        );
+      }
     }
 
     res.json({
