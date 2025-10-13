@@ -7,9 +7,11 @@ import pacientesService from '../services/PacientesService';
 import obrasSocialesService from '../services/ObrasSocialesService';
 import centrosSaludService from '../services/CentrosSaludService';
 import turnosService from '../services/TurnosService';
+import userService from '../services/UserService';
 import DailyAgendaTimeline from '../components/DailyAgendaTimeline.jsx';
-import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers, FaStar, FaExclamationTriangle, FaCalendarPlus, FaUserPlus, FaPhoneAlt, FaWhatsapp, FaSms } from 'react-icons/fa';
-import { DEFAULT_DASHBOARD_PREFERENCES, DASHBOARD_WIDGET_IDS, resolveDashboardPreferences } from '../constants/dashboardPreferences.js';
+import { useFeedback } from '../context/FeedbackContext.jsx';
+import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers, FaStar, FaExclamationTriangle, FaCalendarPlus, FaUserPlus, FaPhoneAlt, FaWhatsapp, FaSms, FaBullseye, FaLightbulb } from 'react-icons/fa';
+import { DASHBOARD_WIDGET_OPTIONS, DEFAULT_DASHBOARD_PREFERENCES, DASHBOARD_WIDGET_IDS, resolveDashboardPreferences } from '../constants/dashboardPreferences.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
@@ -31,6 +33,15 @@ const ESTADO_COLOR_MAP = {
 
 const WEEKLY_AVAILABLE_MINUTES = 5 * 8 * 60; // 5 días hábiles de 8 horas
 const SECTION_USAGE_STORAGE_KEY = 'gestio:section-usage';
+const FOCUS_MODE_STORAGE_KEY = 'gestio:focus-mode';
+const FOCUS_MODE_WIDGETS = new Set([
+  'summaryHighlights',
+  'agendaToday',
+  'turnosTomorrow',
+  'turnosUpcoming',
+  'dateRange',
+  'financialSummary',
+]);
 
 const QUICK_ACTIONS_MAP = {
   turnos: {
@@ -76,6 +87,14 @@ const QUICK_ACTIONS_MAP = {
 };
 
 const QUICK_ACTION_FALLBACK_ORDER = ['turnos', 'pacientes', 'facturas', 'obrasSociales', 'centrosSalud'];
+
+const normalizeWidgetOrder = (widgets) => {
+  if (!Array.isArray(widgets)) {
+    return [...DEFAULT_DASHBOARD_PREFERENCES];
+  }
+
+  return DEFAULT_DASHBOARD_PREFERENCES.filter((id) => widgets.includes(id));
+};
 
 const sanitizeDialValue = (value) => {
   if (typeof value !== 'string') {
@@ -135,6 +154,7 @@ const getLocalDateKey = (date) => {
 
 function DashboardPage({ currentUser }) {
   const navigate = useNavigate();
+  const { showError, showSuccess } = useFeedback();
   const [allFacturas, setAllFacturas] = useState([]);
   const [centros, setCentros] = useState([]);
   const [data, setData] = useState({
@@ -172,13 +192,43 @@ function DashboardPage({ currentUser }) {
     },
   });
   const [turnos, setTurnos] = useState([]);
+  const [preferencesOverride, setPreferencesOverride] = useState(null);
+  const [isPreferencesPanelOpen, setIsPreferencesPanelOpen] = useState(false);
+  const [preferencesDraft, setPreferencesDraft] = useState(() => []);
+  const [isSavingPreferences, setIsSavingPreferences] = useState(false);
+  const [preferencesError, setPreferencesError] = useState('');
+  const [sectionUsageRecords, setSectionUsageRecords] = useState({});
+  const [isFocusMode, setIsFocusMode] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
 
+    try {
+      return window.localStorage.getItem(FOCUS_MODE_STORAGE_KEY) === 'true';
+    } catch (error) {
+      console.warn('No se pudo recuperar la preferencia del modo enfoque.', error);
+      return false;
+    }
+  });
+
+  const preferencesSource = preferencesOverride ?? currentUser?.dashboardPreferences;
   const effectivePreferences = useMemo(() => {
-    const resolved = resolveDashboardPreferences(currentUser?.dashboardPreferences);
+    const resolved = resolveDashboardPreferences(preferencesSource);
     return resolved.filter((widget) => DASHBOARD_WIDGET_IDS.has(widget));
-  }, [currentUser?.dashboardPreferences]);
+  }, [preferencesSource]);
   const activeWidgetsSet = useMemo(() => new Set(effectivePreferences), [effectivePreferences]);
-  const shouldShowWidget = useCallback((widgetId) => activeWidgetsSet.has(widgetId), [activeWidgetsSet]);
+  const shouldShowWidget = useCallback(
+    (widgetId) => {
+      if (!activeWidgetsSet.has(widgetId)) {
+        return false;
+      }
+      if (isFocusMode && !FOCUS_MODE_WIDGETS.has(widgetId)) {
+        return false;
+      }
+      return true;
+    },
+    [activeWidgetsSet, isFocusMode],
+  );
   const hasUpperWidgets = useMemo(() => {
     return [
       'financialSummary',
@@ -188,8 +238,53 @@ function DashboardPage({ currentUser }) {
       'agendaToday',
       'turnosTomorrow',
       'turnosUpcoming',
-    ].some((widget) => activeWidgetsSet.has(widget));
-  }, [activeWidgetsSet]);
+    ].some((widget) => shouldShowWidget(widget));
+  }, [shouldShowWidget]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(SECTION_USAGE_STORAGE_KEY);
+      setSectionUsageRecords(raw ? JSON.parse(raw) : {});
+    } catch (error) {
+      console.warn('No se pudieron recuperar las estadísticas de uso de secciones.', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isPreferencesPanelOpen) {
+      setPreferencesDraft(effectivePreferences);
+    }
+  }, [effectivePreferences, isPreferencesPanelOpen]);
+
+  useEffect(() => {
+    if (Array.isArray(preferencesDraft) && preferencesDraft.length > 0 && preferencesError) {
+      setPreferencesError('');
+    }
+  }, [preferencesDraft, preferencesError]);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.classList.toggle('gestio-focus-mode', isFocusMode);
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(FOCUS_MODE_STORAGE_KEY, isFocusMode ? 'true' : 'false');
+      } catch (error) {
+        console.warn('No se pudo persistir la preferencia del modo enfoque.', error);
+      }
+    }
+
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('gestio-focus-mode');
+      }
+    };
+  }, [isFocusMode]);
   const quickActions = (() => {
     const fallback = QUICK_ACTION_FALLBACK_ORDER.map((id) => QUICK_ACTIONS_MAP[id]).filter(Boolean).slice(0, 3);
 
@@ -225,12 +320,87 @@ function DashboardPage({ currentUser }) {
     }
   })();
 
+  const shouldRenderQuickActions = !isFocusMode && quickActions.length > 0;
+
   const handleQuickAction = useCallback((path) => {
     if (!path) {
       return;
     }
     navigate(path);
   }, [navigate]);
+  const handlePreferencesToggle = useCallback(() => {
+    setIsPreferencesPanelOpen((prev) => {
+      const next = !prev;
+      if (!next) {
+        setPreferencesDraft(effectivePreferences);
+        setPreferencesError('');
+      }
+      return next;
+    });
+  }, [effectivePreferences]);
+
+  const handlePreferencesCancel = useCallback(() => {
+    setIsPreferencesPanelOpen(false);
+    setPreferencesError('');
+    setPreferencesDraft(effectivePreferences);
+  }, [effectivePreferences]);
+
+  const handleWidgetToggle = useCallback((widgetId) => {
+    if (!DASHBOARD_WIDGET_IDS.has(widgetId)) {
+      return;
+    }
+
+    setPreferencesDraft((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      if (current.includes(widgetId)) {
+        const filtered = current.filter((id) => id !== widgetId);
+        return normalizeWidgetOrder(filtered);
+      }
+
+      return normalizeWidgetOrder([...current, widgetId]);
+    });
+  }, []);
+
+  const handleSavePreferences = useCallback(async () => {
+    if (!Array.isArray(preferencesDraft) || preferencesDraft.length === 0) {
+      setPreferencesError('Selecciona al menos un módulo para tu panel.');
+      return;
+    }
+
+    const normalizedDraft = normalizeWidgetOrder(preferencesDraft);
+
+    setIsSavingPreferences(true);
+    try {
+      await userService.updateProfile({ dashboardPreferences: normalizedDraft });
+      setPreferencesOverride(normalizedDraft);
+      setIsPreferencesPanelOpen(false);
+      setPreferencesDraft(normalizedDraft);
+      setPreferencesError('');
+      showSuccess('Guardamos tu selección de módulos.');
+
+      if (typeof window !== 'undefined') {
+        try {
+          const storedUserRaw = window.localStorage.getItem('user');
+          if (storedUserRaw) {
+            const storedUser = JSON.parse(storedUserRaw);
+            const updatedUser = { ...storedUser, dashboardPreferences: normalizedDraft };
+            window.localStorage.setItem('user', JSON.stringify(updatedUser));
+          }
+        } catch (storageError) {
+          console.warn('No se pudo sincronizar la preferencia de módulos en almacenamiento local.', storageError);
+        }
+      }
+    } catch (error) {
+      console.error('No se pudieron guardar las preferencias del panel.', error);
+      showError('No pudimos guardar tus módulos favoritos. Intenta nuevamente.');
+    } finally {
+      setIsSavingPreferences(false);
+    }
+  }, [preferencesDraft, showError, showSuccess]);
+
+  const handleFocusModeToggle = useCallback(() => {
+    setIsFocusMode((prev) => !prev);
+  }, []);
 
   const [dateRange, setDateRange] = useState({
     startDate: '',
@@ -915,8 +1085,92 @@ function DashboardPage({ currentUser }) {
     : 0;
   const obrasSocialesEntries = obrasSocialesResumen.entries || [];
 
+  const suggestions = useMemo(() => {
+    const tips = [];
+    const pendingAmount = Number(data.montoPendiente) || 0;
+    const paidAmount = Number(data.montoPagado) || 0;
+    const pendingCount = Number(data.facturasPendientes) || 0;
+    const observadas = estadoResumen.find((estado) => estado.estado === 'observada')?.count || 0;
+    const turnosSinConfirmar = turnosHoy.filter((turno) => (turno.estado || '').toLowerCase() !== 'confirmado').length;
+    const turnosMananaCount = turnosManana.length;
+    const upcomingCount = turnosPosteriores.length;
+    const usageFacturas = Number(sectionUsageRecords.facturas) || 0;
+    const usageTurnos = Number(sectionUsageRecords.turnos) || 0;
+    const centrosInactivos = Math.max(0, (Number(data.totalCentros) || 0) - (Number(data.centrosActivos) || 0));
+
+    if (pendingAmount > 0 && (pendingAmount >= paidAmount * 0.6 || pendingCount >= 3 || usageFacturas < 2)) {
+      tips.push({
+        id: 'pending-billing',
+        title: 'Seguimiento de cobranzas pendiente',
+        description: `Tienes ${pendingCount} factura${pendingCount === 1 ? '' : 's'} sin cobrar por ${formatNumber(pendingAmount)}. Agenda recordatorios para acelerar los pagos.`,
+        action: '/facturas?estado=pendiente',
+        actionLabel: 'Ver facturas pendientes',
+      });
+    }
+
+    if (observadas > 0) {
+      tips.push({
+        id: 'observed-invoices',
+        title: 'Resuelve facturas observadas',
+        description: `Detectamos ${observadas} comprobante${observadas === 1 ? '' : 's'} observados. Resolverlos evita demoras en la cobranza.`,
+        action: '/facturas?estado=observada',
+        actionLabel: 'Ir a facturación',
+      });
+    }
+
+    if (turnosSinConfirmar > 0) {
+      tips.push({
+        id: 'confirm-appointments',
+        title: 'Confirma los turnos del día',
+        description: `Hay ${turnosSinConfirmar} turno${turnosSinConfirmar === 1 ? '' : 's'} de hoy sin confirmar. Un mensaje rápido reduce ausencias.`,
+        action: '/turnos',
+        actionLabel: 'Abrir agenda',
+      });
+    } else if (turnosMananaCount > 0 && (upcomingCount < 2 || usageTurnos < 2)) {
+      tips.push({
+        id: 'plan-next-day',
+        title: 'Prepará la agenda de mañana',
+        description: `Tienes ${turnosMananaCount} turno${turnosMananaCount === 1 ? '' : 's'} agendado${turnosMananaCount === 1 ? '' : 's'} para mañana. Revisa disponibilidad para sumar nuevos pacientes.`,
+        action: '/turnos',
+        actionLabel: 'Ver agenda',
+      });
+    }
+
+    if (centrosInactivos > 0) {
+      tips.push({
+        id: 'reactivate-centers',
+        title: 'Revisa centros sin actividad reciente',
+        description: `${centrosInactivos} centro${centrosInactivos === 1 ? '' : 's'} derivador${centrosInactivos === 1 ? '' : 'es'} no registran facturación reciente. Actualiza convenios o contacta a tus referentes.`,
+        action: '/centros-salud',
+        actionLabel: 'Gestionar centros',
+      });
+    }
+
+    if (coberturaTop5 > 65 && obrasSocialesEntries.length > 0) {
+      tips.push({
+        id: 'diversify-insurers',
+        title: 'Diversifica convenios clave',
+        description: `El top 5 de obras sociales concentra el ${Math.round(coberturaTop5)}% de tu facturación. Evalúa sumar opciones para reducir riesgos.`,
+        action: '/obras-sociales',
+        actionLabel: 'Ver obras sociales',
+      });
+    }
+
+    const uniqueTips = tips.filter((tip, index, array) => array.findIndex((item) => item.id === tip.id) === index).slice(0, 3);
+
+    if (uniqueTips.length === 0) {
+      uniqueTips.push({
+        id: 'all-good',
+        title: 'Todo en orden',
+        description: 'Tus indicadores se mantienen estables. Reserva unos minutos para revisar agenda y cobranzas y sostener el ritmo.',
+      });
+    }
+
+    return uniqueTips;
+  }, [coberturaTop5, data.centrosActivos, data.montoPagado, data.montoPendiente, data.totalCentros, estadoResumen, obrasSocialesEntries.length, sectionUsageRecords.facturas, sectionUsageRecords.turnos, turnosHoy, turnosManana, turnosPosteriores]);
+
   return (
-    <div className="container mt-4">
+    <div className={`container mt-4 dashboard-root ${isFocusMode ? 'dashboard-root--focus' : ''}`}>
       <div className="mb-4 text-center text-md-start">
         <div className="d-flex flex-column flex-sm-row align-items-center justify-content-center justify-content-sm-start gap-3">
           <h2 className="fw-bold mb-0">Hola, {userDisplayName} 👋</h2>
@@ -932,7 +1186,99 @@ function DashboardPage({ currentUser }) {
         )}
         <p className="text-muted mb-0 mt-3 mt-sm-2">Este resumen ejecutivo reúne tus principales indicadores asistenciales y financieros.</p>
       </div>
-      {quickActions.length > 0 && (
+      <div className="card shadow-sm border-0 mb-4">
+        <div className="card-body d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
+          <div>
+            <h5 className="card-title mb-1 d-flex align-items-center gap-2">
+              <FaBullseye className="text-primary" /> Personaliza tu panel
+            </h5>
+            <p className="text-muted small mb-0">
+              Selecciona los módulos visibles y activa el modo enfoque para trabajar sin distracciones.
+            </p>
+          </div>
+          <div className="d-flex flex-column flex-sm-row gap-2 w-100 w-lg-auto">
+            <button type="button" className="btn btn-outline-primary" onClick={handlePreferencesToggle}>
+              {isPreferencesPanelOpen ? 'Ocultar selección' : 'Elegir módulos'}
+            </button>
+            <button
+              type="button"
+              className={`btn ${isFocusMode ? 'btn-secondary' : 'btn-outline-secondary'}`}
+              onClick={handleFocusModeToggle}
+              aria-pressed={isFocusMode}
+            >
+              {isFocusMode ? 'Salir de modo enfoque' : 'Modo enfoque'}
+            </button>
+          </div>
+        </div>
+        {isFocusMode ? (
+          <div className="alert alert-info mb-0 rounded-0 rounded-bottom">
+            El modo enfoque mantiene solo los indicadores esenciales. Desactívalo para volver a ver el panel completo.
+          </div>
+        ) : null}
+        {isPreferencesPanelOpen && (
+          <div className="card-body border-top pt-3">
+            {preferencesError && <div className="alert alert-danger mb-3">{preferencesError}</div>}
+            <div className="row g-3">
+              {DASHBOARD_WIDGET_OPTIONS.map((option) => {
+                const isChecked = Array.isArray(preferencesDraft) && preferencesDraft.includes(option.id);
+                return (
+                  <div key={option.id} className="col-md-6 col-xl-4">
+                    <label className={`widget-option d-flex align-items-start gap-3 p-3 rounded-3 h-100 ${isChecked ? 'widget-option--active' : ''}`}>
+                      <input
+                        type="checkbox"
+                        className="form-check-input mt-1"
+                        checked={isChecked}
+                        onChange={() => handleWidgetToggle(option.id)}
+                      />
+                      <div>
+                        <p className="fw-semibold mb-1">{option.label}</p>
+                        <p className="text-muted small mb-0">{option.description}</p>
+                      </div>
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="d-flex justify-content-end gap-2 mt-3">
+              <button type="button" className="btn btn-outline-secondary" onClick={handlePreferencesCancel} disabled={isSavingPreferences}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleSavePreferences} disabled={isSavingPreferences}>
+                {isSavingPreferences ? 'Guardando...' : 'Guardar selección'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+      {suggestions.length > 0 && (
+        <div className="card shadow-sm border-0 mb-4">
+          <div className="card-body">
+            <h5 className="card-title d-flex align-items-center gap-2 mb-3">
+              <FaLightbulb className="text-warning" /> Sugerencias contextuales
+            </h5>
+            <ul className="list-group list-group-flush">
+              {suggestions.map((suggestion) => (
+                <li key={suggestion.id} className="list-group-item d-flex flex-column flex-md-row align-items-md-center gap-2">
+                  <div>
+                    <p className="fw-semibold mb-1">{suggestion.title}</p>
+                    <p className="text-muted small mb-0">{suggestion.description}</p>
+                  </div>
+                  {suggestion.action ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-primary ms-md-auto"
+                      onClick={() => handleQuickAction(suggestion.action)}
+                    >
+                      {suggestion.actionLabel || 'Ver detalle'}
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+      {shouldRenderQuickActions && (
         <div className="row g-3 mb-4">
           {quickActions.map((action) => {
             const Icon = action.icon;
