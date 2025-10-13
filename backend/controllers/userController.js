@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const toPositiveNumber = (value, fallback) => {
   const parsed = Number(value);
@@ -198,6 +199,12 @@ const buildUserResponse = (user, includeToken = true) => {
   };
 };
 
+const createResetToken = () => {
+  const token = crypto.randomBytes(32).toString('hex');
+  const hashed = crypto.createHash('sha256').update(token).digest('hex');
+  return { token, hashed };
+};
+
 exports.registerUser = async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -382,6 +389,99 @@ exports.updateProfile = async (req, res) => {
 
     const updatedUser = await User.findById(user._id).select('-password');
     res.json(buildUserResponse(updatedUser));
+  } catch (error) {
+    res.status(500).json({ message: 'Error del servidor' });
+  }
+};
+
+exports.requestPasswordReset = async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'El correo electrónico es obligatorio.' });
+  }
+
+  try {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (user) {
+      const { token, hashed } = createResetToken();
+      user.passwordResetToken = hashed;
+      user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000);
+      await user.save();
+
+      console.info(
+        `Solicitud de restablecimiento de contraseña para ${user.email}. Token temporal: ${token}`,
+      );
+    }
+
+    res.json({
+      message:
+        'Si el correo está registrado, recibirás instrucciones para restablecer tu contraseña.',
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error del servidor' });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    return res.status(400).json({ message: 'Token y nueva contraseña son obligatorios.' });
+  }
+
+  try {
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'El token de restablecimiento no es válido o expiró.' });
+    }
+
+    user.password = password;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'La contraseña se restableció correctamente.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error del servidor' });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res
+      .status(400)
+      .json({ message: 'La contraseña actual y la nueva contraseña son obligatorias.' });
+  }
+
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const isMatch = await user.matchPassword(currentPassword);
+
+    if (!isMatch) {
+      return res.status(401).json({ message: 'La contraseña actual no es correcta.' });
+    }
+
+    user.password = newPassword;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    res.json({ message: 'Contraseña actualizada correctamente.' });
   } catch (error) {
     res.status(500).json({ message: 'Error del servidor' });
   }
