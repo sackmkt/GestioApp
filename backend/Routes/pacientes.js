@@ -6,6 +6,7 @@ const Paciente = require('../models/Paciente');
 const CentroSalud = require('../models/CentroSalud');
 const { protect } = require('../middleware/authMiddleware');
 const storageService = require('../services/storageService');
+const { toCsv, formatDateTime } = require('../utils/csvUtils');
 
 const DEFAULT_PAGE_LIMIT = 16;
 const MAX_PAGE_LIMIT = 100;
@@ -114,6 +115,37 @@ const buildPacienteResponse = (pacienteDoc) => {
     ? plain.documentos.map((doc) => buildDocumentResponse(doc, pacienteDoc._id)).filter(Boolean)
     : [];
   return plain;
+};
+
+const formatDocumentListForExport = (documents) => {
+  if (!Array.isArray(documents) || documents.length === 0) {
+    return '';
+  }
+
+  return documents
+    .map((document) => {
+      const description = typeof document.descripcion === 'string' && document.descripcion.trim()
+        ? ` (${document.descripcion.trim()})`
+        : '';
+      return `${document.nombre}${description}`;
+    })
+    .join(' | ');
+};
+
+const resolveReferenceName = (reference) => {
+  if (!reference) {
+    return '';
+  }
+
+  if (typeof reference === 'string') {
+    return reference;
+  }
+
+  if (typeof reference === 'object' && reference.nombre) {
+    return reference.nombre;
+  }
+
+  return '';
 };
 
 const normalizePacientePayload = async (payload, userId) => {
@@ -330,6 +362,56 @@ router.get('/', protect, async (req, res) => {
       pagination,
       summary,
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/export', protect, async (req, res) => {
+  try {
+    const pacientes = await Paciente.find({ user: req.user._id })
+      .populate('obraSocial', 'nombre')
+      .populate('centroSalud', 'nombre')
+      .sort({ apellido: 1, nombre: 1 })
+      .lean();
+
+    const columns = [
+      { header: 'ID', value: (paciente) => paciente._id },
+      { header: 'Nombre', value: (paciente) => paciente.nombre || '' },
+      { header: 'Apellido', value: (paciente) => paciente.apellido || '' },
+      { header: 'DNI', value: (paciente) => paciente.dni || '' },
+      { header: 'Email', value: (paciente) => paciente.email || '' },
+      { header: 'Teléfono', value: (paciente) => paciente.telefono || '' },
+      {
+        header: 'Tipo de atención',
+        value: (paciente) => (paciente.tipoAtencion === 'centro' ? 'Centro de salud' : 'Particular'),
+      },
+      {
+        header: 'Obra social',
+        value: (paciente) => resolveReferenceName(paciente.obraSocial),
+      },
+      {
+        header: 'Centro de salud',
+        value: (paciente) => resolveReferenceName(paciente.centroSalud),
+      },
+      {
+        header: 'Cantidad de documentos',
+        value: (paciente) => (Array.isArray(paciente.documentos) ? paciente.documentos.length : 0),
+      },
+      {
+        header: 'Documentos adjuntos',
+        value: (paciente) => formatDocumentListForExport(paciente.documentos),
+      },
+      { header: 'Creado el', value: (paciente) => formatDateTime(paciente.createdAt) },
+      { header: 'Actualizado el', value: (paciente) => formatDateTime(paciente.updatedAt) },
+    ];
+
+    const csvContent = toCsv(pacientes, columns);
+    const filename = `pacientes-${new Date().toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(`\ufeff${csvContent}`);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

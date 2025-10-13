@@ -129,6 +129,21 @@ const downloadDocumento = async (facturaId, documentoId) => {
   }
 };
 
+const exportFacturas = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/export`, getHeadersWithConfig({ responseType: 'blob' }));
+    const filename = extractFilename(response.headers['content-disposition'], 'facturas.csv');
+    return {
+      blob: response.data,
+      filename,
+      contentType: response.headers['content-type'],
+    };
+  } catch (error) {
+    console.error('Error al exportar facturas:', error);
+    throw error;
+  }
+};
+
 export default {
   getFacturas,
   createFactura,
@@ -139,4 +154,5 @@ export default {
   uploadDocumento,
   deleteDocumento,
   downloadDocumento,
+  exportFacturas,
 };

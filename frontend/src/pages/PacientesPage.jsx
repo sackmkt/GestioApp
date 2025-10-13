@@ -121,6 +121,7 @@ function PacientesPage() {
   const [documentUploadLoading, setDocumentUploadLoading] = useState(false);
   const [documentDeleteLoadingId, setDocumentDeleteLoadingId] = useState(null);
   const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
+  const [exportLoading, setExportLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const documentFileInputRef = useRef(null);
   const formRef = useRef(null);
@@ -560,6 +561,27 @@ function PacientesPage() {
     }
   };
 
+  const handleExportPacientes = async () => {
+    try {
+      setExportLoading(true);
+      const { blob, filename } = await PacientesService.exportPacientes();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess('Exportación de pacientes generada correctamente.');
+    } catch (err) {
+      const message = err.response?.data?.error || 'No se pudo exportar el listado de pacientes.';
+      showError(message);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   return (
     <div className="container py-4">
       <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
@@ -568,6 +590,21 @@ function PacientesPage() {
           <p className="text-muted mb-0">Centraliza el seguimiento de tus pacientes y accedé a su información clínica y administrativa en segundos.</p>
         </div>
         <div className="d-flex flex-wrap gap-2 justify-content-start justify-content-lg-end">
+          <button
+            type="button"
+            className="btn btn-outline-primary"
+            onClick={handleExportPacientes}
+            disabled={exportLoading}
+          >
+            {exportLoading ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Generando...
+              </>
+            ) : (
+              <>Exportar pacientes</>
+            )}
+          </button>
           {hasSearch && (
             <button type="button" className="btn btn-outline-secondary" onClick={handleClearSearch}>
               Limpiar búsqueda
