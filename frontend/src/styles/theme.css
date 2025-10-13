@@ -51,6 +51,25 @@ body.modal-open {
   color: var(--gestio-dark);
 }
 
+.gestio-brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: inherit;
+}
+
+.gestio-brand__strong {
+  font-weight: 700;
+}
+
+.gestio-brand__light {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
 .gestio-navbar .navbar-toggler {
   border-color: transparent;
 }

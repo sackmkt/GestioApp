@@ -275,7 +275,10 @@ function App() {
         <div className="container">
           <NavLink className="navbar-brand d-flex align-items-center" to={isAuthenticated ? '/dashboard' : '/'} onClick={closeMenu}>
             <img src={GestioLogo} alt="Gestio Logo" style={{ height: '56px', marginRight: '12px' }} />
-            <span>GESTIO</span>
+            <span className="gestio-brand" aria-label="GestioApp">
+              <span className="gestio-brand__strong">GESTIO</span>
+              <span className="gestio-brand__light">APP</span>
+            </span>
           </NavLink>
           <button
             className="navbar-toggler"
@@ -419,7 +422,14 @@ function App() {
       </main>
       <footer className="gestio-footer py-4 mt-auto">
         <div className="container d-flex flex-column flex-md-row align-items-center justify-content-between gap-2">
-          <span>© {new Date().getFullYear()} Gestio. Todos los derechos reservados.</span>
+          <span>
+            © {new Date().getFullYear()}{' '}
+            <span className="gestio-brand" aria-label="GestioApp">
+              <span className="gestio-brand__strong">GESTIO</span>
+              <span className="gestio-brand__light">APP</span>
+            </span>
+            . Todos los derechos reservados.
+          </span>
           <span>Versión {APP_VERSION}</span>
         </div>
       </footer>
