@@ -89,6 +89,11 @@ function LoginPage({ onAuthChange }) {
                 required
               />
             </div>
+            <div className="auth-links auth-links--align-end">
+              <NavLink to="/forgot-password" className="auth-link">
+                ¿Olvidaste tu contraseña?
+              </NavLink>
+            </div>
             <button type="submit" className="auth-submit" disabled={isSubmitting}>
               {isSubmitting ? 'Ingresando…' : 'Acceder'}
             </button>

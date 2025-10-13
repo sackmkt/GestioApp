@@ -19,9 +19,19 @@ const updateProfile = async (profileData) => {
   return response.data;
 };
 
+const changePassword = async ({ currentPassword, newPassword }) => {
+  const response = await axios.post(
+    `${API_BASE_URL}/users/me/password`,
+    { currentPassword, newPassword },
+    withAuthHeaders(),
+  );
+  return response.data;
+};
+
 const userService = {
   getProfile,
   updateProfile,
+  changePassword,
 };
 
 export default userService;
