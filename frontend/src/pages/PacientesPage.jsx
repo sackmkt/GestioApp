@@ -153,7 +153,11 @@ function PacientesPage() {
   const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
   const [exportLoading, setExportLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [formDocumentName, setFormDocumentName] = useState('');
+  const [formDocumentDescription, setFormDocumentDescription] = useState('');
+  const [formDocumentFile, setFormDocumentFile] = useState(null);
   const documentFileInputRef = useRef(null);
+  const inlineDocumentFileInputRef = useRef(null);
   const formRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
@@ -161,6 +165,21 @@ function PacientesPage() {
 
   const trimmedSearch = searchTerm.trim();
   const hasSearch = Boolean(trimmedSearch);
+
+  const scrollToForm = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
+  const clearInlineDocumentFields = useCallback(() => {
+    setFormDocumentName('');
+    setFormDocumentDescription('');
+    setFormDocumentFile(null);
+    if (inlineDocumentFileInputRef.current) {
+      inlineDocumentFileInputRef.current.value = '';
+    }
+  }, []);
 
   const fetchPacientes = useCallback(async (pageToLoad = 1) => {
     setListLoading(true);
@@ -265,16 +284,15 @@ function PacientesPage() {
 
     setEditingId(null);
     setFormData(EMPTY_FORM);
+    clearInlineDocumentFields();
 
-    window.setTimeout(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 120);
+    window.setTimeout(scrollToForm, 120);
 
     params.delete('nuevo');
     params.delete('create');
     const remaining = params.toString();
     window.history.replaceState({}, '', `${location.pathname}${remaining ? `?${remaining}` : ''}`);
-  }, [location.pathname, location.search]);
+  }, [location.pathname, location.search, clearInlineDocumentFields, scrollToForm]);
 
   useEffect(() => {
     let cancelled = false;
@@ -356,12 +374,6 @@ function PacientesPage() {
     setSearchTerm('');
   };
 
-  const scrollToForm = () => {
-    window.requestAnimationFrame(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  };
-
   const resetForm = () => {
     setFormData(EMPTY_FORM);
     setEditingId(null);
@@ -371,6 +383,49 @@ function PacientesPage() {
     if (documentFileInputRef.current) {
       documentFileInputRef.current.value = '';
     }
+    clearInlineDocumentFields();
+  };
+
+  const handleFormDocumentFileChange = (event) => {
+    const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+
+    if (!file) {
+      setFormDocumentFile(null);
+      return;
+    }
+
+    if (exceedsMaxDocumentSize(file)) {
+      setError('El archivo supera el tamaño máximo permitido de 20 MB.');
+      event.target.value = '';
+      setFormDocumentFile(null);
+      return;
+    }
+
+    if (!isAllowedDocumentFile(file)) {
+      setError('Solo se permiten archivos en formato PDF o JPG.');
+      event.target.value = '';
+      setFormDocumentFile(null);
+      return;
+    }
+
+    setError((prev) => (prev && prev.toLowerCase().includes('archivo') ? null : prev));
+    setFormDocumentFile(file);
+    setFormDocumentName((prev) => {
+      const current = (prev || '').trim();
+      if (current) {
+        return prev;
+      }
+      const withoutExtension = file.name.includes('.') ? file.name.replace(/\.[^/.]+$/, '') : file.name;
+      return withoutExtension || file.name;
+    });
+  };
+
+  const handleFormDocumentNameChange = (event) => {
+    setFormDocumentName(event.target.value);
+  };
+
+  const handleFormDocumentDescriptionChange = (event) => {
+    setFormDocumentDescription(event.target.value);
   };
 
   const handleSubmit = async (e) => {
@@ -400,6 +455,45 @@ function PacientesPage() {
     if (payload.tipoAtencion === 'centro' && !payload.centroSalud) {
       setError('Selecciona el centro de salud que deriva al paciente.');
       return;
+    }
+
+    let inlineDocumentPayload = null;
+
+    if (formDocumentFile) {
+      if (exceedsMaxDocumentSize(formDocumentFile)) {
+        setError('El archivo supera el tamaño máximo permitido de 20 MB.');
+        return;
+      }
+
+      if (!isAllowedDocumentFile(formDocumentFile)) {
+        setError('Solo se permiten archivos en formato PDF o JPG.');
+        return;
+      }
+
+      try {
+        const base64 = await toBase64(formDocumentFile);
+        if (!base64) {
+          throw new Error('No se pudo leer el archivo seleccionado.');
+        }
+
+        inlineDocumentPayload = {
+          nombre: (formDocumentName || '').trim() || formDocumentFile.name,
+          descripcion: (formDocumentDescription || '').trim(),
+          archivo: {
+            nombre: formDocumentFile.name,
+            tipo: formDocumentFile.type,
+            base64,
+          },
+        };
+      } catch (conversionError) {
+        const message = conversionError.message || 'No se pudo preparar el archivo para subirlo.';
+        setError(message);
+        return;
+      }
+    }
+
+    if (inlineDocumentPayload) {
+      payload.documento = inlineDocumentPayload;
     }
 
     try {
@@ -472,6 +566,8 @@ function PacientesPage() {
     if (documentFileInputRef.current) {
       documentFileInputRef.current.value = '';
     }
+    clearInlineDocumentFields();
+    scrollToForm();
   };
 
   const handleCancelEdit = () => {
@@ -856,6 +952,50 @@ function PacientesPage() {
                   </select>
                 </div>
               )}
+              <div className="col-12">
+                <div className="bg-light border rounded-3 p-3">
+                  <h6 className="text-uppercase text-muted small mb-3">Adjuntar documentación (opcional)</h6>
+                  <div className="row g-3 align-items-end">
+                    <div className="col-lg-4">
+                      <label htmlFor="pacienteDocumentoNombre" className="form-label">Nombre del archivo</label>
+                      <input
+                        type="text"
+                        id="pacienteDocumentoNombre"
+                        className="form-control"
+                        value={formDocumentName}
+                        onChange={handleFormDocumentNameChange}
+                        placeholder="Ej: Historia clínica"
+                        disabled={formLoading}
+                      />
+                    </div>
+                    <div className="col-lg-4">
+                      <label htmlFor="pacienteDocumentoDescripcion" className="form-label">Descripción (opcional)</label>
+                      <input
+                        type="text"
+                        id="pacienteDocumentoDescripcion"
+                        className="form-control"
+                        value={formDocumentDescription}
+                        onChange={handleFormDocumentDescriptionChange}
+                        placeholder="Notas internas"
+                        disabled={formLoading}
+                      />
+                    </div>
+                    <div className="col-lg-4">
+                      <label htmlFor="pacienteDocumentoArchivo" className="form-label">Archivo (PDF o JPG)</label>
+                      <input
+                        type="file"
+                        id="pacienteDocumentoArchivo"
+                        className="form-control"
+                        onChange={handleFormDocumentFileChange}
+                        ref={inlineDocumentFileInputRef}
+                        accept=".pdf,.jpg,.jpeg"
+                        disabled={formLoading}
+                      />
+                      <div className="form-text">Hasta 20 MB.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
                 <div className="col-12 mt-3 d-flex justify-content-end">
                   {editingId && (
                     <button type="button" className="btn btn-outline-secondary me-2" onClick={handleCancelEdit}>

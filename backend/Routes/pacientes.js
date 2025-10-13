@@ -158,6 +158,89 @@ const buildPacienteResponse = (pacienteDoc) => {
   return plain;
 };
 
+const shouldProcessDocumentPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+
+  const archivo = payload.archivo;
+  if (!archivo || typeof archivo !== 'object') {
+    return false;
+  }
+
+  const base64 = typeof archivo.base64 === 'string' ? archivo.base64.trim() : '';
+  const nombre = typeof archivo.nombre === 'string' ? archivo.nombre.trim() : '';
+
+  return Boolean(base64 && nombre);
+};
+
+const processPacienteDocumentUpload = async ({ paciente, rawDocumento, userId }) => {
+  if (!paciente) {
+    throw new Error('Paciente no válido.');
+  }
+
+  if (!rawDocumento || typeof rawDocumento !== 'object') {
+    throw new Error('Debes adjuntar un archivo válido.');
+  }
+
+  const archivo = rawDocumento.archivo && typeof rawDocumento.archivo === 'object'
+    ? rawDocumento.archivo
+    : {};
+
+  const base64 = typeof archivo.base64 === 'string' ? archivo.base64 : null;
+  const archivoNombre = typeof archivo.nombre === 'string' ? archivo.nombre.trim() : '';
+
+  if (!base64 || !archivoNombre) {
+    throw new Error('Debes adjuntar un archivo válido.');
+  }
+
+  const buffer = decodeBase64File(base64);
+  if (!buffer || buffer.length === 0) {
+    throw new Error('El archivo adjunto está vacío.');
+  }
+
+  if (buffer.length > MAX_FILE_SIZE_BYTES) {
+    throw new Error('El archivo supera el tamaño máximo permitido (20 MB).');
+  }
+
+  const contentType = resolveAllowedContentType(archivo);
+  if (!contentType) {
+    throw new Error('Solo se permiten archivos PDF o JPG.');
+  }
+
+  const nombre = typeof rawDocumento.nombre === 'string' ? rawDocumento.nombre.trim() : '';
+  const descripcion = typeof rawDocumento.descripcion === 'string' ? rawDocumento.descripcion.trim() : '';
+  const resolvedNombre = nombre || archivoNombre;
+
+  if (!resolvedNombre) {
+    throw new Error('El nombre del documento es obligatorio.');
+  }
+
+  const storagePayload = await storageService.uploadDocument({
+    buffer,
+    originalName: archivoNombre,
+    contentType,
+    folder: `users/${userId}/pacientes`,
+  });
+
+  const documento = {
+    nombre: resolvedNombre,
+    descripcion,
+    storage: storagePayload.storage,
+    key: storagePayload.key,
+    bucket: storagePayload.bucket,
+    contentType,
+    size: storagePayload.size,
+    uploadedBy: userId,
+  };
+
+  paciente.documentos.push(documento);
+  await paciente.save();
+
+  const savedDocument = paciente.documentos[paciente.documentos.length - 1];
+  return buildDocumentResponse(savedDocument, paciente._id);
+};
+
 const formatDocumentListForExport = (documents) => {
   if (!Array.isArray(documents) || documents.length === 0) {
     return '';
@@ -221,7 +304,8 @@ const normalizePacientePayload = async (payload, userId) => {
 
 router.post('/', protect, async (req, res) => {
   try {
-    const payload = await normalizePacientePayload(req.body, req.user._id);
+    const { documento: rawDocumento, ...body } = req.body || {};
+    const payload = await normalizePacientePayload(body, req.user._id);
 
     const nuevoPaciente = new Paciente({
       ...payload,
@@ -229,6 +313,11 @@ router.post('/', protect, async (req, res) => {
     });
 
     await nuevoPaciente.save();
+
+    if (shouldProcessDocumentPayload(rawDocumento)) {
+      await processPacienteDocumentUpload({ paciente: nuevoPaciente, rawDocumento, userId: req.user._id });
+    }
+
     await nuevoPaciente.populate('obraSocial');
     await nuevoPaciente.populate('centroSalud');
 
@@ -471,18 +560,28 @@ router.get('/:id', protect, async (req, res) => {
 
 router.put('/:id', protect, async (req, res) => {
   try {
-    const payload = await normalizePacientePayload(req.body, req.user._id);
+    const { documento: rawDocumento, ...body } = req.body || {};
+    const payload = await normalizePacientePayload(body, req.user._id);
 
-    const pacienteActualizado = await Paciente.findOneAndUpdate(
-      { _id: req.params.id, user: req.user._id },
-      payload,
-      { new: true, runValidators: true }
-    )
+    const paciente = await Paciente.findOne({ _id: req.params.id, user: req.user._id })
       .populate('obraSocial')
       .populate('centroSalud');
 
-    if (!pacienteActualizado) return res.status(404).json({ error: 'Paciente no encontrado o no autorizado' });
-    res.json(buildPacienteResponse(pacienteActualizado));
+    if (!paciente) {
+      return res.status(404).json({ error: 'Paciente no encontrado o no autorizado' });
+    }
+
+    paciente.set(payload);
+    await paciente.save();
+
+    if (shouldProcessDocumentPayload(rawDocumento)) {
+      await processPacienteDocumentUpload({ paciente, rawDocumento, userId: req.user._id });
+    }
+
+    await paciente.populate('obraSocial');
+    await paciente.populate('centroSalud');
+
+    res.json(buildPacienteResponse(paciente));
   } catch (error) {
     if (error.code === 11000) {
       return res.status(400).json({ error: 'El DNI ya está registrado para este profesional.' });
@@ -514,56 +613,13 @@ router.post('/:id/documentos', protect, async (req, res) => {
     if (!paciente) {
       return res.status(404).json({ error: 'Paciente no encontrado o no autorizado' });
     }
-
-    const nombre = typeof req.body.nombre === 'string' ? req.body.nombre.trim() : '';
-    const descripcion = typeof req.body.descripcion === 'string' ? req.body.descripcion.trim() : '';
-    const archivo = req.body.archivo || {};
-
-    if (!nombre) {
-      return res.status(400).json({ error: 'El nombre del documento es obligatorio.' });
-    }
-
-    if (!archivo.base64 || !archivo.nombre) {
-      return res.status(400).json({ error: 'Debes adjuntar un archivo válido.' });
-    }
-
-    const buffer = decodeBase64File(archivo.base64);
-    if (!buffer || buffer.length === 0) {
-      return res.status(400).json({ error: 'El archivo adjunto está vacío.' });
-    }
-
-    if (buffer.length > MAX_FILE_SIZE_BYTES) {
-      return res.status(413).json({ error: 'El archivo supera el tamaño máximo permitido (20 MB).' });
-    }
-
-    const contentType = resolveAllowedContentType(archivo);
-    if (!contentType) {
-      return res.status(415).json({ error: 'Solo se permiten archivos PDF o JPG.' });
-    }
-
-    const storagePayload = await storageService.uploadDocument({
-      buffer,
-      originalName: archivo.nombre,
-      contentType,
-      folder: `users/${req.user._id}/pacientes`,
+    const documento = await processPacienteDocumentUpload({
+      paciente,
+      rawDocumento: req.body,
+      userId: req.user._id,
     });
 
-    const documento = {
-      nombre,
-      descripcion,
-      storage: storagePayload.storage,
-      key: storagePayload.key,
-      bucket: storagePayload.bucket,
-      contentType,
-      size: storagePayload.size,
-      uploadedBy: req.user._id,
-    };
-
-    paciente.documentos.push(documento);
-    await paciente.save();
-
-    const savedDocument = paciente.documentos[paciente.documentos.length - 1];
-    res.status(201).json(buildDocumentResponse(savedDocument, paciente._id));
+    res.status(201).json(documento);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

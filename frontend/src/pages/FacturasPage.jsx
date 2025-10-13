@@ -219,6 +219,12 @@ function FacturasPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const formRef = useRef(null);
 
+  const scrollToForm = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
   const fetchFacturas = useCallback(async () => {
     try {
       const data = await facturasService.getFacturas();
@@ -283,15 +289,13 @@ function FacturasPage() {
       centroSalud: prev.centroSalud,
     }));
 
-    window.setTimeout(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 120);
+    window.setTimeout(scrollToForm, 120);
 
     params.delete('nueva');
     params.delete('create');
     const remaining = params.toString();
     window.history.replaceState({}, '', `${location.pathname}${remaining ? `?${remaining}` : ''}`);
-  }, [location.pathname, location.search]);
+  }, [location.pathname, location.search, scrollToForm]);
 
 
   const handleChange = (e) => {
@@ -404,6 +408,7 @@ function FacturasPage() {
       observaciones: factura.observaciones || '',
       centroSalud: factura.centroSalud?._id || '',
     });
+    scrollToForm();
   };
 
   const handleCancelEdit = () => {
