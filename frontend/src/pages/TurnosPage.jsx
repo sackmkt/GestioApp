@@ -445,6 +445,9 @@ const TurnosPage = () => {
           ? ''
           : turno.recordatorioHorasAntes,
     });
+    window.setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
   };
 
   const handleDelete = async (id) => {
