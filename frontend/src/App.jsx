@@ -4,6 +4,7 @@ import GestioLogo from './assets/GestioLogo.png';
 import authService from './services/authService';
 import userService from './services/UserService';
 import { useFeedback } from './context/FeedbackContext.jsx';
+import ThemeToggle from './components/ThemeToggle.jsx';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'v1.0.0';
 const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
@@ -99,6 +100,7 @@ function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const inactivityTimerRef = useRef(null);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
+  const mainContentRef = useRef(null);
 
   const handleAuthChange = useCallback((userData) => {
     if (userData) {
@@ -309,6 +311,9 @@ function App() {
                 : null}
             </ul>
             <ul className="navbar-nav ms-auto align-items-lg-center gap-lg-3">
+              <li className="nav-item">
+                <ThemeToggle className="w-100 w-lg-auto" />
+              </li>
               {isAuthenticated ? (
                 <>
                   <li className="nav-item">
@@ -389,6 +394,12 @@ function App() {
     }
   }, [isAuthenticated, location.pathname]);
 
+  useEffect(() => {
+    if (mainContentRef.current) {
+      mainContentRef.current.focus();
+    }
+  }, [location.pathname]);
+
   if (isRestoringSession) {
     return (
       <div className="d-flex align-items-center justify-content-center min-vh-100">
@@ -402,8 +413,14 @@ function App() {
 
   return (
     <div className="d-flex flex-column min-vh-100">
+      <a href="#contenido-principal" className="skip-to-content-link">Saltar al contenido principal</a>
       {navigationContent}
-      <main className="flex-grow-1 gestio-main py-5">
+      <main
+        id="contenido-principal"
+        ref={mainContentRef}
+        className="flex-grow-1 gestio-main py-5"
+        tabIndex="-1"
+      >
         <div className="container">
           {isAuthenticated && (
             <header className="mb-4 text-center text-lg-start">
@@ -415,7 +432,7 @@ function App() {
                   </span>
                 ) : null}
               </p>
-              <h1 className="display-5 fw-bold mb-3" style={{ color: '#0f172a' }}>
+              <h1 className="display-5 fw-bold mb-3 gestio-heading">
                 Gestión clínica sin fricciones
               </h1>
               <p className="text-muted mb-0 col-lg-6 p-0">
