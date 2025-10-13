@@ -38,20 +38,6 @@ const getToken = () => {
   }
 };
 
-const getStoredUser = () => {
-  try {
-    const raw = localStorage.getItem('user');
-    if (!raw) {
-      return null;
-    }
-    return JSON.parse(raw);
-  } catch (error) {
-    console.warn('No se pudo leer la sesión almacenada.', error);
-    localStorage.removeItem('user');
-    return null;
-  }
-};
-
 const requestPasswordReset = async (email) => {
   const response = await axios.post(`${API_BASE_URL}/users/forgot-password`, {
     email: email.trim().toLowerCase(),
@@ -72,7 +58,6 @@ const authService = {
   login,
   logout,
   getToken,
-  getStoredUser,
   requestPasswordReset,
   resetPassword,
 };
