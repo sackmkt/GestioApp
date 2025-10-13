@@ -109,6 +109,21 @@ const downloadDocumento = async (pacienteId, documentoId) => {
   }
 };
 
+const exportPacientes = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/export`, getHeadersWithConfig({ responseType: 'blob' }));
+    const filename = extractFilename(response.headers['content-disposition'], 'pacientes.csv');
+    return {
+      blob: response.data,
+      filename,
+      contentType: response.headers['content-type'],
+    };
+  } catch (error) {
+    console.error('Error al exportar pacientes:', error);
+    throw error;
+  }
+};
+
 const pacientesService = {
   getPacientes,
   createPaciente,
@@ -117,6 +132,7 @@ const pacientesService = {
   uploadDocumento,
   deleteDocumento,
   downloadDocumento,
+  exportPacientes,
 };
 
 export default pacientesService;

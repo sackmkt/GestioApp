@@ -181,6 +181,7 @@ function FacturasPage() {
   const [documentUploadLoadingId, setDocumentUploadLoadingId] = useState(null);
   const [documentDeleteLoadingId, setDocumentDeleteLoadingId] = useState(null);
   const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
+  const [exportLoading, setExportLoading] = useState(false);
   const [dateFilter, setDateFilter] = useState('last10Days');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [currentPage, setCurrentPage] = useState(1);
@@ -889,6 +890,27 @@ function FacturasPage() {
     }
   };
 
+  const handleExportFacturas = async () => {
+    try {
+      setExportLoading(true);
+      const { blob, filename } = await facturasService.exportFacturas();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess('Exportación de facturas generada correctamente.');
+    } catch (err) {
+      const message = err.response?.data?.error || 'No se pudo exportar el listado de facturas.';
+      showError(message);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   return (
     <div className="container mt-4">
       <div className="card shadow-sm mb-4">
@@ -1063,16 +1085,33 @@ function FacturasPage() {
           <div className="d-flex flex-column gap-3">
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
               <h4 className="mb-0">Listado de Facturas</h4>
-              <div className="input-group" style={{ maxWidth: '320px' }}>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Buscar por paciente, punto de venta, factura u obra social"
-                  value={searchTerm}
-                  onChange={handleInputChange}
-                />
-                <button className="btn btn-outline-secondary" type="button" onClick={handleSearchClick}>
-                  Buscar
+              <div className="d-flex flex-column flex-sm-row align-items-stretch gap-2" style={{ maxWidth: '100%' }}>
+                <div className="input-group" style={{ minWidth: '240px' }}>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Buscar por paciente, punto de venta, factura u obra social"
+                    value={searchTerm}
+                    onChange={handleInputChange}
+                  />
+                  <button className="btn btn-outline-secondary" type="button" onClick={handleSearchClick}>
+                    Buscar
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary"
+                  onClick={handleExportFacturas}
+                  disabled={exportLoading}
+                >
+                  {exportLoading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Generando...
+                    </>
+                  ) : (
+                    <>Exportar facturas</>
+                  )}
                 </button>
               </div>
             </div>

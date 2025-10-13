@@ -6,6 +6,7 @@ const CentroSalud = require('../models/CentroSalud');
 const ObraSocial = require('../models/ObraSocial');
 const { protect } = require('../middleware/authMiddleware');
 const storageService = require('../services/storageService');
+const { toCsv, formatDateTime } = require('../utils/csvUtils');
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -124,6 +125,137 @@ const syncEstadoDesdePagos = (factura) => {
   } else {
     factura.pagado = factura.estado === 'pagada';
   }
+};
+
+const formatNumber = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return '';
+  }
+  return numeric.toFixed(2);
+};
+
+const formatDocumentListForExport = (documents) => {
+  if (!Array.isArray(documents) || documents.length === 0) {
+    return '';
+  }
+
+  return documents
+    .map((document) => {
+      const description = typeof document.descripcion === 'string' && document.descripcion.trim()
+        ? ` (${document.descripcion.trim()})`
+        : '';
+      return `${document.nombre}${description}`;
+    })
+    .join(' | ');
+};
+
+const resolveReferenceName = (reference) => {
+  if (!reference) {
+    return '';
+  }
+
+  if (typeof reference === 'string') {
+    return reference;
+  }
+
+  if (typeof reference === 'object' && reference.nombre) {
+    return reference.nombre;
+  }
+
+  return '';
+};
+
+const resolvePacienteNombre = (paciente) => {
+  if (!paciente) {
+    return '';
+  }
+
+  if (typeof paciente === 'string') {
+    return paciente;
+  }
+
+  const nombre = paciente.nombre || '';
+  const apellido = paciente.apellido || '';
+  const fullName = `${nombre} ${apellido}`.trim();
+  if (fullName) {
+    return fullName;
+  }
+
+  return paciente.dni || '';
+};
+
+const resolvePacienteDni = (paciente) => {
+  if (!paciente) {
+    return '';
+  }
+
+  if (typeof paciente === 'object' && paciente.dni) {
+    return paciente.dni;
+  }
+
+  return '';
+};
+
+const ESTADO_LABELS = {
+  pendiente: 'Pendiente',
+  presentada: 'Presentada',
+  observada: 'Observada',
+  pagada_parcial: 'Pagada parcialmente',
+  pagada: 'Pagada',
+};
+
+const resolveEstado = (factura, montoCobrado) => {
+  if (!factura) {
+    return 'pendiente';
+  }
+
+  if (factura.estado) {
+    return factura.estado;
+  }
+
+  if (factura.pagado) {
+    return 'pagada';
+  }
+
+  if (montoCobrado > 0) {
+    return 'pagada_parcial';
+  }
+
+  return 'pendiente';
+};
+
+const resolveEstadoLabel = (estado) => ESTADO_LABELS[estado] || estado || 'Pendiente';
+
+const formatPaymentsForExport = (payments) => {
+  if (!Array.isArray(payments) || payments.length === 0) {
+    return '';
+  }
+
+  return payments
+    .map((payment, index) => {
+      const fragments = [`Pago ${index + 1}`];
+      const fecha = formatDateTime(payment.fecha);
+      if (fecha) {
+        fragments.push(`Fecha: ${fecha}`);
+      }
+
+      const monto = formatNumber(payment.monto);
+      if (monto !== '') {
+        fragments.push(`Monto: ${monto}`);
+      }
+
+      if (payment.metodo) {
+        fragments.push(`Método: ${payment.metodo}`);
+      }
+
+      if (payment.nota) {
+        fragments.push(`Nota: ${payment.nota}`);
+      }
+
+      return fragments.join(' | ');
+    })
+    .join(' || ');
 };
 
 const allowedUpdateFields = ['paciente', 'obraSocial', 'puntoVenta', 'numeroFactura', 'montoTotal', 'fechaEmision', 'fechaVencimiento', 'observaciones', 'centroSalud'];
@@ -278,6 +410,82 @@ router.get('/', protect, async (req, res) => {
 
     const payload = facturas.map((factura) => buildFacturaResponse(factura));
     res.json(payload);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/export', protect, async (req, res) => {
+  try {
+    const facturas = await Factura.find({ user: req.user._id })
+      .populate({
+        path: 'paciente',
+        select: 'nombre apellido dni',
+      })
+      .populate('obraSocial', 'nombre')
+      .populate('centroSalud', 'nombre')
+      .sort({ fechaEmision: -1, createdAt: -1 })
+      .lean();
+
+    const facturasForCsv = (Array.isArray(facturas) ? facturas : []).map((factura) => {
+      const pagos = Array.isArray(factura.pagos) ? factura.pagos : [];
+      const montoCobrado = pagos.reduce((total, pago) => total + (Number(pago.monto) || 0), 0);
+      const montoTotal = Number(factura.montoTotal) || 0;
+      const saldoPendiente = Math.max(montoTotal - montoCobrado, 0);
+      const estado = resolveEstado(factura, montoCobrado);
+
+      return {
+        ...factura,
+        pagos,
+        montoCobrado,
+        saldoPendiente,
+        estado,
+      };
+    });
+
+    const columns = [
+      { header: 'ID', value: (factura) => factura._id },
+      { header: 'Paciente', value: (factura) => resolvePacienteNombre(factura.paciente) },
+      { header: 'DNI del paciente', value: (factura) => resolvePacienteDni(factura.paciente) },
+      { header: 'Obra social', value: (factura) => resolveReferenceName(factura.obraSocial) },
+      { header: 'Centro de salud', value: (factura) => resolveReferenceName(factura.centroSalud) },
+      {
+        header: 'Punto de venta',
+        value: (factura) => (factura.puntoVenta !== null && factura.puntoVenta !== undefined ? factura.puntoVenta : ''),
+      },
+      {
+        header: 'Número de factura',
+        value: (factura) => (factura.numeroFactura !== null && factura.numeroFactura !== undefined
+          ? factura.numeroFactura
+          : ''),
+      },
+      { header: 'Monto total', value: (factura) => formatNumber(factura.montoTotal) },
+      { header: 'Monto cobrado', value: (factura) => formatNumber(factura.montoCobrado) },
+      { header: 'Saldo pendiente', value: (factura) => formatNumber(factura.saldoPendiente) },
+      { header: 'Estado', value: (factura) => resolveEstadoLabel(factura.estado) },
+      { header: 'Fecha de emisión', value: (factura) => formatDateTime(factura.fechaEmision) },
+      { header: 'Fecha de vencimiento', value: (factura) => formatDateTime(factura.fechaVencimiento) },
+      { header: 'Observaciones', value: (factura) => factura.observaciones || '' },
+      {
+        header: 'Cantidad de pagos',
+        value: (factura) => (Array.isArray(factura.pagos) ? factura.pagos.length : 0),
+      },
+      { header: 'Detalle de pagos', value: (factura) => formatPaymentsForExport(factura.pagos) },
+      {
+        header: 'Cantidad de documentos',
+        value: (factura) => (Array.isArray(factura.documentos) ? factura.documentos.length : 0),
+      },
+      { header: 'Documentos adjuntos', value: (factura) => formatDocumentListForExport(factura.documentos) },
+      { header: 'Creado el', value: (factura) => formatDateTime(factura.createdAt) },
+      { header: 'Actualizado el', value: (factura) => formatDateTime(factura.updatedAt) },
+    ];
+
+    const csvContent = toCsv(facturasForCsv, columns);
+    const filename = `facturas-${new Date().toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(`\ufeff${csvContent}`);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
