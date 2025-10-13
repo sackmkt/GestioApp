@@ -5,6 +5,7 @@ import PacientesService from '../services/PacientesService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
 import AgendaGantt from '../components/AgendaGantt.jsx';
 import { FaPhoneAlt, FaWhatsapp, FaSms } from 'react-icons/fa';
+import '../styles/contact-actions.css';
 
 const formatoFechaLocal = (fechaISO) => {
   if (!fechaISO) return '';
@@ -1048,19 +1049,33 @@ const TurnosPage = () => {
                       <div className="text-end">
                         <span>{formatoFechaLocal(turno.fecha)}</span>
                         {contact && (
-                          <div className="d-flex justify-content-end gap-2 mt-2">
+                          <div className="contact-actions contact-actions--compact contact-actions--end mt-2">
                             {contact.tel && (
-                              <a className="btn btn-outline-primary btn-sm" href={contact.tel} title={`Llamar a ${pacienteNombre}`}>
+                              <a
+                                className="contact-action contact-action--call"
+                                href={contact.tel}
+                                title={`Llamar a ${pacienteNombre}`}
+                              >
                                 <FaPhoneAlt />
                               </a>
                             )}
                             {contact.whatsapp && (
-                              <a className="btn btn-outline-success btn-sm" href={contact.whatsapp} target="_blank" rel="noreferrer" title={`Enviar WhatsApp a ${pacienteNombre}`}>
+                              <a
+                                className="contact-action contact-action--whatsapp"
+                                href={contact.whatsapp}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={`Enviar WhatsApp a ${pacienteNombre}`}
+                              >
                                 <FaWhatsapp />
                               </a>
                             )}
                             {contact.sms && (
-                              <a className="btn btn-outline-secondary btn-sm" href={contact.sms} title={`Enviar SMS a ${pacienteNombre}`}>
+                              <a
+                                className="contact-action contact-action--sms"
+                                href={contact.sms}
+                                title={`Enviar SMS a ${pacienteNombre}`}
+                              >
                                 <FaSms />
                               </a>
                             )}
