@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import centrosSaludService from '../services/CentrosSaludService';
 import facturasService from '../services/FacturasService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
@@ -21,6 +21,13 @@ function CentrosSaludPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const formRef = useRef(null);
+
+  const scrollToForm = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
 
   const fetchCentros = useCallback(async () => {
     try {
@@ -154,6 +161,7 @@ function CentrosSaludPage() {
       nombre: centro.nombre,
       porcentajeRetencion: centro.porcentajeRetencion,
     });
+    scrollToForm();
   };
 
   const handleDelete = async (id) => {
@@ -195,7 +203,7 @@ function CentrosSaludPage() {
         </div>
         <div className="card-body">
           {error && <div className="alert alert-danger">{error}</div>}
-          <form className="row g-3 align-items-end" onSubmit={handleSubmit}>
+          <form className="row g-3 align-items-end" onSubmit={handleSubmit} ref={formRef}>
             <div className="col-md-6">
               <label className="form-label" htmlFor="nombreCentro">Nombre del centro</label>
               <input

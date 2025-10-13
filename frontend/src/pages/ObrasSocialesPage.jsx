@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ObrasSocialesService from '../services/ObrasSocialesService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
 
@@ -45,6 +45,13 @@ function ObrasSocialesPage() {
   const [deleteLoadingId, setDeleteLoadingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const formRef = useRef(null);
+
+  const scrollToForm = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
 
   const fetchObrasSociales = useCallback(async () => {
     try {
@@ -117,6 +124,7 @@ function ObrasSocialesPage() {
       email: os.email,
       cuit: os.cuit || '',
     });
+    scrollToForm();
   };
 
   const handleCancelEdit = () => {
@@ -229,7 +237,7 @@ function ObrasSocialesPage() {
           <h2 className="mb-0">Gestión de Obras Sociales</h2>
         </div>
         <div className="card-body">
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} ref={formRef}>
             <fieldset disabled={formLoading} className="border-0 p-0">
               <div className="row g-3">
               <div className="col-md-4">
