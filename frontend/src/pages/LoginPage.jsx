@@ -44,7 +44,12 @@ function LoginPage({ onAuthChange }) {
       <div className="auth-card">
         <div className="auth-card__brand">
           <img src={GestioLogo} alt="Gestio" className="auth-card__brand-logo" />
-          <h2 className="auth-card__brand-title">GESTIO</h2>
+          <h2 className="auth-card__brand-title">
+            <span className="gestio-brand" aria-label="GestioApp">
+              <span className="gestio-brand__strong">GESTIO</span>
+              <span className="gestio-brand__light">APP</span>
+            </span>
+          </h2>
           <p className="auth-card__brand-subtitle">
             Simplificamos la gestión integral de pacientes, turnos y facturación para profesionales de la salud.
           </p>
