@@ -1,17 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import PacientesPage from './pages/PacientesPage';
-import ObrasSocialesPage from './pages/ObrasSocialesPage';
-import FacturasPage from './pages/FacturasPage';
-import DashboardPage from './pages/DashboardPage';
-import TurnosPage from './pages/TurnosPage';
-import CentrosSaludPage from './pages/CentrosSaludPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import CompleteProfilePage from './pages/CompleteProfilePage';
-import ProfilePage from './pages/ProfilePage';
 import GestioLogo from './assets/GestioLogo.png';
 import authService from './services/authService';
 import userService from './services/UserService';
@@ -20,6 +8,34 @@ import { useFeedback } from './context/FeedbackContext.jsx';
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'v1.0.0';
 const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
 const SECTION_USAGE_STORAGE_KEY = 'gestio:section-usage';
+
+const lazyWithPreload = (factory) => {
+  const Component = lazy(factory);
+  Component.preload = factory;
+  return Component;
+};
+
+const DashboardPage = lazyWithPreload(() => import('./pages/DashboardPage'));
+const PacientesPage = lazyWithPreload(() => import('./pages/PacientesPage'));
+const ObrasSocialesPage = lazyWithPreload(() => import('./pages/ObrasSocialesPage'));
+const FacturasPage = lazyWithPreload(() => import('./pages/FacturasPage'));
+const TurnosPage = lazyWithPreload(() => import('./pages/TurnosPage'));
+const CentrosSaludPage = lazyWithPreload(() => import('./pages/CentrosSaludPage'));
+const LoginPage = lazyWithPreload(() => import('./pages/LoginPage'));
+const RegisterPage = lazyWithPreload(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazyWithPreload(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazyWithPreload(() => import('./pages/ResetPasswordPage'));
+const CompleteProfilePage = lazyWithPreload(() => import('./pages/CompleteProfilePage'));
+const ProfilePage = lazyWithPreload(() => import('./pages/ProfilePage'));
+
+const SuspenseFallback = (
+  <div className="d-flex justify-content-center py-5" aria-live="polite" aria-busy="true">
+    <div className="text-center">
+      <div className="spinner-border text-primary mb-3" role="status" aria-hidden="true"></div>
+      <p className="text-muted mb-0">Cargando sección...</p>
+    </div>
+  </div>
+);
 
 const getStoredUser = () => {
   try {
@@ -244,33 +260,23 @@ function App() {
     }
   }, [isAuthenticated]);
 
-  const navLinkClassName = ({ isActive }) => `nav-link ${isActive ? 'active' : ''}`;
+  const navLinkClassName = useCallback(({ isActive }) => `nav-link ${isActive ? 'active' : ''}`, []);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      return;
-    }
+  const toggleMenu = useCallback(() => {
+    setIsMenuOpen((prev) => !prev);
+  }, []);
 
-    const section = resolveSectionFromPath(location.pathname);
-    if (!section) {
-      return;
-    }
+  const closeMenu = useCallback(() => {
+    setIsMenuOpen(false);
+  }, []);
 
-    try {
-      const raw = localStorage.getItem(SECTION_USAGE_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      const previousCount = Number(parsed[section]) || 0;
-      parsed[section] = previousCount + 1;
-      localStorage.setItem(SECTION_USAGE_STORAGE_KEY, JSON.stringify(parsed));
-    } catch (error) {
-      console.warn('No se pudieron registrar las estadísticas de navegación.', error);
-    }
-  }, [isAuthenticated, location.pathname]);
+  const handleLogoutClick = useCallback(() => {
+    closeMenu();
+    handleLogout();
+  }, [closeMenu, handleLogout]);
 
-  const NavContent = () => {
-    const closeMenu = () => setIsMenuOpen(false);
-
-    return (
+  const navigationContent = useMemo(
+    () => (
       <nav className="navbar navbar-expand-lg gestio-navbar sticky-top py-3">
         <div className="container">
           <NavLink className="navbar-brand d-flex align-items-center" to={isAuthenticated ? '/dashboard' : '/'} onClick={closeMenu}>
@@ -283,7 +289,7 @@ function App() {
           <button
             className="navbar-toggler"
             type="button"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            onClick={toggleMenu}
             aria-controls="navbarNav"
             aria-expanded={isMenuOpen}
             aria-label="Toggle navigation"
@@ -292,15 +298,15 @@ function App() {
           </button>
           <div className={`collapse navbar-collapse ${isMenuOpen ? 'show' : ''}`} id="navbarNav">
             <ul className="navbar-nav me-auto align-items-lg-center">
-              {isAuthenticated && (
-                NAVIGATION_ITEMS.map((item) => (
-                  <li className="nav-item" key={item.to}>
-                    <NavLink className={navLinkClassName} to={item.to} onClick={closeMenu}>
-                      {item.label}
-                    </NavLink>
-                  </li>
-                ))
-              )}
+              {isAuthenticated
+                ? NAVIGATION_ITEMS.map((item) => (
+                    <li className="nav-item" key={item.to}>
+                      <NavLink className={navLinkClassName} to={item.to} onClick={closeMenu}>
+                        {item.label}
+                      </NavLink>
+                    </li>
+                  ))
+                : null}
             </ul>
             <ul className="navbar-nav ms-auto align-items-lg-center gap-lg-3">
               {isAuthenticated ? (
@@ -311,7 +317,7 @@ function App() {
                     </NavLink>
                   </li>
                   <li className="nav-item mt-3 mt-lg-0">
-                    <button onClick={() => { closeMenu(); handleLogout(); }} className="btn btn-primary px-4">
+                    <button onClick={handleLogoutClick} className="btn btn-primary px-4">
                       Cerrar sesión
                     </button>
                   </li>
@@ -334,8 +340,54 @@ function App() {
           </div>
         </div>
       </nav>
-    );
-  };
+    ),
+    [closeMenu, handleLogoutClick, isAuthenticated, isMenuOpen, navLinkClassName, toggleMenu],
+  );
+
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser?.profileCompleted) {
+      return undefined;
+    }
+
+    const preloadRoutes = () => {
+      DashboardPage.preload?.();
+      PacientesPage.preload?.();
+      TurnosPage.preload?.();
+    };
+
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(preloadRoutes);
+      return () => {
+        if (typeof window.cancelIdleCallback === 'function') {
+          window.cancelIdleCallback(idleId);
+        }
+      };
+    }
+
+    const timeoutId = window.setTimeout(preloadRoutes, 600);
+    return () => window.clearTimeout(timeoutId);
+  }, [isAuthenticated, currentUser?.profileCompleted]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    const section = resolveSectionFromPath(location.pathname);
+    if (!section) {
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(SECTION_USAGE_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const previousCount = Number(parsed[section]) || 0;
+      parsed[section] = previousCount + 1;
+      localStorage.setItem(SECTION_USAGE_STORAGE_KEY, JSON.stringify(parsed));
+    } catch (error) {
+      console.warn('No se pudieron registrar las estadísticas de navegación.', error);
+    }
+  }, [isAuthenticated, location.pathname]);
 
   if (isRestoringSession) {
     return (
@@ -350,7 +402,7 @@ function App() {
 
   return (
     <div className="d-flex flex-column min-vh-100">
-      <NavContent />
+      {navigationContent}
       <main className="flex-grow-1 gestio-main py-5">
         <div className="container">
           {isAuthenticated && (
@@ -372,51 +424,53 @@ function App() {
             </header>
           )}
           <div className="gestio-content">
-            <Routes>
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              {!isAuthenticated && (
-                <>
-                  <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />
-                  <Route path="/register" element={<RegisterPage onAuthChange={handleAuthChange} />} />
-                  <Route path="*" element={<LoginPage onAuthChange={handleAuthChange} />} />
-                </>
-              )}
+            <Suspense fallback={SuspenseFallback}>
+              <Routes>
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                {!isAuthenticated && (
+                  <>
+                    <Route path="/login" element={<LoginPage onAuthChange={handleAuthChange} />} />
+                    <Route path="/register" element={<RegisterPage onAuthChange={handleAuthChange} />} />
+                    <Route path="*" element={<LoginPage onAuthChange={handleAuthChange} />} />
+                  </>
+                )}
 
-              {isAuthenticated && !currentUser.profileCompleted && (
-                <>
-                  <Route
-                    path="/complete-profile"
-                    element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
-                  />
-                  <Route
-                    path="*"
-                    element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
-                  />
-                </>
-              )}
+                {isAuthenticated && !currentUser.profileCompleted && (
+                  <>
+                    <Route
+                      path="/complete-profile"
+                      element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+                    />
+                    <Route
+                      path="*"
+                      element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+                    />
+                  </>
+                )}
 
-              {isAuthenticated && currentUser.profileCompleted && (
-                <>
-                  <Route
-                    path="/complete-profile"
-                    element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
-                  />
-                  <Route
-                    path="/profile"
-                    element={<ProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
-                  />
-                  <Route path="/pacientes" element={<PacientesPage />} />
-                  <Route path="/obras-sociales" element={<ObrasSocialesPage />} />
-                  <Route path="/turnos" element={<TurnosPage />} />
-                  <Route path="/centros-salud" element={<CentrosSaludPage />} />
-                  <Route path="/facturas" element={<FacturasPage />} />
-                  <Route path="/dashboard" element={<DashboardPage currentUser={currentUser} />} />
-                  <Route path="/" element={<DashboardPage currentUser={currentUser} />} />
-                  <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
-                </>
-              )}
-            </Routes>
+                {isAuthenticated && currentUser.profileCompleted && (
+                  <>
+                    <Route
+                      path="/complete-profile"
+                      element={<CompleteProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+                    />
+                    <Route
+                      path="/profile"
+                      element={<ProfilePage currentUser={currentUser} onProfileUpdated={handleAuthChange} />}
+                    />
+                    <Route path="/pacientes" element={<PacientesPage />} />
+                    <Route path="/obras-sociales" element={<ObrasSocialesPage />} />
+                    <Route path="/turnos" element={<TurnosPage />} />
+                    <Route path="/centros-salud" element={<CentrosSaludPage />} />
+                    <Route path="/facturas" element={<FacturasPage />} />
+                    <Route path="/dashboard" element={<DashboardPage currentUser={currentUser} />} />
+                    <Route path="/" element={<DashboardPage currentUser={currentUser} />} />
+                    <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
+                  </>
+                )}
+              </Routes>
+            </Suspense>
           </div>
         </div>
       </main>
