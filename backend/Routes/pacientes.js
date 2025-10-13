@@ -6,7 +6,7 @@ const Paciente = require('../models/Paciente');
 const CentroSalud = require('../models/CentroSalud');
 const { protect } = require('../middleware/authMiddleware');
 const storageService = require('../services/storageService');
-const { toCsv, formatDateTime } = require('../utils/csvUtils');
+const { generateExcelBuffer, formatDateTime } = require('../utils/exportUtils');
 
 const DEFAULT_PAGE_LIMIT = 16;
 const MAX_PAGE_LIMIT = 100;
@@ -56,7 +56,48 @@ const buildProjection = (fieldsParam) => {
   return fields.join(' ');
 };
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB
+const ALLOWED_MIME_TYPES = new Map([
+  ['application/pdf', 'application/pdf'],
+  ['application/x-pdf', 'application/pdf'],
+  ['image/jpeg', 'image/jpeg'],
+  ['image/pjpeg', 'image/jpeg'],
+]);
+const ALLOWED_EXTENSIONS = new Map([
+  ['.pdf', 'application/pdf'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+]);
+
+const resolveExtension = (filename) => {
+  if (typeof filename !== 'string') {
+    return null;
+  }
+  const lastDotIndex = filename.lastIndexOf('.');
+  if (lastDotIndex === -1) {
+    return null;
+  }
+  return filename.slice(lastDotIndex).toLowerCase();
+};
+
+const resolveAllowedContentType = (archivo = {}) => {
+  const typeCandidates = [archivo.tipo, archivo.contentType]
+    .filter((candidate) => typeof candidate === 'string' && candidate.trim())
+    .map((candidate) => candidate.trim().toLowerCase());
+
+  for (const candidate of typeCandidates) {
+    if (ALLOWED_MIME_TYPES.has(candidate)) {
+      return ALLOWED_MIME_TYPES.get(candidate);
+    }
+  }
+
+  const extension = resolveExtension(archivo.nombre);
+  if (extension && ALLOWED_EXTENSIONS.has(extension)) {
+    return ALLOWED_EXTENSIONS.get(extension);
+  }
+
+  return null;
+};
 
 const sanitizeBase64 = (value) => {
   if (typeof value !== 'string') {
@@ -129,7 +170,7 @@ const formatDocumentListForExport = (documents) => {
         : '';
       return `${document.nombre}${description}`;
     })
-    .join(' | ');
+    .join('\n');
 };
 
 const resolveReferenceName = (reference) => {
@@ -376,7 +417,6 @@ router.get('/export', protect, async (req, res) => {
       .lean();
 
     const columns = [
-      { header: 'ID', value: (paciente) => paciente._id },
       { header: 'Nombre', value: (paciente) => paciente.nombre || '' },
       { header: 'Apellido', value: (paciente) => paciente.apellido || '' },
       { header: 'DNI', value: (paciente) => paciente.dni || '' },
@@ -406,12 +446,12 @@ router.get('/export', protect, async (req, res) => {
       { header: 'Actualizado el', value: (paciente) => formatDateTime(paciente.updatedAt) },
     ];
 
-    const csvContent = toCsv(pacientes, columns);
-    const filename = `pacientes-${new Date().toISOString().slice(0, 10)}.csv`;
+    const workbookBuffer = await generateExcelBuffer(pacientes, columns, { sheetName: 'Pacientes' });
+    const filename = `pacientes-${new Date().toISOString().slice(0, 10)}.xls`;
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Type', 'application/vnd.ms-excel');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.status(200).send(`\ufeff${csvContent}`);
+    res.status(200).send(workbookBuffer);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -493,12 +533,13 @@ router.post('/:id/documentos', protect, async (req, res) => {
     }
 
     if (buffer.length > MAX_FILE_SIZE_BYTES) {
-      return res.status(413).json({ error: 'El archivo supera el tamaño máximo permitido (10 MB).' });
+      return res.status(413).json({ error: 'El archivo supera el tamaño máximo permitido (20 MB).' });
     }
 
-    const contentType = typeof archivo.tipo === 'string' && archivo.tipo.trim() !== ''
-      ? archivo.tipo.trim()
-      : (typeof archivo.contentType === 'string' ? archivo.contentType.trim() : 'application/octet-stream');
+    const contentType = resolveAllowedContentType(archivo);
+    if (!contentType) {
+      return res.status(415).json({ error: 'Solo se permiten archivos PDF o JPG.' });
+    }
 
     const storagePayload = await storageService.uploadDocument({
       buffer,

@@ -129,10 +129,22 @@ const downloadDocumento = async (facturaId, documentoId) => {
   }
 };
 
-const exportFacturas = async () => {
+const exportFacturas = async (filters = {}) => {
   try {
-    const response = await axios.get(`${API_URL}/export`, getHeadersWithConfig({ responseType: 'blob' }));
-    const filename = extractFilename(response.headers['content-disposition'], 'facturas.csv');
+    const params = new URLSearchParams();
+    if (filters.startDate) {
+      params.append('startDate', filters.startDate);
+    }
+    if (filters.endDate) {
+      params.append('endDate', filters.endDate);
+    }
+    if (filters.userId) {
+      params.append('usuarioId', filters.userId);
+    }
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+
+    const response = await axios.get(`${API_URL}/export${queryString}`, getHeadersWithConfig({ responseType: 'blob' }));
+    const filename = extractFilename(response.headers['content-disposition'], 'facturas.xls');
     return {
       blob: response.data,
       filename,

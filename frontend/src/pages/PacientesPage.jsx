@@ -77,6 +77,36 @@ const toBase64 = (file) => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+const MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024;
+const ALLOWED_DOCUMENT_TYPES = new Set(['application/pdf', 'application/x-pdf', 'image/jpeg', 'image/pjpeg']);
+const ALLOWED_DOCUMENT_EXTENSIONS = ['.pdf', '.jpg', '.jpeg'];
+
+const getFileExtension = (filename = '') => {
+  if (typeof filename !== 'string') {
+    return '';
+  }
+  const trimmed = filename.trim().toLowerCase();
+  const lastDotIndex = trimmed.lastIndexOf('.');
+  if (lastDotIndex === -1) {
+    return '';
+  }
+  return trimmed.slice(lastDotIndex);
+};
+
+const isAllowedDocumentFile = (file) => {
+  if (!file) {
+    return true;
+  }
+  const type = (file.type || '').toLowerCase();
+  if (ALLOWED_DOCUMENT_TYPES.has(type)) {
+    return true;
+  }
+  const extension = getFileExtension(file.name);
+  return ALLOWED_DOCUMENT_EXTENSIONS.includes(extension);
+};
+
+const exceedsMaxDocumentSize = (file) => Boolean(file && file.size > MAX_DOCUMENT_SIZE_BYTES);
+
 const formatFileSize = (bytes) => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return '—';
@@ -454,6 +484,23 @@ function PacientesPage() {
 
   const handleDocumentFileChange = (event) => {
     const file = event.target.files && event.target.files[0] ? event.target.files[0] : null;
+    if (file) {
+      if (exceedsMaxDocumentSize(file)) {
+        setDocumentError('El archivo supera el tamaño máximo permitido de 20 MB.');
+        event.target.value = '';
+        setDocumentForm((prev) => ({ ...prev, archivo: null }));
+        return;
+      }
+
+      if (!isAllowedDocumentFile(file)) {
+        setDocumentError('Solo se permiten archivos en formato PDF o JPG.');
+        event.target.value = '';
+        setDocumentForm((prev) => ({ ...prev, archivo: null }));
+        return;
+      }
+    }
+
+    setDocumentError(null);
     setDocumentForm((prev) => ({ ...prev, archivo: file }));
   };
 
@@ -474,6 +521,16 @@ function PacientesPage() {
 
     if (!documentForm.archivo) {
       setDocumentError('Selecciona un archivo para adjuntar.');
+      return;
+    }
+
+    if (exceedsMaxDocumentSize(documentForm.archivo)) {
+      setDocumentError('El archivo supera el tamaño máximo permitido de 20 MB.');
+      return;
+    }
+
+    if (!isAllowedDocumentFile(documentForm.archivo)) {
+      setDocumentError('Solo se permiten archivos en formato PDF o JPG.');
       return;
     }
 
@@ -504,6 +561,7 @@ function PacientesPage() {
       if (documentFileInputRef.current) {
         documentFileInputRef.current.value = '';
       }
+      setDocumentError(null);
       showSuccess('Documento adjuntado correctamente.');
     } catch (err) {
       const message = err.response?.data?.error || err.message || 'No se pudo adjuntar el documento.';
@@ -864,7 +922,7 @@ function PacientesPage() {
                   className="form-control"
                   onChange={handleDocumentFileChange}
                   ref={documentFileInputRef}
-                  accept=".pdf,image/*,.doc,.docx,.xls,.xlsx"
+                  accept=".pdf,.jpg,.jpeg"
                   required
                 />
               </div>

@@ -160,6 +160,36 @@ const esFacturaVencida = (factura) => {
   return !Number.isNaN(vencimiento.getTime()) && vencimiento < hoy;
 };
 
+const MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024;
+const ALLOWED_DOCUMENT_TYPES = new Set(['application/pdf', 'application/x-pdf', 'image/jpeg', 'image/pjpeg']);
+const ALLOWED_DOCUMENT_EXTENSIONS = ['.pdf', '.jpg', '.jpeg'];
+
+const getFileExtension = (filename = '') => {
+  if (typeof filename !== 'string') {
+    return '';
+  }
+  const trimmed = filename.trim().toLowerCase();
+  const lastDotIndex = trimmed.lastIndexOf('.');
+  if (lastDotIndex === -1) {
+    return '';
+  }
+  return trimmed.slice(lastDotIndex);
+};
+
+const isAllowedDocumentFile = (file) => {
+  if (!file) {
+    return true;
+  }
+  const type = (file.type || '').toLowerCase();
+  if (ALLOWED_DOCUMENT_TYPES.has(type)) {
+    return true;
+  }
+  const extension = getFileExtension(file.name);
+  return ALLOWED_DOCUMENT_EXTENSIONS.includes(extension);
+};
+
+const exceedsMaxDocumentSize = (file) => Boolean(file && file.size > MAX_DOCUMENT_SIZE_BYTES);
+
 function FacturasPage() {
   const { showError, showSuccess, showInfo } = useFeedback();
   const location = useLocation();
@@ -182,6 +212,8 @@ function FacturasPage() {
   const [documentDeleteLoadingId, setDocumentDeleteLoadingId] = useState(null);
   const [documentDownloadLoadingId, setDocumentDownloadLoadingId] = useState(null);
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportFilters, setExportFilters] = useState({ startDate: '', endDate: '', userId: '' });
+  const [exportOptionsOpen, setExportOptionsOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState('last10Days');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [currentPage, setCurrentPage] = useState(1);
@@ -781,11 +813,39 @@ function FacturasPage() {
   };
 
   const handleDocumentFileChange = (facturaId, file) => {
+    if (file) {
+      if (exceedsMaxDocumentSize(file)) {
+        showError('El archivo supera el tamaño máximo permitido de 20 MB.');
+        setDocumentForms((prev) => ({
+          ...prev,
+          [facturaId]: { ...getDocumentForm(facturaId), archivo: null },
+        }));
+        setDocumentInputKeys((prev) => ({
+          ...prev,
+          [facturaId]: (prev[facturaId] || 0) + 1,
+        }));
+        return;
+      }
+
+      if (!isAllowedDocumentFile(file)) {
+        showError('Solo se permiten archivos en formato PDF o JPG.');
+        setDocumentForms((prev) => ({
+          ...prev,
+          [facturaId]: { ...getDocumentForm(facturaId), archivo: null },
+        }));
+        setDocumentInputKeys((prev) => ({
+          ...prev,
+          [facturaId]: (prev[facturaId] || 0) + 1,
+        }));
+        return;
+      }
+    }
+
     setDocumentForms((prev) => ({
       ...prev,
       [facturaId]: {
         ...getDocumentForm(facturaId),
-        archivo: file,
+        archivo: file || null,
       },
     }));
   };
@@ -813,6 +873,16 @@ function FacturasPage() {
 
     if (!form.archivo) {
       showError('Selecciona un archivo para adjuntar.');
+      return;
+    }
+
+    if (exceedsMaxDocumentSize(form.archivo)) {
+      showError('El archivo supera el tamaño máximo permitido de 20 MB.');
+      return;
+    }
+
+    if (!isAllowedDocumentFile(form.archivo)) {
+      showError('Solo se permiten archivos en formato PDF o JPG.');
       return;
     }
 
@@ -847,6 +917,17 @@ function FacturasPage() {
     } finally {
       setDocumentUploadLoadingId(null);
     }
+  };
+
+  const handleExportFilterChange = (field, value) => {
+    setExportFilters((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const resetExportFilters = () => {
+    setExportFilters({ startDate: '', endDate: '', userId: '' });
   };
 
   const handleDocumentoDelete = async (facturaId, documentoId) => {
@@ -892,8 +973,21 @@ function FacturasPage() {
 
   const handleExportFacturas = async () => {
     try {
+      const trimmedStartDate = exportFilters.startDate?.trim() || '';
+      const trimmedEndDate = exportFilters.endDate?.trim() || '';
+      const trimmedUserId = exportFilters.userId?.trim() || '';
+
+      if (trimmedStartDate && trimmedEndDate && trimmedStartDate > trimmedEndDate) {
+        showError('La fecha desde no puede ser posterior a la fecha hasta.');
+        return;
+      }
+
       setExportLoading(true);
-      const { blob, filename } = await facturasService.exportFacturas();
+      const { blob, filename } = await facturasService.exportFacturas({
+        startDate: trimmedStartDate || undefined,
+        endDate: trimmedEndDate || undefined,
+        userId: trimmedUserId || undefined,
+      });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -1098,23 +1192,92 @@ function FacturasPage() {
                     Buscar
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-outline-primary"
-                  onClick={handleExportFacturas}
-                  disabled={exportLoading}
-                >
-                  {exportLoading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Generando...
-                    </>
-                  ) : (
-                    <>Exportar facturas</>
-                  )}
-                </button>
+                <div className="d-flex flex-column flex-sm-row gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary"
+                    onClick={handleExportFacturas}
+                    disabled={exportLoading}
+                  >
+                    {exportLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Generando...
+                      </>
+                    ) : (
+                      <>Exportar facturas</>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setExportOptionsOpen((prev) => !prev)}
+                    aria-expanded={exportOptionsOpen}
+                  >
+                    {exportOptionsOpen ? 'Ocultar opciones' : 'Opciones de exportación'}
+                  </button>
+                </div>
               </div>
             </div>
+            {exportOptionsOpen && (
+              <div className="border rounded bg-light p-3 mt-3">
+                <div className="row g-3">
+                  <div className="col-12 col-md-4 col-lg-3">
+                    <label className="form-label text-muted small mb-1" htmlFor="exportStartDate">
+                      Fecha desde
+                    </label>
+                    <input
+                      id="exportStartDate"
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={exportFilters.startDate}
+                      max={exportFilters.endDate || undefined}
+                      onChange={(event) => handleExportFilterChange('startDate', event.target.value)}
+                      disabled={exportLoading}
+                    />
+                  </div>
+                  <div className="col-12 col-md-4 col-lg-3">
+                    <label className="form-label text-muted small mb-1" htmlFor="exportEndDate">
+                      Fecha hasta
+                    </label>
+                    <input
+                      id="exportEndDate"
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={exportFilters.endDate}
+                      min={exportFilters.startDate || undefined}
+                      onChange={(event) => handleExportFilterChange('endDate', event.target.value)}
+                      disabled={exportLoading}
+                    />
+                  </div>
+                  <div className="col-12 col-md-4 col-lg-3">
+                    <label className="form-label text-muted small mb-1" htmlFor="exportUserId">
+                      Usuario (opcional)
+                    </label>
+                    <input
+                      id="exportUserId"
+                      type="text"
+                      className="form-control form-control-sm"
+                      value={exportFilters.userId}
+                      onChange={(event) => handleExportFilterChange('userId', event.target.value)}
+                      placeholder="ID de usuario"
+                      disabled={exportLoading}
+                    />
+                    <small className="text-muted">Deja vacío para exportar tus propias facturas.</small>
+                  </div>
+                  <div className="col-12 col-lg-3 d-flex align-items-end justify-content-end gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm"
+                      onClick={resetExportFilters}
+                      disabled={exportLoading}
+                    >
+                      Limpiar filtros
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3">
               <div className="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
                 <label className="form-label mb-0 text-muted text-uppercase small fw-semibold" htmlFor="dateFilter">
@@ -1491,6 +1654,7 @@ function FacturasPage() {
                                           id={`documentoArchivo-${factura._id}`}
                                           type="file"
                                           className="form-control"
+                                          accept=".pdf,.jpg,.jpeg"
                                           onChange={(e) => handleDocumentFileChange(factura._id, e.target.files?.[0] || null)}
                                         />
                                       </div>
@@ -1713,6 +1877,7 @@ function FacturasPage() {
                                 id={`documentoArchivo-mobile-${factura._id}`}
                                 type="file"
                                 className="form-control"
+                                accept=".pdf,.jpg,.jpeg"
                                 onChange={(e) => handleDocumentFileChange(factura._id, e.target.files?.[0] || null)}
                               />
                             </div>
