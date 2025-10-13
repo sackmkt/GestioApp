@@ -4,7 +4,6 @@ import GestioLogo from './assets/GestioLogo.png';
 import authService from './services/authService';
 import userService from './services/UserService';
 import { useFeedback } from './context/FeedbackContext.jsx';
-import ThemeToggle from './components/ThemeToggle.jsx';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'v1.0.0';
 const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
@@ -311,9 +310,6 @@ function App() {
                 : null}
             </ul>
             <ul className="navbar-nav ms-auto align-items-lg-center gap-lg-3">
-              <li className="nav-item">
-                <ThemeToggle className="w-100 w-lg-auto" />
-              </li>
               {isAuthenticated ? (
                 <>
                   <li className="nav-item">

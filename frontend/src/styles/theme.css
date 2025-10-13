@@ -77,6 +77,11 @@ body {
   transition: background-color var(--gestio-transition-base), color var(--gestio-transition-base), background-image var(--gestio-transition-base);
 }
 
+body.gestio-focus-mode {
+  background-image: none;
+  background-color: #f8fafc;
+}
+
 body.modal-open {
   overflow: hidden;
 }
@@ -198,6 +203,51 @@ main:focus {
 .gestio-navbar .nav-link:focus-visible {
   color: var(--gestio-primary);
   transform: translateY(-1px);
+}
+
+.dashboard-root {
+  transition: filter var(--gestio-transition-base);
+}
+
+.dashboard-root--focus {
+  filter: saturate(0.92);
+}
+
+.dashboard-root--focus .card,
+.dashboard-root--focus .list-group-item {
+  box-shadow: none !important;
+  border: 1px solid var(--gestio-border) !important;
+  background-color: var(--gestio-surface) !important;
+}
+
+.dashboard-root--focus .card-header {
+  background-color: var(--gestio-surface) !important;
+  color: var(--gestio-text-primary) !important;
+}
+
+.widget-option {
+  border: 1px solid var(--gestio-border);
+  background-color: var(--gestio-surface);
+  cursor: pointer;
+  transition: border-color var(--gestio-transition-base), box-shadow var(--gestio-transition-base), transform var(--gestio-transition-base);
+}
+
+.widget-option:hover,
+.widget-option:focus-within {
+  border-color: var(--gestio-primary);
+  box-shadow: 0 12px 30px -20px rgba(37, 99, 235, 0.6);
+  transform: translateY(-2px);
+}
+
+.widget-option--active {
+  border-color: var(--gestio-primary);
+  box-shadow: 0 14px 34px -18px rgba(37, 99, 235, 0.55);
+}
+
+.widget-option input[type='checkbox'] {
+  cursor: pointer;
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 .gestio-navbar .nav-link.active::after,
