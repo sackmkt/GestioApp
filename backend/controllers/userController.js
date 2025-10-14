@@ -183,6 +183,7 @@ const buildUserResponse = (user, includeToken = true) => {
     username: user.username,
     email: user.email,
     authProvider: user.authProvider || 'local',
+    googleId: user.googleId || '',
     firstName: user.firstName || '',
     lastName: user.lastName || '',
     profession: user.profession || '',

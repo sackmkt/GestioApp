@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import userService from '../services/UserService';
+import authService from '../services/authService';
+import GoogleAuthButton from '../components/GoogleAuthButton.jsx';
 import { DASHBOARD_WIDGET_OPTIONS, DEFAULT_DASHBOARD_PREFERENCES, resolveDashboardPreferences } from '../constants/dashboardPreferences.js';
 
 const professionOptions = [
@@ -90,6 +92,10 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+  const [googleLinked, setGoogleLinked] = useState(Boolean(currentUser?.googleId));
+  const [googleLinkError, setGoogleLinkError] = useState('');
+  const [googleLinkSuccess, setGoogleLinkSuccess] = useState('');
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
 
   useEffect(() => {
     if (!currentUser) {
@@ -119,6 +125,9 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
         setSelectedAvatar(profile.profileAvatar || '');
         setSelectedWidgets(sortDashboardPreferences(resolveDashboardPreferences(profile.dashboardPreferences)));
         setImageError('');
+        setGoogleLinked(Boolean(profile.googleId));
+        setGoogleLinkError('');
+        setGoogleLinkSuccess('');
       } catch (fetchError) {
         console.error('Error al cargar el perfil:', fetchError);
         setError('No pudimos cargar tu perfil. Intenta nuevamente.');
@@ -373,6 +382,53 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
     } finally {
       setIsPasswordSubmitting(false);
     }
+  };
+
+  const handleGoogleLinkCredential = async (idToken) => {
+    if (!idToken) {
+      setGoogleLinkError('No recibimos la credencial de Google. Intenta nuevamente.');
+      return;
+    }
+
+    setGoogleLinkError('');
+    setGoogleLinkSuccess('');
+    setIsLinkingGoogle(true);
+
+    try {
+      const user = await authService.googleAuth({ idToken });
+
+      setGoogleLinked(Boolean(user.googleId));
+      setGoogleLinkSuccess('Conectamos tu cuenta de Google correctamente.');
+
+      setFormData((prev) => ({
+        ...prev,
+        email: user.email || prev.email,
+        firstName: user.firstName || prev.firstName,
+        lastName: user.lastName || prev.lastName,
+      }));
+
+      setProfileImage((prev) => prev || user.profileImage || '');
+      setSelectedAvatar((prev) => prev || user.profileAvatar || '');
+
+      if (Array.isArray(user.dashboardPreferences) && user.dashboardPreferences.length > 0) {
+        setSelectedWidgets(sortDashboardPreferences(resolveDashboardPreferences(user.dashboardPreferences)));
+      }
+
+      if (onProfileUpdated) {
+        onProfileUpdated(user);
+      }
+    } catch (linkError) {
+      const message =
+        linkError.response?.data?.message || 'No pudimos conectar tu cuenta de Google. Intenta nuevamente.';
+      setGoogleLinkError(message);
+      console.error('Error al vincular la cuenta de Google:', linkError);
+    } finally {
+      setIsLinkingGoogle(false);
+    }
+  };
+
+  const handleGoogleLinkError = (message) => {
+    setGoogleLinkError(message || 'No pudimos conectar tu cuenta de Google. Intenta nuevamente.');
   };
 
   if (isLoading) {
@@ -660,6 +716,46 @@ function ProfilePage({ currentUser, onProfileUpdated }) {
                   {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               </form>
+            </div>
+          </div>
+
+          <div className="card shadow-sm border-0 mt-4">
+            <div className="card-header bg-white">
+              <h5 className="mb-0">Conexión con Google</h5>
+            </div>
+            <div className="card-body">
+              <p className="text-muted">
+                Vincula tu cuenta de Google para iniciar sesión más rápido y reforzar la seguridad de tu acceso.
+              </p>
+              {googleLinkError && <div className="alert alert-danger">{googleLinkError}</div>}
+              {googleLinkSuccess && <div className="alert alert-success">{googleLinkSuccess}</div>}
+              {googleLinked ? (
+                <div className="alert alert-info small mb-4">
+                  Tu cuenta ya está conectada con Google. Si revocaste el acceso desde Google, vuelve a vincularla aquí.
+                </div>
+              ) : (
+                <div className="alert alert-warning small mb-4">
+                  Aún no conectaste tu cuenta con Google. Hazlo para simplificar tu ingreso a la plataforma.
+                </div>
+              )}
+              <div
+                className={`d-flex flex-column flex-sm-row align-items-center gap-3 ${
+                  isLinkingGoogle ? 'pe-none opacity-75' : ''
+                }`}
+              >
+                <GoogleAuthButton
+                  className="w-100 w-sm-auto"
+                  text="continue_with"
+                  onCredential={handleGoogleLinkCredential}
+                  onError={handleGoogleLinkError}
+                  disabled={isLinkingGoogle}
+                />
+                <p className="text-muted small mb-0 text-center text-sm-start">
+                  {googleLinked
+                    ? 'Puedes reconectar tu cuenta si cambiaste los permisos en Google.'
+                    : 'Solo utilizaremos tu cuenta para autenticarte, nunca para enviar correos sin tu autorización.'}
+                </p>
+              </div>
             </div>
           </div>
 

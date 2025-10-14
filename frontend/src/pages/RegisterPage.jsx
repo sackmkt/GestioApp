@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import authService from '../services/authService';
+import GoogleAuthButton from '../components/GoogleAuthButton.jsx';
 import GestioLogo from '../assets/GestioLogo.png';
 import '../styles/auth-pages.css';
 
@@ -66,6 +67,35 @@ function RegisterPage({ onAuthChange }) {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleGoogleCredential = async (idToken) => {
+    if (!idToken) {
+      setError('No pudimos crear tu cuenta con Google. Intenta nuevamente.');
+      return;
+    }
+
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      const user = await authService.googleAuth({ idToken });
+      if (onAuthChange) {
+        onAuthChange(user);
+      }
+      navigate(user.profileCompleted ? '/dashboard' : '/complete-profile');
+    } catch (googleError) {
+      const message =
+        googleError.response?.data?.message || 'No pudimos crear tu cuenta con Google. Intenta nuevamente.';
+      setError(message);
+      console.error('Google register error:', googleError);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleError = (message) => {
+    setError(message || 'No pudimos crear tu cuenta con Google. Intenta nuevamente.');
   };
 
   return (
@@ -148,6 +178,17 @@ function RegisterPage({ onAuthChange }) {
               {isSubmitting ? 'Creando cuenta…' : 'Registrarse'}
             </button>
           </form>
+          <div className="auth-divider">
+            <span>O regístrate con</span>
+          </div>
+          <div className={`auth-social ${isSubmitting ? 'auth-social--disabled' : ''}`}>
+            <GoogleAuthButton
+              onCredential={handleGoogleCredential}
+              onError={handleGoogleError}
+              text="signup_with"
+              disabled={isSubmitting}
+            />
+          </div>
           <p className="auth-switch">
             ¿Ya tienes una cuenta?{' '}
             <NavLink to="/login" className="auth-link">

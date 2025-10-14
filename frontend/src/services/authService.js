@@ -19,6 +19,14 @@ const login = async (userData) => {
   return response.data;
 };
 
+const googleAuth = async ({ idToken }) => {
+  const response = await axios.post(`${API_BASE_URL}/users/google`, { idToken });
+  if (response.data.token) {
+    localStorage.setItem('user', JSON.stringify(response.data));
+  }
+  return response.data;
+};
+
 const logout = () => {
   localStorage.removeItem('user');
 };
@@ -56,6 +64,7 @@ const resetPassword = async ({ token, password }) => {
 const authService = {
   register,
   login,
+  googleAuth,
   logout,
   getToken,
   requestPasswordReset,
