@@ -610,15 +610,17 @@ function PagosCentrosPage() {
               </div>
               <div className="col-12 col-lg-2">
                 <label htmlFor="metodo" className="form-label">Método</label>
-                <input
+                <select
                   id="metodo"
-                  type="text"
-                  className="form-control"
-                  placeholder="Transferencia, efectivo…"
-                  value={paymentForm.metodo}
+                  className="form-select"
+                  value={paymentForm.metodo || ''}
                   onChange={(event) => handlePaymentFormChange('metodo', event.target.value)}
                   disabled={isRegistering || pendientesDelCentro.length === 0}
-                />
+                >
+                  <option value="">Selecciona el método</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Transferencia bancaria">Transferencia bancaria</option>
+                </select>
               </div>
               <div className="col-12">
                 <label htmlFor="nota" className="form-label">Nota</label>

@@ -107,10 +107,9 @@ const normalizeEstado = (factura) => {
 };
 
 const PAYMENT_METHODS = {
-  efectivo: { label: 'Efectivo', includes: ['efectivo'] },
-  transferencia: { label: 'Transferencia bancaria', includes: ['transfer'] },
-  tarjeta: { label: 'Tarjeta', includes: ['tarjeta'] },
-  otros: { label: 'Otros métodos', includes: [] },
+  efectivo: { label: 'Efectivo', includes: ['efectivo', 'cash', 'contado'] },
+  transferencia: { label: 'Transferencia bancaria', includes: ['transfer', 'banco', 'cbu'] },
+  otros: { label: 'Otros métodos (revisar)', includes: [] },
 };
 
 const STATUS_FILTERS = [
@@ -135,6 +134,7 @@ function CobranzasPage() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activePanel, setActivePanel] = useState('pacientes');
 
   const loadFacturas = useCallback(async () => {
     setLoading(true);
@@ -372,6 +372,178 @@ function CobranzasPage() {
     };
   }, [filteredFacturas]);
 
+  const panelTabs = [
+    { key: 'pacientes', label: 'Pacientes con saldo', total: cobranzasSummary.pacientesConSaldo.length },
+    { key: 'obras', label: 'Obras sociales', total: cobranzasSummary.obras.length },
+    { key: 'meses', label: 'Flujo mensual', total: cobranzasSummary.meses.length },
+    { key: 'facturas', label: 'Facturas incluidas', total: filteredFacturas.length },
+  ];
+
+  const activePanelMeta = panelTabs.find((panel) => panel.key === activePanel) || panelTabs[0];
+
+  const renderActivePanel = () => {
+    if (loading) {
+      return <p className="text-muted mb-0">Cargando información…</p>;
+    }
+
+    switch (activePanel) {
+      case 'pacientes': {
+        if (cobranzasSummary.pacientesConSaldo.length === 0) {
+          return <p className="text-muted mb-0">No hay pacientes con deuda para los filtros seleccionados.</p>;
+        }
+
+        return (
+          <div className="table-responsive" style={{ maxHeight: '320px' }}>
+            <table className="table table-sm align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Paciente</th>
+                  <th className="text-center">Facturas</th>
+                  <th className="text-end">Facturado</th>
+                  <th className="text-end">Cobrado</th>
+                  <th className="text-end">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cobranzasSummary.pacientesConSaldo.slice(0, 12).map((paciente) => (
+                  <tr key={paciente.id}>
+                    <td>{paciente.nombre}</td>
+                    <td className="text-center">{paciente.facturas}</td>
+                    <td className="text-end">{formatCurrency(paciente.totalFacturado)}</td>
+                    <td className="text-end">{formatCurrency(paciente.totalCobrado)}</td>
+                    <td className="text-end fw-semibold text-danger">{formatCurrency(paciente.saldoPendiente)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      case 'obras': {
+        if (cobranzasSummary.obras.length === 0) {
+          return <p className="text-muted mb-0">No se registran obras sociales para los filtros aplicados.</p>;
+        }
+
+        return (
+          <div className="table-responsive" style={{ maxHeight: '320px' }}>
+            <table className="table table-sm align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Obra social</th>
+                  <th className="text-center">Facturas</th>
+                  <th className="text-end">Cobrado</th>
+                  <th className="text-end">Pendiente</th>
+                  <th className="text-center">Pagadas</th>
+                  <th className="text-center">Pendientes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cobranzasSummary.obras.slice(0, 12).map((obra) => (
+                  <tr key={obra.id}>
+                    <td>{obra.nombre}</td>
+                    <td className="text-center">{obra.facturas}</td>
+                    <td className="text-end text-success">{formatCurrency(obra.totalCobrado)}</td>
+                    <td className="text-end text-danger">{formatCurrency(obra.saldoPendiente)}</td>
+                    <td className="text-center text-success">{obra.pagas}</td>
+                    <td className="text-center text-warning">{obra.pendientes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      case 'meses': {
+        if (cobranzasSummary.meses.length === 0) {
+          return <p className="text-muted mb-0">No hay datos mensuales para los filtros seleccionados.</p>;
+        }
+
+        return (
+          <div className="table-responsive" style={{ maxHeight: '320px' }}>
+            <table className="table table-sm align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Mes</th>
+                  <th className="text-end">Facturado</th>
+                  <th className="text-end">Cobrado</th>
+                  <th className="text-end">Pendiente</th>
+                  <th className="text-center">Facturas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cobranzasSummary.meses.slice(0, 12).map((mes) => (
+                  <tr key={mes.key}>
+                    <td>{mes.label}</td>
+                    <td className="text-end">{formatCurrency(mes.totalFacturado)}</td>
+                    <td className="text-end text-success">{formatCurrency(mes.totalCobrado)}</td>
+                    <td className="text-end text-danger">{formatCurrency(mes.totalPendiente)}</td>
+                    <td className="text-center">{mes.facturas}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      case 'facturas': {
+        if (filteredFacturas.length === 0) {
+          return <p className="text-muted mb-0">No se encontraron facturas con los filtros seleccionados.</p>;
+        }
+
+        return (
+          <div className="table-responsive" style={{ maxHeight: '360px' }}>
+            <table className="table table-hover table-sm align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Factura</th>
+                  <th>Paciente</th>
+                  <th>Obra social</th>
+                  <th className="text-end">Total</th>
+                  <th className="text-end">Cobrado</th>
+                  <th className="text-end">Saldo</th>
+                  <th className="text-end">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredFacturas.slice(0, 40).map((factura) => {
+                  const estado = normalizeEstado(factura);
+                  const saldo = getSaldoPendiente(factura);
+                  const pacienteNombre = factura.paciente
+                    ? `${factura.paciente?.nombre || ''} ${factura.paciente?.apellido || ''}`.trim()
+                    : '';
+                  const obraSocialNombre = factura.obraSocial?.nombre || 'Particulares';
+
+                  return (
+                    <tr key={factura._id}>
+                      <td>
+                        <div className="fw-semibold">{factura.numeroFactura || 'Sin número'}</div>
+                        <small className="text-muted">{new Date(factura.fechaEmision || factura.createdAt).toLocaleDateString()}</small>
+                      </td>
+                      <td>{pacienteNombre || 'Paciente sin identificar'}</td>
+                      <td>{obraSocialNombre}</td>
+                      <td className="text-end">{formatCurrency(factura.montoTotal)}</td>
+                      <td className="text-end">{formatCurrency(getMontoCobrado(factura))}</td>
+                      <td className={`text-end ${saldo > SALDO_THRESHOLD ? 'text-danger fw-semibold' : ''}`}>
+                        {formatCurrency(saldo)}
+                      </td>
+                      <td className="text-end">
+                        <span className="badge bg-light text-uppercase text-muted">
+                          {estado.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      default:
+        return null;
+    }
+  };
+
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
@@ -519,9 +691,11 @@ function CobranzasPage() {
 
       <div className="card shadow-sm mb-4">
         <div className="card-body">
-          <h2 className="h5 mb-3">Métodos de cobro</h2>
+          <h2 className="h5 mb-2">Métodos de cobro</h2>
+          <p className="text-muted small mb-3">Solo se admiten pagos en efectivo o transferencias bancarias para los pacientes particulares.</p>
           {Object.values(cobranzasSummary.paymentSummary).every((method) => method.pagos === 0) ? (
-            <p className="text-muted mb-0">Aún no se registraron pagos en las facturas seleccionadas.</p>) : (
+            <p className="text-muted mb-0">Aún no se registraron pagos en las facturas seleccionadas.</p>
+          ) : (
             <div className="row g-3">
               {Object.entries(cobranzasSummary.paymentSummary).map(([key, method]) => (
                 <div className="col-12 col-md-6 col-xl-3" key={key}>
@@ -537,176 +711,51 @@ function CobranzasPage() {
         </div>
       </div>
 
-      <div className="row g-4">
-        <div className="col-12 col-xl-6">
-          <div className="card shadow-sm h-100">
-            <div className="card-body">
-              <h2 className="h5 mb-3">Pacientes con saldo pendiente</h2>
-              {loading ? (
-                <p className="text-muted mb-0">Cargando información…</p>
-              ) : cobranzasSummary.pacientesConSaldo.length === 0 ? (
-                <p className="text-muted mb-0">No hay pacientes con deuda en el período seleccionado.</p>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-sm align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>Paciente</th>
-                        <th className="text-center">Facturas</th>
-                        <th className="text-end">Facturado</th>
-                        <th className="text-end">Cobrado</th>
-                        <th className="text-end">Saldo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cobranzasSummary.pacientesConSaldo.map((paciente) => (
-                        <tr key={paciente.id}>
-                          <td>{paciente.nombre}</td>
-                          <td className="text-center">{paciente.facturas}</td>
-                          <td className="text-end">{formatCurrency(paciente.totalFacturado)}</td>
-                          <td className="text-end">{formatCurrency(paciente.totalCobrado)}</td>
-                          <td className="text-end fw-semibold text-danger">{formatCurrency(paciente.saldoPendiente)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="col-12 col-xl-6">
-          <div className="card shadow-sm h-100">
-            <div className="card-body">
-              <h2 className="h5 mb-3">Obras sociales</h2>
-              {loading ? (
-                <p className="text-muted mb-0">Cargando información…</p>
-              ) : cobranzasSummary.obras.length === 0 ? (
-                <p className="text-muted mb-0">No se registran facturas con obras sociales en los filtros aplicados.</p>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table table-sm align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th>Obra social</th>
-                        <th className="text-center">Facturas</th>
-                        <th className="text-end">Cobrado</th>
-                        <th className="text-end">Pendiente</th>
-                        <th className="text-center">Pagadas</th>
-                        <th className="text-center">Pendientes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cobranzasSummary.obras.map((obra) => (
-                        <tr key={obra.id}>
-                          <td>{obra.nombre}</td>
-                          <td className="text-center">{obra.facturas}</td>
-                          <td className="text-end">{formatCurrency(obra.totalCobrado)}</td>
-                          <td className="text-end text-danger">{formatCurrency(obra.saldoPendiente)}</td>
-                          <td className="text-center text-success">{obra.pagas}</td>
-                          <td className="text-center text-warning">{obra.pendientes}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card shadow-sm my-4">
-        <div className="card-body">
-          <h2 className="h5 mb-3">Flujo mensual de cobranzas</h2>
-          {loading ? (
-            <p className="text-muted mb-0">Cargando información…</p>
-          ) : cobranzasSummary.meses.length === 0 ? (
-            <p className="text-muted mb-0">No se registran datos para los filtros aplicados.</p>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-sm align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Mes</th>
-                    <th className="text-end">Facturado</th>
-                    <th className="text-end">Cobrado</th>
-                    <th className="text-end">Pendiente</th>
-                    <th className="text-center">Facturas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cobranzasSummary.meses.map((mes) => (
-                    <tr key={mes.key}>
-                      <td>{mes.label}</td>
-                      <td className="text-end">{formatCurrency(mes.totalFacturado)}</td>
-                      <td className="text-end">{formatCurrency(mes.totalCobrado)}</td>
-                      <td className="text-end text-danger">{formatCurrency(mes.totalPendiente)}</td>
-                      <td className="text-center">{mes.facturas}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="card shadow-sm">
         <div className="card-body">
-          <h2 className="h5 mb-3">Facturas incluidas en el resumen</h2>
-          {loading ? (
-            <p className="text-muted mb-0">Cargando facturas…</p>
-          ) : filteredFacturas.length === 0 ? (
-            <p className="text-muted mb-0">No se encontraron facturas con los filtros seleccionados.</p>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-hover table-sm align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Factura</th>
-                    <th>Paciente</th>
-                    <th>Obra social</th>
-                    <th className="text-end">Total</th>
-                    <th className="text-end">Cobrado</th>
-                    <th className="text-end">Saldo</th>
-                    <th className="text-end">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredFacturas.map((factura) => {
-                    const estado = normalizeEstado(factura);
-                    const saldo = getSaldoPendiente(factura);
-                    const pacienteNombre = factura.paciente
-                      ? `${factura.paciente?.nombre || ''} ${factura.paciente?.apellido || ''}`.trim()
-                      : '';
-                    const obraSocialNombre = factura.obraSocial?.nombre || 'Particulares';
-
-                    return (
-                      <tr key={factura._id}>
-                        <td>
-                          <div className="fw-semibold">{factura.numeroFactura || 'Sin número'}</div>
-                          <small className="text-muted">{new Date(factura.fechaEmision || factura.createdAt).toLocaleDateString()}</small>
-                        </td>
-                        <td>{pacienteNombre || 'Paciente sin identificar'}</td>
-                        <td>{obraSocialNombre}</td>
-                        <td className="text-end">{formatCurrency(factura.montoTotal)}</td>
-                        <td className="text-end">{formatCurrency(getMontoCobrado(factura))}</td>
-                        <td className={`text-end ${saldo > SALDO_THRESHOLD ? 'text-danger fw-semibold' : ''}`}>
-                          {formatCurrency(saldo)}
-                        </td>
-                        <td className="text-end">
-                          <span className="badge bg-light text-uppercase text-muted">
-                            {estado.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3 mb-3">
+            <div>
+              <h2 className="h5 mb-1">Detalle inteligente</h2>
+              <p className="text-muted mb-0 small">Explora los segmentos clave sin perder de vista el total de registros.</p>
             </div>
-          )}
+            <div className="nav nav-pills flex-nowrap overflow-auto">
+              {panelTabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  className={`nav-link ${activePanel === tab.key ? 'active' : ''}`}
+                  onClick={() => setActivePanel(tab.key)}
+                >
+                  {tab.label}
+                  <span className="badge rounded-pill bg-light text-dark ms-2">{formatNumber(tab.total)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3 mb-3">
+            <small className="text-muted">
+              {activePanelMeta ? `Mostrando hasta ${activePanel === 'facturas' ? 40 : 12} registros de ${formatNumber(activePanelMeta.total)} en ${activePanelMeta.label.toLowerCase()}.` : ''}
+            </small>
+            <div className="d-flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => setActivePanel('pacientes')}
+                disabled={activePanel === 'pacientes'}
+              >
+                Ver pacientes
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline-primary btn-sm"
+                onClick={() => setActivePanel('facturas')}
+                disabled={activePanel === 'facturas'}
+              >
+                Ver facturas
+              </button>
+            </div>
+          </div>
+          {renderActivePanel()}
         </div>
       </div>
     </section>
