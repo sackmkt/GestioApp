@@ -1603,60 +1603,61 @@ function DashboardPage({ currentUser }) {
         )}
 
         {shouldShowWidget('collectionsOverview') && (
-          <div className="col-xl-8 col-lg-12">
-            <div className="card shadow-sm h-100">
-              <div className="card-header bg-secondary text-white">
-                <div className="d-flex flex-column flex-lg-row justify-content-lg-between align-items-lg-center gap-2">
+          <div className="col-12">
+            <div className="card shadow-sm border-0 h-100">
+              <div className="card-header bg-primary text-white border-0 py-3">
+                <div className="d-flex flex-column flex-lg-row justify-content-lg-between align-items-lg-center gap-3">
                   <div className="d-flex align-items-center gap-2">
                     <FaChartBar />
                     <span className="fw-semibold">Resumen de cobranzas y centros</span>
                   </div>
                   <div className="d-flex flex-wrap gap-2 small">
-                    <span className="badge text-bg-dark">Facturado {formatNumber(collectionsTotals.totalFacturado || 0)}</span>
-                    <span className="badge text-bg-success">Cobrado {formatNumber(collectionsTotals.totalCobrado || 0)}</span>
-                    <span className="badge text-bg-warning text-dark">Saldo pacientes {formatNumber(collectionsTotals.totalSaldoPacientes || 0)}</span>
-                    <span className="badge text-bg-info text-dark">Saldo centros {formatNumber(collectionsTotals.totalCentroSaldo || 0)}</span>
+                    <span className="badge bg-white text-primary-emphasis border border-light-subtle shadow-sm">Facturado {formatNumber(collectionsTotals.totalFacturado || 0)}</span>
+                    <span className="badge bg-white text-success-emphasis border border-light-subtle shadow-sm">Cobrado {formatNumber(collectionsTotals.totalCobrado || 0)}</span>
+                    <span className="badge bg-white text-warning-emphasis border border-light-subtle shadow-sm">Saldo pacientes {formatNumber(collectionsTotals.totalSaldoPacientes || 0)}</span>
+                    <span className="badge bg-white text-info-emphasis border border-light-subtle shadow-sm">Saldo centros {formatNumber(collectionsTotals.totalCentroSaldo || 0)}</span>
                   </div>
                 </div>
               </div>
-              <div className="card-body">
-                <p className="text-muted small mb-3">
-                  Visualiza los grupos con mayor impacto en tu cobranza y decide si necesitas acciones inmediatas. Configura este módulo desde tu perfil para mantener solo lo que necesitas en tu panel.
-                </p>
-                <div className="row g-3">
-                  <div className="col-6 col-md-3">
-                    <div className="border rounded p-3 h-100 bg-body-tertiary">
-                      <div className="text-muted text-uppercase small">Facturado</div>
-                      <div className="fw-bold">{formatCompactCurrency(collectionsTotals.totalFacturado || 0)}</div>
+              <div className="card-body bg-body-tertiary">
+                <div className="row g-3 row-cols-2 row-cols-md-4">
+                  <div className="col">
+                    <div className="p-3 rounded-3 border border-primary-subtle bg-primary-subtle h-100">
+                      <div className="text-uppercase small fw-semibold text-primary-emphasis">Facturado</div>
+                      <h4 className="fw-bold text-primary-emphasis mb-0">{formatCompactCurrency(collectionsTotals.totalFacturado || 0)}</h4>
+                      <small className="text-primary-emphasis opacity-75">Período seleccionado</small>
                     </div>
                   </div>
-                  <div className="col-6 col-md-3">
-                    <div className="border rounded p-3 h-100 bg-body-tertiary">
-                      <div className="text-muted text-uppercase small">Cobrado</div>
-                      <div className="fw-bold text-success">{formatCompactCurrency(collectionsTotals.totalCobrado || 0)}</div>
+                  <div className="col">
+                    <div className="p-3 rounded-3 border border-success-subtle bg-success-subtle h-100">
+                      <div className="text-uppercase small fw-semibold text-success-emphasis">Cobrado</div>
+                      <h4 className="fw-bold text-success-emphasis mb-0">{formatCompactCurrency(collectionsTotals.totalCobrado || 0)}</h4>
+                      <small className="text-success-emphasis opacity-75">Ingresos confirmados</small>
                     </div>
                   </div>
-                  <div className="col-6 col-md-3">
-                    <div className="border rounded p-3 h-100 bg-body-tertiary">
-                      <div className="text-muted text-uppercase small">Saldo pacientes</div>
-                      <div className="fw-bold text-danger">{formatCompactCurrency(collectionsTotals.totalSaldoPacientes || 0)}</div>
+                  <div className="col">
+                    <div className="p-3 rounded-3 border border-warning-subtle bg-warning-subtle h-100">
+                      <div className="text-uppercase small fw-semibold text-warning-emphasis">Saldo pacientes</div>
+                      <h4 className="fw-bold text-warning-emphasis mb-0">{formatCompactCurrency(collectionsTotals.totalSaldoPacientes || 0)}</h4>
+                      <small className="text-warning-emphasis opacity-75">Seguimiento individual</small>
                     </div>
                   </div>
-                  <div className="col-6 col-md-3">
-                    <div className="border rounded p-3 h-100 bg-body-tertiary">
-                      <div className="text-muted text-uppercase small">Saldo centros</div>
-                      <div className="fw-bold text-warning">{formatCompactCurrency(collectionsTotals.totalCentroSaldo || 0)}</div>
+                  <div className="col">
+                    <div className="p-3 rounded-3 border border-info-subtle bg-info-subtle h-100">
+                      <div className="text-uppercase small fw-semibold text-info-emphasis">Saldo centros</div>
+                      <h4 className="fw-bold text-info-emphasis mb-0">{formatCompactCurrency(collectionsTotals.totalCentroSaldo || 0)}</h4>
+                      <small className="text-info-emphasis opacity-75">Pendiente por derivaciones</small>
                     </div>
                   </div>
                 </div>
 
                 <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3 mt-4">
-                  <div className="nav nav-pills flex-nowrap overflow-auto">
+                  <div className="nav nav-underline flex-nowrap overflow-auto">
                     {collectionsTabs.map((tab) => (
                       <button
                         key={tab.key}
                         type="button"
-                        className={`nav-link ${collectionsTab === tab.key ? 'active' : ''}`}
+                        className={`nav-link ${collectionsTab === tab.key ? 'active fw-semibold' : ''}`}
                         onClick={() => setCollectionsTab(tab.key)}
                       >
                         {tab.label}
@@ -1664,7 +1665,7 @@ function DashboardPage({ currentUser }) {
                       </button>
                     ))}
                   </div>
-                  <div className="d-flex align-items-center gap-3">
+                  <div className="d-flex flex-column flex-sm-row align-items-sm-center gap-3 text-sm-end">
                     <small className="text-muted">
                       {activeCollectionCount > 6
                         ? `Mostrando 6 de ${formatCompactNumber(activeCollectionCount)} registros`
@@ -1677,7 +1678,7 @@ function DashboardPage({ currentUser }) {
                   </div>
                 </div>
 
-                <div className="mt-3">
+                <div className="mt-4 p-3 bg-white rounded-3 shadow-sm">
                   {renderCollectionsPanel()}
                 </div>
               </div>
