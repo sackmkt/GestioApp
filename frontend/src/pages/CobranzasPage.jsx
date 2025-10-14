@@ -109,6 +109,7 @@ const normalizeEstado = (factura) => {
 const PAYMENT_METHODS = {
   efectivo: { label: 'Efectivo', includes: ['efectivo', 'cash', 'contado'] },
   transferencia: { label: 'Transferencia bancaria', includes: ['transfer', 'banco', 'cbu'] },
+  tarjeta: { label: 'Tarjeta', includes: ['tarjeta', 'crédito', 'débito'] },
   otros: { label: 'Otros métodos (revisar)', includes: [] },
 };
 
