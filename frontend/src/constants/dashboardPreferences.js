@@ -15,6 +15,11 @@ export const DASHBOARD_WIDGET_OPTIONS = [
     description: 'Detalle de facturación, cobranzas y neto por tipo de ingreso.',
   },
   {
+    id: 'collectionsOverview',
+    label: 'Resumen de cobranzas y centros',
+    description: 'Tarjetas y tablas resumidas con cobranzas por paciente, obra social, centro y mes.',
+  },
+  {
     id: 'administrativeMetrics',
     label: 'Métricas administrativas',
     description: 'Totales de pacientes, obras sociales y centros con actividad.',

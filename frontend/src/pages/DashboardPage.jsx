@@ -12,6 +12,7 @@ import DailyAgendaTimeline from '../components/DailyAgendaTimeline.jsx';
 import { useFeedback } from '../context/FeedbackContext.jsx';
 import { FaMoneyBillWave, FaChartBar, FaCalendarAlt, FaAngleDoubleUp, FaAngleDoubleDown, FaHospital, FaClock, FaFileInvoiceDollar, FaUsers, FaStar, FaExclamationTriangle, FaCalendarPlus, FaUserPlus, FaPhoneAlt, FaWhatsapp, FaSms, FaBullseye, FaLightbulb } from 'react-icons/fa';
 import { DASHBOARD_WIDGET_OPTIONS, DEFAULT_DASHBOARD_PREFERENCES, DASHBOARD_WIDGET_IDS, resolveDashboardPreferences } from '../constants/dashboardPreferences.js';
+import { buildCollectionsSummary } from '../utils/collectionsSummary.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
@@ -190,6 +191,7 @@ function DashboardPage({ currentUser }) {
       facturacion: { currentYear: 0, previousYear: 0, percentage: 0 },
       facturas: { currentYear: 0, previousYear: 0, percentage: 0 },
     },
+    collectionsSummary: buildCollectionsSummary([]),
   });
   const [turnos, setTurnos] = useState([]);
   const [preferencesOverride, setPreferencesOverride] = useState(null);
@@ -210,6 +212,7 @@ function DashboardPage({ currentUser }) {
       return false;
     }
   });
+  const [collectionsTab, setCollectionsTab] = useState('patients');
 
   const preferencesSource = preferencesOverride ?? currentUser?.dashboardPreferences;
   const effectivePreferences = useMemo(() => {
@@ -232,6 +235,7 @@ function DashboardPage({ currentUser }) {
   const hasUpperWidgets = useMemo(() => {
     return [
       'financialSummary',
+      'collectionsOverview',
       'administrativeMetrics',
       'collectionsHealth',
       'centersSummary',
@@ -614,6 +618,8 @@ function DashboardPage({ currentUser }) {
     const totalNetoCentros = centrosResumen.reduce((sum, centro) => sum + centro.totalNeto, 0);
     const centrosActivos = centrosResumen.filter((centro) => centro.totalFacturado > 0).length;
 
+    const collectionsSummary = buildCollectionsSummary(filteredFacturas);
+
     const estadoCounts = filteredFacturas.reduce((acc, factura) => {
       const estadoFactura = factura.estado || (factura.pagado ? 'pagada' : 'pendiente');
       acc[estadoFactura] = (acc[estadoFactura] || 0) + 1;
@@ -718,6 +724,7 @@ function DashboardPage({ currentUser }) {
       monthlyBarChartData,
       monthlyInsights,
       centrosResumen,
+      collectionsSummary,
       totalRetencionCentros,
       centrosActivos,
       netoParticulares: totalParticulares,
@@ -897,6 +904,7 @@ function DashboardPage({ currentUser }) {
           turnosProximos: agendaMetrics.upcoming,
           ocupacionSemanal: agendaMetrics.ocupacion,
           minutosProgramadosSemana: agendaMetrics.minutosProgramados,
+          collectionsSummary: buildCollectionsSummary(facturas),
         }));
       } catch (error) {
         console.error('Error fetching initial dashboard data:', error);
@@ -1084,6 +1092,164 @@ function DashboardPage({ currentUser }) {
     ? (obrasSocialesResumen.totalTop5 / obrasSocialesResumen.totalGeneral) * 100
     : 0;
   const obrasSocialesEntries = obrasSocialesResumen.entries || [];
+  const collectionsSummary = data.collectionsSummary || buildCollectionsSummary([]);
+  const collectionsTotals = collectionsSummary.totals || {};
+  const collectionsTabs = [
+    { key: 'patients', label: 'Pacientes con saldo' },
+    { key: 'obras', label: 'Obras sociales' },
+    { key: 'centros', label: 'Centros de salud' },
+    { key: 'months', label: 'Resumen mensual' },
+  ];
+  const activeCollectionCount = (() => {
+    switch (collectionsTab) {
+      case 'patients':
+        return (collectionsSummary.pacientesConSaldo || []).length;
+      case 'obras':
+        return (collectionsSummary.obras || []).length;
+      case 'centros':
+        return (collectionsSummary.centros || []).length;
+      case 'months':
+        return (collectionsSummary.meses || []).length;
+      default:
+        return 0;
+    }
+  })();
+  const activeCollectionLabel = collectionsTabs.find((tab) => tab.key === collectionsTab)?.label || '';
+
+  const renderCollectionsPanel = () => {
+    switch (collectionsTab) {
+      case 'patients': {
+        const rows = collectionsSummary.pacientesConSaldo || [];
+        if (rows.length === 0) {
+          return <p className="text-muted mb-0">No hay pacientes con deuda en el período seleccionado.</p>;
+        }
+
+        return (
+          <div className="table-responsive" style={{ maxHeight: '280px' }}>
+            <table className="table table-sm align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Paciente</th>
+                  <th className="text-center">Facturas</th>
+                  <th className="text-end">Facturado</th>
+                  <th className="text-end">Cobrado</th>
+                  <th className="text-end">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 6).map((paciente) => (
+                  <tr key={paciente.id}>
+                    <td>{paciente.nombre}</td>
+                    <td className="text-center">{paciente.facturas}</td>
+                    <td className="text-end">{formatNumber(paciente.totalFacturado)}</td>
+                    <td className="text-end">{formatNumber(paciente.totalCobrado)}</td>
+                    <td className="text-end fw-semibold text-danger">{formatNumber(paciente.saldoPendiente)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      case 'obras': {
+        const rows = collectionsSummary.obras || [];
+        if (rows.length === 0) {
+          return <p className="text-muted mb-0">Aún no se registran obras sociales con cobranzas en este período.</p>;
+        }
+
+        return (
+          <div className="table-responsive" style={{ maxHeight: '280px' }}>
+            <table className="table table-sm align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Obra social</th>
+                  <th className="text-center">Facturas</th>
+                  <th className="text-end">Cobrado</th>
+                  <th className="text-end">Pendiente</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 6).map((obra) => (
+                  <tr key={obra.id}>
+                    <td>{obra.nombre}</td>
+                    <td className="text-center">{obra.facturas}</td>
+                    <td className="text-end text-success">{formatNumber(obra.totalCobrado)}</td>
+                    <td className="text-end text-danger">{formatNumber(obra.saldoPendiente)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      case 'centros': {
+        const rows = collectionsSummary.centros || [];
+        if (rows.length === 0) {
+          return <p className="text-muted mb-0">No se registran centros con actividad para este rango de fechas.</p>;
+        }
+
+        return (
+          <div className="table-responsive" style={{ maxHeight: '280px' }}>
+            <table className="table table-sm align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Centro</th>
+                  <th className="text-center">Retención</th>
+                  <th className="text-end">Esperado</th>
+                  <th className="text-end">Pagado</th>
+                  <th className="text-end">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 6).map((centro) => (
+                  <tr key={centro.id}>
+                    <td>{centro.nombre}</td>
+                    <td className="text-center">{centro.porcentaje}%</td>
+                    <td className="text-end">{formatNumber(centro.totalEsperado)}</td>
+                    <td className="text-end text-success">{formatNumber(centro.totalPagado)}</td>
+                    <td className="text-end text-danger">{formatNumber(centro.saldoPendiente)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      case 'months': {
+        const rows = collectionsSummary.meses || [];
+        if (rows.length === 0) {
+          return <p className="text-muted mb-0">No hay facturas dentro del rango de fechas seleccionado.</p>;
+        }
+
+        return (
+          <div className="table-responsive" style={{ maxHeight: '280px' }}>
+            <table className="table table-sm align-middle mb-0">
+              <thead className="table-light">
+                <tr>
+                  <th>Mes</th>
+                  <th className="text-end">Facturado</th>
+                  <th className="text-end">Cobrado</th>
+                  <th className="text-end">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 6).map((mes) => (
+                  <tr key={mes.key}>
+                    <td>{mes.label}</td>
+                    <td className="text-end">{formatNumber(mes.totalFacturado)}</td>
+                    <td className="text-end text-success">{formatNumber(mes.totalCobrado)}</td>
+                    <td className="text-end text-danger">{formatNumber(mes.totalPendiente)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      default:
+        return null;
+    }
+  };
 
   const suggestions = useMemo(() => {
     const tips = [];
@@ -1431,6 +1597,89 @@ function DashboardPage({ currentUser }) {
                     <span className="fw-bold text-warning">{formatNumber(data.totalRetencionCentros)}</span>
                   </li>
                 </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {shouldShowWidget('collectionsOverview') && (
+          <div className="col-xl-8 col-lg-12">
+            <div className="card shadow-sm h-100">
+              <div className="card-header bg-secondary text-white">
+                <div className="d-flex flex-column flex-lg-row justify-content-lg-between align-items-lg-center gap-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <FaChartBar />
+                    <span className="fw-semibold">Resumen de cobranzas y centros</span>
+                  </div>
+                  <div className="d-flex flex-wrap gap-2 small">
+                    <span className="badge text-bg-dark">Facturado {formatNumber(collectionsTotals.totalFacturado || 0)}</span>
+                    <span className="badge text-bg-success">Cobrado {formatNumber(collectionsTotals.totalCobrado || 0)}</span>
+                    <span className="badge text-bg-warning text-dark">Saldo pacientes {formatNumber(collectionsTotals.totalSaldoPacientes || 0)}</span>
+                    <span className="badge text-bg-info text-dark">Saldo centros {formatNumber(collectionsTotals.totalCentroSaldo || 0)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="card-body">
+                <p className="text-muted small mb-3">
+                  Visualiza los grupos con mayor impacto en tu cobranza y decide si necesitas acciones inmediatas. Configura este módulo desde tu perfil para mantener solo lo que necesitas en tu panel.
+                </p>
+                <div className="row g-3">
+                  <div className="col-6 col-md-3">
+                    <div className="border rounded p-3 h-100 bg-body-tertiary">
+                      <div className="text-muted text-uppercase small">Facturado</div>
+                      <div className="fw-bold">{formatCompactCurrency(collectionsTotals.totalFacturado || 0)}</div>
+                    </div>
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <div className="border rounded p-3 h-100 bg-body-tertiary">
+                      <div className="text-muted text-uppercase small">Cobrado</div>
+                      <div className="fw-bold text-success">{formatCompactCurrency(collectionsTotals.totalCobrado || 0)}</div>
+                    </div>
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <div className="border rounded p-3 h-100 bg-body-tertiary">
+                      <div className="text-muted text-uppercase small">Saldo pacientes</div>
+                      <div className="fw-bold text-danger">{formatCompactCurrency(collectionsTotals.totalSaldoPacientes || 0)}</div>
+                    </div>
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <div className="border rounded p-3 h-100 bg-body-tertiary">
+                      <div className="text-muted text-uppercase small">Saldo centros</div>
+                      <div className="fw-bold text-warning">{formatCompactCurrency(collectionsTotals.totalCentroSaldo || 0)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3 mt-4">
+                  <div className="nav nav-pills flex-nowrap overflow-auto">
+                    {collectionsTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        className={`nav-link ${collectionsTab === tab.key ? 'active' : ''}`}
+                        onClick={() => setCollectionsTab(tab.key)}
+                      >
+                        {tab.label}
+                        <span className="badge rounded-pill bg-light text-dark ms-2">{formatCompactNumber(tab.total)}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="d-flex align-items-center gap-3">
+                    <small className="text-muted">
+                      {activeCollectionCount > 6
+                        ? `Mostrando 6 de ${formatCompactNumber(activeCollectionCount)} registros`
+                        : `Total: ${formatCompactNumber(activeCollectionCount)} registros`}
+                      {activeCollectionLabel ? ` · ${activeCollectionLabel}` : ''}
+                    </small>
+                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => navigate('/cobranzas')}>
+                      Ver detalle
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  {renderCollectionsPanel()}
+                </div>
               </div>
             </div>
           </div>

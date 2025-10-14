@@ -143,13 +143,6 @@ const formatCurrency = (value) => {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(numericValue);
 };
 
-const formatPercentage = (value) => {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue)) {
-    return '0';
-  }
-  return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(numericValue);
-};
 
 const formatDate = (value) => {
   if (!value) {
@@ -173,49 +166,8 @@ const formatDateTime = (value) => {
   return date.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 };
 
-const getMonthKey = (value) => {
-  if (!value) {
-    return 'sin-fecha';
-  }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return 'sin-fecha';
-  }
 
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const getMonthSortValue = (key) => {
-  if (!key || key === 'sin-fecha') {
-    return Number.NEGATIVE_INFINITY;
-  }
-
-  const [yearStr, monthStr] = key.split('-');
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  if (!Number.isFinite(year) || !Number.isFinite(month)) {
-    return Number.NEGATIVE_INFINITY;
-  }
-
-  return year * 100 + month;
-};
-
-const formatMonthLabel = (key) => {
-  if (!key || key === 'sin-fecha') {
-    return 'Sin fecha';
-  }
-
-  const [yearStr, monthStr] = key.split('-');
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  if (!Number.isFinite(year) || !Number.isFinite(month)) {
-    return key;
-  }
-
-  const date = new Date(year, month - 1, 1);
-  return date.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
-};
 
 const formatFileSize = (bytes) => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -323,7 +275,6 @@ function FacturasPage() {
   const [dateFilter, setDateFilter] = useState('last10Days');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [currentPage, setCurrentPage] = useState(1);
-  const [summaryTab, setSummaryTab] = useState('patients');
   const formRef = useRef(null);
 
   const scrollToForm = useCallback(() => {
@@ -949,327 +900,6 @@ function FacturasPage() {
     return counts;
   }, [facturas]);
 
-  const financialSummary = useMemo(() => {
-    const totals = {
-      totalFacturado: 0,
-      totalCobrado: 0,
-      totalSaldoPacientes: 0,
-      totalCentroEsperado: 0,
-      totalCentroPagado: 0,
-      totalCentroSaldo: 0,
-    };
-
-    const pacientesMap = new Map();
-    const obrasMap = new Map();
-    const centrosMap = new Map();
-    const mesesMap = new Map();
-
-    filteredFacturas.forEach((factura) => {
-      const montoTotal = Number(factura.montoTotal) || 0;
-      const montoCobrado = getMontoCobrado(factura);
-      const saldoPaciente = Math.max(montoTotal - montoCobrado, 0);
-      const centroTotal = getCentroTotal(factura);
-      const centroPagado = getCentroPagado(factura);
-      const centroSaldo = Math.max(centroTotal - centroPagado, 0);
-
-      totals.totalFacturado += montoTotal;
-      totals.totalCobrado += montoCobrado;
-      totals.totalSaldoPacientes += saldoPaciente;
-      totals.totalCentroEsperado += centroTotal;
-      totals.totalCentroPagado += centroPagado;
-      totals.totalCentroSaldo += centroSaldo;
-
-      const pacienteId = factura.paciente?._id || `sin-paciente-${factura._id}`;
-      const pacienteNombreBase = factura.paciente
-        ? `${factura.paciente?.nombre || ''} ${factura.paciente?.apellido || ''}`.trim()
-        : '';
-      const pacienteNombre = pacienteNombreBase || 'Paciente sin identificar';
-
-      if (!pacientesMap.has(pacienteId)) {
-        pacientesMap.set(pacienteId, {
-          id: pacienteId,
-          nombre: pacienteNombre,
-          facturas: 0,
-          totalFacturado: 0,
-          totalCobrado: 0,
-          saldoPendiente: 0,
-          centroTotal: 0,
-          centroPagado: 0,
-          centroSaldo: 0,
-        });
-      }
-
-      const pacienteEntry = pacientesMap.get(pacienteId);
-      pacienteEntry.facturas += 1;
-      pacienteEntry.totalFacturado += montoTotal;
-      pacienteEntry.totalCobrado += montoCobrado;
-      pacienteEntry.saldoPendiente += saldoPaciente;
-      pacienteEntry.centroTotal += centroTotal;
-      pacienteEntry.centroPagado += centroPagado;
-      pacienteEntry.centroSaldo += centroSaldo;
-
-      const obraId = factura.obraSocial?._id || 'particular';
-      const obraNombre = factura.obraSocial?.nombre || 'Particulares';
-
-      if (!obrasMap.has(obraId)) {
-        obrasMap.set(obraId, {
-          id: obraId,
-          nombre: obraNombre,
-          facturas: 0,
-          totalFacturado: 0,
-          totalCobrado: 0,
-          saldoPendiente: 0,
-          centroTotal: 0,
-          centroPagado: 0,
-          centroSaldo: 0,
-        });
-      }
-
-      const obraEntry = obrasMap.get(obraId);
-      obraEntry.facturas += 1;
-      obraEntry.totalFacturado += montoTotal;
-      obraEntry.totalCobrado += montoCobrado;
-      obraEntry.saldoPendiente += saldoPaciente;
-      obraEntry.centroTotal += centroTotal;
-      obraEntry.centroPagado += centroPagado;
-      obraEntry.centroSaldo += centroSaldo;
-
-      const centroId = factura.centroSalud?._id || null;
-      if (centroId) {
-        if (!centrosMap.has(centroId)) {
-          centrosMap.set(centroId, {
-            id: centroId,
-            nombre: factura.centroSalud?.nombre || 'Centro sin nombre',
-            porcentaje: getCentroRetencionPorcentaje(factura),
-            facturas: 0,
-            totalFacturado: 0,
-            totalEsperado: 0,
-            totalPagado: 0,
-            saldoPendiente: 0,
-          });
-        }
-
-        const centroEntry = centrosMap.get(centroId);
-        centroEntry.facturas += 1;
-        centroEntry.totalFacturado += montoTotal;
-        centroEntry.totalEsperado += centroTotal;
-        centroEntry.totalPagado += centroPagado;
-        centroEntry.saldoPendiente += centroSaldo;
-        centroEntry.porcentaje = getCentroRetencionPorcentaje(factura);
-      }
-
-      const monthKey = getMonthKey(factura.fechaEmision);
-      if (!mesesMap.has(monthKey)) {
-        mesesMap.set(monthKey, {
-          key: monthKey,
-          totalFacturado: 0,
-          totalCobrado: 0,
-          saldoPendiente: 0,
-          centroTotal: 0,
-          centroPagado: 0,
-          centroSaldo: 0,
-        });
-      }
-
-      const mesEntry = mesesMap.get(monthKey);
-      mesEntry.totalFacturado += montoTotal;
-      mesEntry.totalCobrado += montoCobrado;
-      mesEntry.saldoPendiente += saldoPaciente;
-      mesEntry.centroTotal += centroTotal;
-      mesEntry.centroPagado += centroPagado;
-      mesEntry.centroSaldo += centroSaldo;
-    });
-
-    const pacientes = Array.from(pacientesMap.values()).sort((a, b) => b.saldoPendiente - a.saldoPendiente);
-    const pacientesConSaldo = pacientes.filter((paciente) => paciente.saldoPendiente > 1e-2);
-    const pacientesAlDia = pacientes.filter((paciente) => paciente.saldoPendiente <= 1e-2);
-    const obras = Array.from(obrasMap.values()).sort((a, b) => b.totalFacturado - a.totalFacturado);
-    const centros = Array.from(centrosMap.values()).sort((a, b) => b.totalEsperado - a.totalEsperado);
-    const meses = Array.from(mesesMap.values()).sort((a, b) => getMonthSortValue(b.key) - getMonthSortValue(a.key));
-
-    return {
-      totals,
-      pacientes,
-      pacientesConSaldo,
-      pacientesAlDia,
-      obras,
-      centros,
-      meses,
-    };
-  }, [filteredFacturas]);
-
-  const summaryTabs = [
-    { key: 'patients', label: 'Pacientes' },
-    { key: 'obras', label: 'Obras sociales' },
-    { key: 'centros', label: 'Centros de salud' },
-    { key: 'months', label: 'Resumen mensual' },
-  ];
-
-  const summaryCards = [
-    { key: 'totalFacturado', label: 'Total facturado', value: financialSummary.totals.totalFacturado },
-    { key: 'totalCobrado', label: 'Total cobrado', value: financialSummary.totals.totalCobrado },
-    { key: 'deudaPacientes', label: 'Deuda pacientes', value: financialSummary.totals.totalSaldoPacientes },
-    { key: 'centroEsperado', label: 'Compromiso con centros', value: financialSummary.totals.totalCentroEsperado },
-    { key: 'centroPagado', label: 'Pagado a centros', value: financialSummary.totals.totalCentroPagado },
-    { key: 'centroSaldo', label: 'Deuda con centros', value: financialSummary.totals.totalCentroSaldo },
-  ];
-
-  const summaryCounts = [
-    { key: 'pacientesSaldo', label: 'Pacientes con saldo', value: financialSummary.pacientesConSaldo.length },
-    { key: 'pacientesAlDia', label: 'Pacientes al día', value: financialSummary.pacientesAlDia.length },
-  ];
-
-  const renderSummaryTable = () => {
-    switch (summaryTab) {
-      case 'patients': {
-        if (financialSummary.pacientes.length === 0) {
-          return <p className="text-muted mb-0">No hay información de pacientes para el período seleccionado.</p>;
-        }
-
-        return (
-          <div className="table-responsive">
-            <table className="table table-sm align-middle">
-              <thead className="table-light">
-                <tr>
-                  <th>Paciente</th>
-                  <th>Facturas</th>
-                  <th>Total facturado</th>
-                  <th>Total cobrado</th>
-                  <th>Saldo paciente</th>
-                  <th>Total a centro</th>
-                  <th>Pagado al centro</th>
-                  <th>Saldo centro</th>
-                </tr>
-              </thead>
-              <tbody>
-                {financialSummary.pacientes.map((paciente) => (
-                  <tr key={paciente.id}>
-                    <td>{paciente.nombre}</td>
-                    <td>{paciente.facturas}</td>
-                    <td>{formatCurrency(paciente.totalFacturado)}</td>
-                    <td>{formatCurrency(paciente.totalCobrado)}</td>
-                    <td>{formatCurrency(paciente.saldoPendiente)}</td>
-                    <td>{formatCurrency(paciente.centroTotal)}</td>
-                    <td>{formatCurrency(paciente.centroPagado)}</td>
-                    <td>{formatCurrency(paciente.centroSaldo)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      }
-      case 'obras': {
-        if (financialSummary.obras.length === 0) {
-          return <p className="text-muted mb-0">No se registran obras sociales en el período seleccionado.</p>;
-        }
-
-        return (
-          <div className="table-responsive">
-            <table className="table table-sm align-middle">
-              <thead className="table-light">
-                <tr>
-                  <th>Obra social</th>
-                  <th>Facturas</th>
-                  <th>Total facturado</th>
-                  <th>Total cobrado</th>
-                  <th>Saldo pacientes</th>
-                  <th>Total a centros</th>
-                  <th>Pagado a centros</th>
-                  <th>Saldo centros</th>
-                </tr>
-              </thead>
-              <tbody>
-                {financialSummary.obras.map((obra) => (
-                  <tr key={obra.id}>
-                    <td>{obra.nombre}</td>
-                    <td>{obra.facturas}</td>
-                    <td>{formatCurrency(obra.totalFacturado)}</td>
-                    <td>{formatCurrency(obra.totalCobrado)}</td>
-                    <td>{formatCurrency(obra.saldoPendiente)}</td>
-                    <td>{formatCurrency(obra.centroTotal)}</td>
-                    <td>{formatCurrency(obra.centroPagado)}</td>
-                    <td>{formatCurrency(obra.centroSaldo)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      }
-      case 'centros': {
-        if (financialSummary.centros.length === 0) {
-          return <p className="text-muted mb-0">Aún no registraste facturas con centros de salud en este período.</p>;
-        }
-
-        return (
-          <div className="table-responsive">
-            <table className="table table-sm align-middle">
-              <thead className="table-light">
-                <tr>
-                  <th>Centro de salud</th>
-                  <th>Facturas</th>
-                  <th>Retención (%)</th>
-                  <th>Total facturado</th>
-                  <th>Compromiso con centro</th>
-                  <th>Pagado</th>
-                  <th>Saldo con centro</th>
-                </tr>
-              </thead>
-              <tbody>
-                {financialSummary.centros.map((centro) => (
-                  <tr key={centro.id}>
-                    <td>{centro.nombre}</td>
-                    <td>{centro.facturas}</td>
-                    <td>{formatPercentage(centro.porcentaje)}</td>
-                    <td>{formatCurrency(centro.totalFacturado)}</td>
-                    <td>{formatCurrency(centro.totalEsperado)}</td>
-                    <td>{formatCurrency(centro.totalPagado)}</td>
-                    <td>{formatCurrency(centro.saldoPendiente)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      }
-      case 'months':
-      default: {
-        if (financialSummary.meses.length === 0) {
-          return <p className="text-muted mb-0">No hay información mensual disponible con los filtros aplicados.</p>;
-        }
-
-        return (
-          <div className="table-responsive">
-            <table className="table table-sm align-middle">
-              <thead className="table-light">
-                <tr>
-                  <th>Mes</th>
-                  <th>Total facturado</th>
-                  <th>Total cobrado</th>
-                  <th>Saldo pacientes</th>
-                  <th>Pagado a centros</th>
-                  <th>Saldo centros</th>
-                </tr>
-              </thead>
-              <tbody>
-                {financialSummary.meses.map((mes) => (
-                  <tr key={mes.key}>
-                    <td>{formatMonthLabel(mes.key)}</td>
-                    <td>{formatCurrency(mes.totalFacturado)}</td>
-                    <td>{formatCurrency(mes.totalCobrado)}</td>
-                    <td>{formatCurrency(mes.saldoPendiente)}</td>
-                    <td>{formatCurrency(mes.centroPagado)}</td>
-                    <td>{formatCurrency(mes.centroSaldo)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      }
-    }
-  };
 
   const renderStatusTabs = () => {
     const tabs = [
@@ -1674,52 +1304,6 @@ function FacturasPage() {
           </form>
       </div>
     </div>
-
-      <div className="card shadow-sm mb-4">
-        <div className="card-header bg-white">
-          <h4 className="mb-0">Resumen de cobranzas y centros</h4>
-        </div>
-        <div className="card-body">
-          <p className="text-muted mb-4">
-            Controla los montos facturados, cobrados y pendientes por paciente, obra social, centro de salud y mes
-            en función de los filtros seleccionados.
-          </p>
-          <div className="row g-3">
-            {summaryCards.map((card) => (
-              <div key={card.key} className="col-12 col-sm-6 col-xl-4 col-xxl-2">
-                <div className="border rounded p-3 h-100 bg-body-tertiary">
-                  <div className="text-muted text-uppercase small fw-semibold">{card.label}</div>
-                  <div className="fs-5 fw-bold text-dark">{formatCurrency(card.value)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="d-flex flex-wrap gap-2 mt-3">
-            {summaryCounts.map((item) => (
-              <span key={item.key} className="badge rounded-pill text-bg-secondary">
-                {new Intl.NumberFormat('es-AR').format(item.value)} {item.label}
-              </span>
-            ))}
-          </div>
-          <ul className="nav nav-pills mt-4 flex-nowrap overflow-auto">
-            {summaryTabs.map((tab) => (
-              <li className="nav-item" key={tab.key}>
-                <button
-                  type="button"
-                  className={`nav-link ${summaryTab === tab.key ? 'active' : ''}`}
-                  onClick={() => setSummaryTab(tab.key)}
-                >
-                  {tab.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-3">
-            {renderSummaryTable()}
-          </div>
-        </div>
-      </div>
-
       <div className="card shadow-sm mb-4">
         <div className="card-header">
           <div className="d-flex flex-column gap-3">
@@ -2091,13 +1675,15 @@ function FacturasPage() {
                                         />
                                       </div>
                                       <div className="col-sm-3">
-                                        <input
-                                          type="text"
-                                          className="form-control"
-                                          placeholder="Método"
-                                          value={getPaymentForm(factura._id).metodo}
+                                        <select
+                                          className="form-select"
+                                          value={getPaymentForm(factura._id).metodo || ''}
                                           onChange={(e) => handlePaymentFormChange(factura._id, 'metodo', e.target.value)}
-                                        />
+                                        >
+                                          <option value="">Selecciona el método</option>
+                                          <option value="Efectivo">Efectivo</option>
+                                          <option value="Transferencia bancaria">Transferencia bancaria</option>
+                                        </select>
                                       </div>
                                       <div className="col-sm-3">
                                         <input
@@ -2195,13 +1781,15 @@ function FacturasPage() {
                                               />
                                             </div>
                                             <div className="col-sm-3">
-                                              <input
-                                                type="text"
-                                                className="form-control"
-                                                placeholder="Método"
-                                                value={getCenterPaymentForm(factura._id).metodo}
+                                              <select
+                                                className="form-select"
+                                                value={getCenterPaymentForm(factura._id).metodo || ''}
                                                 onChange={(e) => handleCenterPaymentFormChange(factura._id, 'metodo', e.target.value)}
-                                              />
+                                              >
+                                                <option value="">Selecciona el método</option>
+                                                <option value="Efectivo">Efectivo</option>
+                                                <option value="Transferencia bancaria">Transferencia bancaria</option>
+                                              </select>
                                             </div>
                                             <div className="col-sm-3">
                                               <input
@@ -2529,13 +2117,15 @@ function FacturasPage() {
                                   />
                                 </div>
                                 <div className="col-6">
-                                  <input
-                                    type="text"
-                                    className="form-control"
-                                    placeholder="Método"
-                                    value={getCenterPaymentForm(factura._id).metodo}
+                                  <select
+                                    className="form-select"
+                                    value={getCenterPaymentForm(factura._id).metodo || ''}
                                     onChange={(e) => handleCenterPaymentFormChange(factura._id, 'metodo', e.target.value)}
-                                  />
+                                  >
+                                    <option value="">Selecciona el método</option>
+                                    <option value="Efectivo">Efectivo</option>
+                                    <option value="Transferencia bancaria">Transferencia bancaria</option>
+                                  </select>
                                 </div>
                                 <div className="col-6">
                                   <input
@@ -2693,13 +2283,15 @@ function FacturasPage() {
                               />
                             </div>
                             <div className="col-12">
-                              <input
-                                type="text"
-                                className="form-control"
-                                placeholder="Método"
-                                value={paymentForm.metodo}
+                              <select
+                                className="form-select"
+                                value={paymentForm.metodo || ''}
                                 onChange={(e) => handlePaymentFormChange(factura._id, 'metodo', e.target.value)}
-                              />
+                              >
+                                <option value="">Selecciona el método</option>
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Transferencia bancaria">Transferencia bancaria</option>
+                              </select>
                             </div>
                             <div className="col-12">
                               <input
