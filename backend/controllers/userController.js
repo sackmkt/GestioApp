@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const https = require('https');
 const emailService = require('../services/emailService');
 
 const toPositiveNumber = (value, fallback) => {
@@ -15,6 +16,8 @@ const LOGIN_ATTEMPT_CLEANUP_INTERVAL_MINUTES = toPositiveNumber(
   process.env.LOGIN_ATTEMPT_CLEANUP_INTERVAL_MINUTES,
   5,
 );
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
 const LOGIN_ATTEMPTS = new Map();
 let lastLoginAttemptCleanup = 0;
@@ -179,6 +182,7 @@ const buildUserResponse = (user, includeToken = true) => {
     _id: user._id,
     username: user.username,
     email: user.email,
+    authProvider: user.authProvider || 'local',
     firstName: user.firstName || '',
     lastName: user.lastName || '',
     profession: user.profession || '',
@@ -207,6 +211,103 @@ const createResetToken = () => {
   return { token, hashed };
 };
 
+const toUsernameCandidate = (email = '') => {
+  if (typeof email !== 'string') {
+    return '';
+  }
+  const [localPart] = email.split('@');
+  const sanitized = (localPart || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/gi, '')
+    .replace(/\.+/g, '.');
+  return sanitized || `user${Date.now()}`;
+};
+
+const findAvailableUsername = async (baseCandidate) => {
+  let candidate = baseCandidate;
+  let suffix = 0;
+
+  while (await User.exists({ username: candidate })) {
+    suffix += 1;
+    candidate = `${baseCandidate}${suffix}`;
+    if (suffix > 1000) {
+      const randomSuffix = crypto.randomBytes(2).toString('hex');
+      candidate = `${baseCandidate}${randomSuffix}`;
+      break;
+    }
+  }
+
+  return candidate;
+};
+
+const requestGoogleTokenInfo = (idToken) => {
+  return new Promise((resolve, reject) => {
+    const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
+
+    const req = https.get(url, (res) => {
+      const { statusCode } = res;
+      let rawData = '';
+
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        rawData += chunk;
+      });
+
+      res.on('end', () => {
+        try {
+          const parsedData = JSON.parse(rawData);
+
+          if (statusCode !== 200) {
+            const error = new Error(parsedData.error_description || 'Fallo al verificar el token.');
+            error.statusCode = statusCode;
+            return reject(error);
+          }
+
+          resolve(parsedData);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    req.setTimeout(5000, () => {
+      req.destroy(new Error('Tiempo de espera agotado al verificar el token de Google.'));
+    });
+  });
+};
+
+const verifyGoogleIdToken = async (idToken) => {
+  const tokenInfo = await requestGoogleTokenInfo(idToken);
+
+  if (!tokenInfo || typeof tokenInfo !== 'object') {
+    throw new Error('Respuesta inválida al verificar el token de Google.');
+  }
+
+  if (GOOGLE_CLIENT_ID && tokenInfo.aud !== GOOGLE_CLIENT_ID) {
+    const error = new Error('El token de Google no corresponde al cliente configurado.');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  if (tokenInfo.expires_in && Number(tokenInfo.expires_in) <= 0) {
+    const error = new Error('El token de Google expiró.');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  if (tokenInfo.email_verified !== 'true' && tokenInfo.email_verified !== true) {
+    const error = new Error('El correo electrónico de Google no está verificado.');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  return tokenInfo;
+};
+
 exports.registerUser = async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -232,12 +333,98 @@ exports.registerUser = async (req, res) => {
       username: normalizedUsername,
       email: normalizedEmail,
       password,
+      authProvider: 'local',
     });
 
     const createdUser = await User.findById(user._id).select('-password');
     res.status(201).json(buildUserResponse(createdUser));
   } catch (error) {
     res.status(500).json({ message: 'Error del servidor' });
+  }
+};
+
+exports.googleAuth = async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return res.status(400).json({ message: 'El token de Google es obligatorio.' });
+  }
+
+  if (!GOOGLE_CLIENT_ID) {
+    return res.status(500).json({ message: 'La autenticación con Google no está configurada.' });
+  }
+
+  try {
+    const payload = await verifyGoogleIdToken(idToken);
+
+    const { sub: googleId, email, given_name: givenName, family_name: familyName, picture } = payload;
+
+    if (!email) {
+      return res
+        .status(400)
+        .json({ message: 'No se pudo obtener el correo electrónico de la cuenta de Google.' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    let user = await User.findOne({
+      $or: [{ googleId }, { email: normalizedEmail }],
+    });
+
+    if (!user) {
+      const baseUsername = toUsernameCandidate(normalizedEmail);
+      const uniqueUsername = await findAvailableUsername(baseUsername);
+
+      user = new User({
+        username: uniqueUsername,
+        email: normalizedEmail,
+        password: crypto.randomBytes(32).toString('hex'),
+        authProvider: 'google',
+        googleId,
+        firstName: typeof givenName === 'string' ? givenName : '',
+        lastName: typeof familyName === 'string' ? familyName : '',
+        profileImage: typeof picture === 'string' ? picture : '',
+      });
+
+      await user.save();
+    } else {
+      let shouldSave = false;
+
+      if (!user.googleId && googleId) {
+        user.googleId = googleId;
+        shouldSave = true;
+      }
+
+      if (user.authProvider !== 'google') {
+        user.authProvider = 'google';
+        shouldSave = true;
+      }
+
+      if (!user.firstName && typeof givenName === 'string') {
+        user.firstName = givenName;
+        shouldSave = true;
+      }
+
+      if (!user.lastName && typeof familyName === 'string') {
+        user.lastName = familyName;
+        shouldSave = true;
+      }
+
+      if (!user.profileImage && typeof picture === 'string') {
+        user.profileImage = picture;
+        shouldSave = true;
+      }
+
+      if (shouldSave) {
+        await user.save();
+      }
+    }
+
+    const sanitizedUser = await User.findById(user._id).select('-password');
+    res.json(buildUserResponse(sanitizedUser));
+  } catch (error) {
+    const status = error.statusCode || 401;
+    res.status(status).json({ message: error.message || 'El token de Google no es válido.' });
   }
 };
 
