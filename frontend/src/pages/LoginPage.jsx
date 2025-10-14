@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import authService from '../services/authService';
+import GoogleAuthButton from '../components/GoogleAuthButton.jsx';
 import GestioLogo from '../assets/GestioLogo.png';
 import '../styles/auth-pages.css';
 
@@ -37,6 +38,35 @@ function LoginPage({ onAuthChange }) {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleGoogleCredential = async (idToken) => {
+    if (!idToken) {
+      setError('No pudimos iniciar sesión con Google. Intenta nuevamente.');
+      return;
+    }
+
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      const user = await authService.googleAuth({ idToken });
+      if (onAuthChange) {
+        onAuthChange(user);
+      }
+      navigate(user.profileCompleted ? '/dashboard' : '/complete-profile');
+    } catch (googleError) {
+      const message =
+        googleError.response?.data?.message || 'No pudimos iniciar sesión con Google. Intenta nuevamente.';
+      setError(message);
+      console.error('Google login error:', googleError);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleGoogleError = (message) => {
+    setError(message || 'No pudimos iniciar sesión con Google. Intenta nuevamente.');
   };
 
   return (
@@ -103,6 +133,17 @@ function LoginPage({ onAuthChange }) {
               {isSubmitting ? 'Ingresando…' : 'Acceder'}
             </button>
           </form>
+          <div className="auth-divider">
+            <span>O continúa con</span>
+          </div>
+          <div className={`auth-social ${isSubmitting ? 'auth-social--disabled' : ''}`}>
+            <GoogleAuthButton
+              onCredential={handleGoogleCredential}
+              onError={handleGoogleError}
+              text="signin_with"
+              disabled={isSubmitting}
+            />
+          </div>
           <p className="auth-switch">
             ¿No tienes una cuenta?{' '}
             <NavLink to="/register" className="auth-link">
