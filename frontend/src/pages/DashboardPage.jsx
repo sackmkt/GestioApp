@@ -375,7 +375,11 @@ function DashboardPage({ currentUser }) {
 
     setIsSavingPreferences(true);
     try {
-      await userService.updateProfile({ dashboardPreferences: normalizedDraft });
+      const updatedUser = await userService.updateProfile({ dashboardPreferences: normalizedDraft });
+      const normalizedUser = updatedUser && typeof updatedUser === 'object' ? updatedUser : {};
+      const mergedUser = currentUser
+        ? { ...currentUser, ...normalizedUser, dashboardPreferences: normalizedDraft }
+        : { ...normalizedUser, dashboardPreferences: normalizedDraft };
       setPreferencesOverride(normalizedDraft);
       setIsPreferencesPanelOpen(false);
       setPreferencesDraft(normalizedDraft);
@@ -384,14 +388,15 @@ function DashboardPage({ currentUser }) {
 
       if (typeof window !== 'undefined') {
         try {
-          const storedUserRaw = window.localStorage.getItem('user');
-          if (storedUserRaw) {
-            const storedUser = JSON.parse(storedUserRaw);
-            const updatedUser = { ...storedUser, dashboardPreferences: normalizedDraft };
-            window.localStorage.setItem('user', JSON.stringify(updatedUser));
-          }
+          window.localStorage.setItem('user', JSON.stringify(mergedUser));
         } catch (storageError) {
           console.warn('No se pudo sincronizar la preferencia de módulos en almacenamiento local.', storageError);
+        }
+
+        try {
+          window.dispatchEvent(new CustomEvent('gestio:user-updated', { detail: mergedUser }));
+        } catch (eventError) {
+          console.warn('No se pudo notificar la actualización de usuario.', eventError);
         }
       }
     } catch (error) {
@@ -400,7 +405,7 @@ function DashboardPage({ currentUser }) {
     } finally {
       setIsSavingPreferences(false);
     }
-  }, [preferencesDraft, showError, showSuccess]);
+  }, [currentUser, preferencesDraft, showError, showSuccess]);
 
   const handleFocusModeToggle = useCallback(() => {
     setIsFocusMode((prev) => !prev);
@@ -1094,26 +1099,19 @@ function DashboardPage({ currentUser }) {
   const obrasSocialesEntries = obrasSocialesResumen.entries || [];
   const collectionsSummary = data.collectionsSummary || buildCollectionsSummary([]);
   const collectionsTotals = collectionsSummary.totals || {};
+  const collectionsCounts = {
+    patients: (collectionsSummary.pacientesConSaldo || []).length,
+    obras: (collectionsSummary.obras || []).length,
+    centros: (collectionsSummary.centros || []).length,
+    months: (collectionsSummary.meses || []).length,
+  };
   const collectionsTabs = [
-    { key: 'patients', label: 'Pacientes con saldo' },
-    { key: 'obras', label: 'Obras sociales' },
-    { key: 'centros', label: 'Centros de salud' },
-    { key: 'months', label: 'Resumen mensual' },
+    { key: 'patients', label: 'Pacientes con saldo', total: collectionsCounts.patients },
+    { key: 'obras', label: 'Obras sociales', total: collectionsCounts.obras },
+    { key: 'centros', label: 'Centros de salud', total: collectionsCounts.centros },
+    { key: 'months', label: 'Resumen mensual', total: collectionsCounts.months },
   ];
-  const activeCollectionCount = (() => {
-    switch (collectionsTab) {
-      case 'patients':
-        return (collectionsSummary.pacientesConSaldo || []).length;
-      case 'obras':
-        return (collectionsSummary.obras || []).length;
-      case 'centros':
-        return (collectionsSummary.centros || []).length;
-      case 'months':
-        return (collectionsSummary.meses || []).length;
-      default:
-        return 0;
-    }
-  })();
+  const activeCollectionCount = collectionsCounts[collectionsTab] ?? 0;
   const activeCollectionLabel = collectionsTabs.find((tab) => tab.key === collectionsTab)?.label || '';
 
   const renderCollectionsPanel = () => {

@@ -197,6 +197,44 @@ function App() {
   }, [navigate]);
 
   useEffect(() => {
+    const handleUserUpdated = (event) => {
+      const detail = event?.detail;
+
+      if (detail && typeof detail === 'object') {
+        setCurrentUser((prev) => {
+          if (prev) {
+            const nextUser = { ...prev, ...detail };
+            if (prev.token && !nextUser.token) {
+              nextUser.token = prev.token;
+            }
+            return nextUser;
+          }
+
+          if (detail.token) {
+            return detail;
+          }
+
+          const stored = getStoredUser();
+          if (stored) {
+            return { ...stored, ...detail };
+          }
+
+          return detail;
+        });
+        return;
+      }
+
+      const storedUser = getStoredUser();
+      if (storedUser) {
+        setCurrentUser(storedUser);
+      }
+    };
+
+    window.addEventListener('gestio:user-updated', handleUserUpdated);
+    return () => window.removeEventListener('gestio:user-updated', handleUserUpdated);
+  }, []);
+
+  useEffect(() => {
     let isMounted = true;
 
     const restoreSession = async () => {

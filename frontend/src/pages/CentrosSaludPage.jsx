@@ -12,6 +12,19 @@ const formatCurrency = (value) => {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(Number(value) || 0);
 };
 
+const formatDateLabel = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+
+  return parsed.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
 function CentrosSaludPage() {
   const { showError, showSuccess, showInfo } = useFeedback();
   const [centros, setCentros] = useState([]);
@@ -21,6 +34,8 @@ function CentrosSaludPage() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [retentionPeriod, setRetentionPeriod] = useState('all');
+  const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const formRef = useRef(null);
 
   const scrollToForm = useCallback(() => {
@@ -54,6 +69,69 @@ function CentrosSaludPage() {
     fetchFacturas();
   }, [fetchCentros, fetchFacturas]);
 
+  const { start: customRangeStart, end: customRangeEnd } = customRange;
+
+  const filteredFacturas = useMemo(() => {
+    if (!Array.isArray(facturas) || facturas.length === 0) {
+      return [];
+    }
+
+    if (retentionPeriod === 'all') {
+      return facturas;
+    }
+
+    let startDate = null;
+    let endDate = null;
+
+    if (retentionPeriod === 'currentMonth') {
+      const today = new Date();
+      startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (retentionPeriod === 'custom') {
+      if (customRangeStart) {
+        const parsedStart = new Date(`${customRangeStart}T00:00:00`);
+        if (!Number.isNaN(parsedStart.getTime())) {
+          startDate = parsedStart;
+        }
+      }
+
+      if (customRangeEnd) {
+        const parsedEnd = new Date(`${customRangeEnd}T23:59:59`);
+        if (!Number.isNaN(parsedEnd.getTime())) {
+          endDate = parsedEnd;
+        }
+      }
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+      const temp = startDate;
+      startDate = endDate;
+      endDate = temp;
+    }
+
+    return facturas.filter((factura) => {
+      const rawDate = factura.fechaEmision || factura.fecha || factura.fechaFactura || factura.createdAt;
+      if (!rawDate) {
+        return false;
+      }
+
+      const date = new Date(rawDate);
+      if (Number.isNaN(date.getTime())) {
+        return false;
+      }
+
+      if (startDate && date < startDate) {
+        return false;
+      }
+
+      if (endDate && date > endDate) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [customRangeEnd, customRangeStart, facturas, retentionPeriod]);
+
   const resumenCentros = useMemo(() => {
     const acumulado = centros.reduce((acc, centro) => {
       acc[centro._id] = {
@@ -65,7 +143,7 @@ function CentrosSaludPage() {
       return acc;
     }, {});
 
-    facturas.forEach((factura) => {
+    filteredFacturas.forEach((factura) => {
       const centroId = factura.centroSalud?._id || factura.centroSalud;
       if (centroId && acumulado[centroId]) {
         const porcentaje = acumulado[centroId].centro.porcentajeRetencion || 0;
@@ -76,11 +154,46 @@ function CentrosSaludPage() {
     });
 
     return Object.values(acumulado).sort((a, b) => b.totalRetencion - a.totalRetencion);
-  }, [centros, facturas]);
+  }, [centros, filteredFacturas]);
+
+  const showCustomRange = retentionPeriod === 'custom';
 
   const totalRetencion = useMemo(() => {
     return resumenCentros.reduce((sum, item) => sum + item.totalRetencion, 0);
   }, [resumenCentros]);
+
+  const retentionPeriodLabel = useMemo(() => {
+    if (retentionPeriod === 'all') {
+      return 'Todo el historial';
+    }
+
+    if (retentionPeriod === 'currentMonth') {
+      const today = new Date();
+      const monthLabel = today.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+      return `Mes en curso · ${monthLabel}`;
+    }
+
+    if (retentionPeriod === 'custom') {
+      const startLabel = formatDateLabel(customRangeStart);
+      const endLabel = formatDateLabel(customRangeEnd);
+
+      if (startLabel && endLabel) {
+        return `Del ${startLabel} al ${endLabel}`;
+      }
+
+      if (startLabel) {
+        return `Desde ${startLabel}`;
+      }
+
+      if (endLabel) {
+        return `Hasta ${endLabel}`;
+      }
+
+      return 'Rango personalizado';
+    }
+
+    return 'Todo el historial';
+  }, [customRangeEnd, customRangeStart, retentionPeriod]);
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -94,6 +207,20 @@ function CentrosSaludPage() {
       return nombre.includes(normalizedSearch);
     });
   }, [resumenCentros, normalizedSearch]);
+
+  const handleRetentionPeriodChange = (event) => {
+    const value = event.target.value;
+    setRetentionPeriod(value);
+
+    if (value !== 'custom') {
+      setCustomRange({ start: '', end: '' });
+    }
+  };
+
+  const handleCustomRangeChange = (key) => (event) => {
+    const { value } = event.target;
+    setCustomRange((prev) => ({ ...prev, [key]: value }));
+  };
 
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
@@ -194,6 +321,58 @@ function CentrosSaludPage() {
         <div className="text-lg-end mt-2 mt-lg-0 w-100 w-lg-auto">
           <h5 className="text-primary mb-1">Retención acumulada</h5>
           <h3 className="fw-bold">{formatCurrency(totalRetencion)}</h3>
+          <small className="text-muted">Período: {retentionPeriodLabel}</small>
+        </div>
+      </div>
+
+      <div className="card shadow-sm mb-4">
+        <div className="card-body">
+          <div className="row g-3 align-items-end">
+            <div className="col-md-4 col-lg-3">
+              <label className="form-label" htmlFor="retentionPeriod">Período a analizar</label>
+              <select
+                id="retentionPeriod"
+                className="form-select"
+                value={retentionPeriod}
+                onChange={handleRetentionPeriodChange}
+              >
+                <option value="all">Todo el historial</option>
+                <option value="currentMonth">Mes en curso</option>
+                <option value="custom">Rango personalizado</option>
+              </select>
+            </div>
+            {showCustomRange && (
+              <>
+                <div className="col-sm-6 col-md-4 col-lg-3">
+                  <label className="form-label" htmlFor="retentionStart">Desde</label>
+                  <input
+                    id="retentionStart"
+                    type="date"
+                    className="form-control"
+                    value={customRangeStart}
+                    max={customRangeEnd || undefined}
+                    onChange={handleCustomRangeChange('start')}
+                  />
+                </div>
+                <div className="col-sm-6 col-md-4 col-lg-3">
+                  <label className="form-label" htmlFor="retentionEnd">Hasta</label>
+                  <input
+                    id="retentionEnd"
+                    type="date"
+                    className="form-control"
+                    value={customRangeEnd}
+                    min={customRangeStart || undefined}
+                    onChange={handleCustomRangeChange('end')}
+                  />
+                </div>
+              </>
+            )}
+            <div className="col-lg d-flex align-items-end">
+              <p className="text-muted small mb-0">
+                El total mostrado incluye las retenciones correspondientes a las facturas emitidas en el período elegido.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
