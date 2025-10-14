@@ -19,6 +19,12 @@ const facturaSchema = new mongoose.Schema({
     metodo: { type: String, trim: true },
     nota: { type: String, trim: true },
   }],
+  pagosCentro: [{
+    monto: { type: Number, required: true, min: 0 },
+    fecha: { type: Date, default: Date.now },
+    metodo: { type: String, trim: true },
+    nota: { type: String, trim: true },
+  }],
   pagado: { type: Boolean, default: false },
   documentos: [{
     nombre: { type: String, required: true },

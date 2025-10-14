@@ -91,6 +91,26 @@ const eliminarPago = async (facturaId, pagoId) => {
   }
 };
 
+const registrarPagoCentro = async (id, pagoData) => {
+  try {
+    const response = await axios.post(`${API_URL}/${id}/pagos-centro`, pagoData, getHeaders());
+    return response.data;
+  } catch (error) {
+    console.error('Error al registrar pago al centro:', error);
+    throw error;
+  }
+};
+
+const eliminarPagoCentro = async (facturaId, pagoId) => {
+  try {
+    const response = await axios.delete(`${API_URL}/${facturaId}/pagos-centro/${pagoId}`, getHeaders());
+    return response.data;
+  } catch (error) {
+    console.error('Error al eliminar pago al centro:', error);
+    throw error;
+  }
+};
+
 const uploadDocumento = async (facturaId, payload) => {
   try {
     const response = await axios.post(`${API_URL}/${facturaId}/documentos`, payload, getHeaders());
@@ -163,6 +183,8 @@ export default {
   deleteFactura,
   registrarPago,
   eliminarPago,
+  registrarPagoCentro,
+  eliminarPagoCentro,
   uploadDocumento,
   deleteDocumento,
   downloadDocumento,

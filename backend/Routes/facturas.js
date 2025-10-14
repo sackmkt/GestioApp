@@ -113,21 +113,36 @@ const buildFacturaResponse = (facturaDoc) => {
   const montoCobrado = pagos.reduce((total, pago) => total + (pago.monto || 0), 0);
   const saldoPendiente = Math.max((plain.montoTotal || 0) - montoCobrado, 0);
   const estado = plain.estado || (plain.pagado ? 'pagada' : (montoCobrado > 0 ? 'pagada_parcial' : 'pendiente'));
+  const pagosCentro = Array.isArray(plain.pagosCentro) ? plain.pagosCentro : [];
+  const centroRetencionPorcentaje = (() => {
+    const porcentaje = plain.centroSalud?.porcentajeRetencion ?? plain.centroRetencionPorcentaje;
+    return Number.isFinite(Number(porcentaje)) ? Number(porcentaje) : 0;
+  })();
+  const centroTotal = ((Number(plain.montoTotal) || 0) * centroRetencionPorcentaje) / 100;
+  const centroPagado = pagosCentro.reduce((total, pago) => total + (Number(pago.monto) || 0), 0);
+  const centroSaldoPendiente = Math.max(centroTotal - centroPagado, 0);
   const documentos = Array.isArray(plain.documentos)
     ? plain.documentos.map((doc) => buildFacturaDocumentResponse(doc, facturaDoc._id)).filter(Boolean)
     : [];
 
   const sanitizedPlain = { ...plain };
   delete sanitizedPlain.documentos;
+  delete sanitizedPlain.pagos;
+  delete sanitizedPlain.pagosCentro;
 
   return {
     ...sanitizedPlain,
     pagos,
+    pagosCentro,
     montoCobrado,
     saldoPendiente,
     estado,
     pagado: estado === 'pagada',
     documentos,
+    centroRetencionPorcentaje,
+    centroTotal,
+    centroPagado,
+    centroSaldoPendiente,
   };
 };
 
@@ -276,6 +291,37 @@ const formatPaymentsForExport = (payments) => {
   return payments
     .map((payment, index) => {
       const fragments = [`Pago ${index + 1}`];
+      const fecha = formatDateTime(payment.fecha);
+      if (fecha) {
+        fragments.push(`Fecha: ${fecha}`);
+      }
+
+      const monto = formatNumber(payment.monto);
+      if (monto !== '') {
+        fragments.push(`Monto: ${monto}`);
+      }
+
+      if (payment.metodo) {
+        fragments.push(`Método: ${payment.metodo}`);
+      }
+
+      if (payment.nota) {
+        fragments.push(`Nota: ${payment.nota}`);
+      }
+
+      return fragments.join('\n');
+    })
+    .join('\n\n');
+};
+
+const formatCentroPaymentsForExport = (payments) => {
+  if (!Array.isArray(payments) || payments.length === 0) {
+    return '';
+  }
+
+  return payments
+    .map((payment, index) => {
+      const fragments = [`Pago centro ${index + 1}`];
       const fecha = formatDateTime(payment.fecha);
       if (fecha) {
         fragments.push(`Fecha: ${fecha}`);
@@ -528,17 +574,30 @@ router.get('/export', protect, async (req, res) => {
 
     const facturasForExport = (Array.isArray(facturas) ? facturas : []).map((factura) => {
       const pagos = Array.isArray(factura.pagos) ? factura.pagos : [];
+      const pagosCentro = Array.isArray(factura.pagosCentro) ? factura.pagosCentro : [];
       const montoCobrado = pagos.reduce((total, pago) => total + (Number(pago.monto) || 0), 0);
       const montoTotal = Number(factura.montoTotal) || 0;
       const saldoPendiente = Math.max(montoTotal - montoCobrado, 0);
       const estado = resolveEstado(factura, montoCobrado);
+      const centroRetencionPorcentaje = (() => {
+        const porcentaje = factura.centroSalud?.porcentajeRetencion ?? factura.centroRetencionPorcentaje;
+        return Number.isFinite(Number(porcentaje)) ? Number(porcentaje) : 0;
+      })();
+      const centroTotal = (montoTotal * centroRetencionPorcentaje) / 100;
+      const centroPagado = pagosCentro.reduce((total, pago) => total + (Number(pago.monto) || 0), 0);
+      const centroSaldoPendiente = Math.max(centroTotal - centroPagado, 0);
 
       return {
         ...factura,
         pagos,
+        pagosCentro,
         montoCobrado,
         saldoPendiente,
         estado,
+        centroRetencionPorcentaje,
+        centroTotal,
+        centroPagado,
+        centroSaldoPendiente,
       };
     });
 
@@ -569,6 +628,18 @@ router.get('/export', protect, async (req, res) => {
         value: (factura) => (Array.isArray(factura.pagos) ? factura.pagos.length : 0),
       },
       { header: 'Detalle de pagos', value: (factura) => formatPaymentsForExport(factura.pagos) },
+      {
+        header: 'Cantidad de pagos al centro',
+        value: (factura) => (Array.isArray(factura.pagosCentro) ? factura.pagosCentro.length : 0),
+      },
+      { header: 'Pagos al centro', value: (factura) => formatCentroPaymentsForExport(factura.pagosCentro) },
+      {
+        header: 'Retención centro (%)',
+        value: (factura) => formatNumber(factura.centroRetencionPorcentaje),
+      },
+      { header: 'Total a centro', value: (factura) => formatNumber(factura.centroTotal) },
+      { header: 'Pagado a centro', value: (factura) => formatNumber(factura.centroPagado) },
+      { header: 'Saldo con centro', value: (factura) => formatNumber(factura.centroSaldoPendiente) },
       {
         header: 'Cantidad de documentos',
         value: (factura) => (Array.isArray(factura.documentos) ? factura.documentos.length : 0),
@@ -764,6 +835,70 @@ router.delete('/:id/pagos/:pagoId', protect, async (req, res) => {
     }
 
     syncEstadoDesdePagos(factura);
+    await factura.save();
+    await populateFactura(factura);
+    res.json(buildFacturaResponse(factura));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:id/pagos-centro', protect, async (req, res) => {
+  try {
+    const { monto, fecha, metodo, nota } = req.body;
+    if (typeof monto !== 'number' || Number.isNaN(monto) || monto <= 0) {
+      return res.status(400).json({ error: 'El monto del pago debe ser un número positivo.' });
+    }
+
+    const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id })
+      .populate('centroSalud', 'nombre porcentajeRetencion');
+    if (!factura) {
+      return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
+    }
+
+    if (!factura.centroSalud) {
+      return res.status(400).json({ error: 'La factura no tiene un centro de salud asociado.' });
+    }
+
+    const porcentaje = Number(factura.centroSalud.porcentajeRetencion) || 0;
+    const totalEsperado = ((Number(factura.montoTotal) || 0) * porcentaje) / 100;
+    const totalPagado = Array.isArray(factura.pagosCentro)
+      ? factura.pagosCentro.reduce((sum, pago) => sum + (Number(pago.monto) || 0), 0)
+      : 0;
+
+    if (totalEsperado > 0 && (totalPagado + monto) - totalEsperado > 1e-6) {
+      return res.status(400).json({ error: 'El pago excede el monto pendiente con el centro de salud.' });
+    }
+
+    factura.pagosCentro.push({
+      monto,
+      fecha: fecha ? new Date(fecha) : Date.now(),
+      metodo,
+      nota,
+    });
+
+    await factura.save();
+    await populateFactura(factura);
+    res.status(201).json(buildFacturaResponse(factura));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/:id/pagos-centro/:pagoId', protect, async (req, res) => {
+  try {
+    const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id });
+    if (!factura) {
+      return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
+    }
+
+    const pagosIniciales = Array.isArray(factura.pagosCentro) ? factura.pagosCentro.length : 0;
+    factura.pagosCentro = (factura.pagosCentro || []).filter((pago) => pago._id.toString() !== req.params.pagoId);
+
+    if (pagosIniciales === factura.pagosCentro.length) {
+      return res.status(404).json({ error: 'Pago al centro no encontrado en la factura.' });
+    }
+
     await factura.save();
     await populateFactura(factura);
     res.json(buildFacturaResponse(factura));
