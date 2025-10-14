@@ -4,8 +4,10 @@ import turnosService from '../services/TurnosService';
 import PacientesService from '../services/PacientesService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
 import AgendaGantt from '../components/AgendaGantt.jsx';
+import MobileTurnoCard from '../components/MobileTurnoCard.jsx';
 import { FaPhoneAlt, FaWhatsapp, FaSms } from 'react-icons/fa';
 import '../styles/contact-actions.css';
+import '../styles/turnos-mobile.css';
 
 const formatoFechaLocal = (fechaISO) => {
   if (!fechaISO) return '';
@@ -81,6 +83,7 @@ const obtenerFechaLocalISO = (date = new Date()) => {
 };
 
 const ITEMS_PER_PAGE = 16;
+const POSTPONE_MINUTES = 60;
 
 const DEFAULT_PAGINATION = {
   page: 1,
@@ -184,6 +187,8 @@ const TurnosPage = () => {
   const [futurePage, setFuturePage] = useState(1);
   const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
   const formRef = useRef(null);
+  const [completingId, setCompletingId] = useState(null);
+  const [postponingId, setPostponingId] = useState(null);
 
   const trimmedSearch = searchTerm.trim();
   const hasSearch = trimmedSearch.length > 0;
@@ -271,6 +276,13 @@ const TurnosPage = () => {
       setLoading(false);
     }
   }, [filtros.estado, filtros.rango, trimmedSearch]);
+
+  const refreshTurnos = useCallback(async () => {
+    const { resolvedPage } = await loadTurnos(currentPage);
+    if (resolvedPage !== undefined && resolvedPage !== currentPage) {
+      setCurrentPage(resolvedPage);
+    }
+  }, [currentPage, loadTurnos]);
 
   useEffect(() => {
     let cancelled = false;
@@ -479,6 +491,57 @@ const TurnosPage = () => {
       setDeletingId(null);
     }
   };
+
+  const handleCompleteTurno = useCallback(async (turno) => {
+    if (!turno?._id) {
+      return;
+    }
+    try {
+      setCompletingId(turno._id);
+      await turnosService.updateTurno(turno._id, { estado: 'completado' });
+      await refreshTurnos();
+      showSuccess('Turno marcado como completado.');
+    } catch (error) {
+      console.error('No se pudo completar el turno desde gesto móvil.', error);
+      const message = error.response?.data?.error || 'No se pudo marcar el turno como completado.';
+      showError(message);
+    } finally {
+      setCompletingId(null);
+    }
+  }, [refreshTurnos, showError, showSuccess]);
+
+  const handlePostponeTurno = useCallback(async (turno) => {
+    if (!turno?._id || !turno.fecha) {
+      return;
+    }
+    const confirmMessage = `¿Deseas posponer este turno ${POSTPONE_MINUTES} minutos? Podrás ajustar el horario luego.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+    try {
+      setPostponingId(turno._id);
+      const nuevaFecha = new Date(turno.fecha);
+      if (Number.isNaN(nuevaFecha.getTime())) {
+        throw new Error('Fecha del turno inválida.');
+      }
+      nuevaFecha.setMinutes(nuevaFecha.getMinutes() + POSTPONE_MINUTES);
+      const payload = {
+        fecha: nuevaFecha.toISOString(),
+      };
+      if (turno.estado === 'cancelado') {
+        payload.estado = 'programado';
+      }
+      await turnosService.updateTurno(turno._id, payload);
+      await refreshTurnos();
+      showInfo(`Turno pospuesto ${POSTPONE_MINUTES} minutos.`);
+    } catch (error) {
+      console.error('No se pudo posponer el turno desde gesto móvil.', error);
+      const message = error.response?.data?.error || 'No se pudo posponer el turno.';
+      showError(message);
+    } finally {
+      setPostponingId(null);
+    }
+  }, [refreshTurnos, showError, showInfo]);
 
   const toggleRecordatorio = async (turno) => {
     try {
@@ -893,90 +956,42 @@ const TurnosPage = () => {
           </div>
         )}
         {!loading && turnos.length === 0 && <p>{emptyMessage}</p>}
+        {!loading && turnos.length > 0 && (
+          <p className="text-muted small mb-3">
+            Consejo rápido: arrastra un turno a la derecha para completarlo o a la izquierda para posponerlo {POSTPONE_MINUTES} minutos.
+          </p>
+        )}
         <div className="row g-3">
-          {turnos.map((turno) => (
-            <div className="col-12" key={turno._id}>
-              <div className="card shadow-sm">
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-start">
-                    <div>
-                      <h5 className="card-title mb-1">
-                        {turno.paciente?.nombre} {turno.paciente?.apellido}
-                      </h5>
-                      <p className="text-muted mb-2">{turno.titulo || 'Sin título'}</p>
-                    </div>
-                    <span className={`badge ${estadoBadgeClass[turno.estado] || 'bg-secondary'}`}>
-                      {estadoLabel[turno.estado] || turno.estado}
-                    </span>
-                  </div>
-                  <p className="mb-1">
-                    <strong>Fecha:</strong> {formatoFechaLocal(turno.fecha)}
-                  </p>
-                  <p className="mb-1">
-                    <strong>Duración:</strong> {turno.duracionMinutos} min
-                  </p>
-                  <p className="mb-1">
-                    <strong>Recordatorio:</strong>{' '}
-                    {turno.recordatorioProgramadoPara
-                      ? formatoFechaLocal(turno.recordatorioProgramadoPara)
-                      : 'No programado'}
-                  </p>
-                  {turno.notas && (
-                    <p className="mb-2">
-                      <strong>Notas:</strong> {turno.notas}
-                    </p>
-                  )}
-                  <div className="d-flex flex-wrap gap-2">
-                    <button
-                      className="btn btn-warning btn-sm"
-                      onClick={() => handleEdit(turno)}
-                      disabled={saving || Boolean(deletingId)}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleDelete(turno._id)}
-                      disabled={deletingId === turno._id || saving}
-                    >
-                      {deletingId === turno._id ? (
-                        <>
-                          <span
-                            className="spinner-border spinner-border-sm me-2"
-                            role="status"
-                            aria-hidden="true"
-                          ></span>
-                          Eliminando...
-                        </>
-                      ) : (
-                        'Eliminar'
-                      )}
-                    </button>
-                    <button
-                      className={`btn btn-sm ${turno.recordatorioEnviado ? 'btn-success' : 'btn-outline-primary'}`}
-                      onClick={() => toggleRecordatorio(turno)}
-                      disabled={recordatorioUpdatingId === turno._id || Boolean(deletingId) || saving}
-                    >
-                      {recordatorioUpdatingId === turno._id
-                        ? (
-                          <>
-                            <span
-                              className="spinner-border spinner-border-sm me-2"
-                              role="status"
-                              aria-hidden="true"
-                            ></span>
-                            Actualizando...
-                          </>
-                        )
-                        : turno.recordatorioEnviado
-                        ? 'Recordatorio enviado'
-                        : 'Marcar recordatorio'}
-                    </button>
-                  </div>
-                </div>
+          {turnos.map((turno) => {
+            const mobileTurno = {
+              ...turno,
+              fechaFormateada: formatoFechaLocal(turno.fecha),
+              estadoBadgeClass: estadoBadgeClass[turno.estado] || 'bg-secondary',
+              estadoLabel: estadoLabel[turno.estado] || turno.estado,
+              recordatorioLabel: turno.recordatorioProgramadoPara
+                ? formatoFechaLocal(turno.recordatorioProgramadoPara)
+                : 'No programado',
+            };
+            return (
+              <div className="col-12" key={turno._id}>
+                <MobileTurnoCard
+                  turno={mobileTurno}
+                  onEdit={() => handleEdit(turno)}
+                  onDelete={() => handleDelete(turno._id)}
+                  onToggleRecordatorio={() => toggleRecordatorio(turno)}
+                  onComplete={handleCompleteTurno}
+                  onPostpone={handlePostponeTurno}
+                  disableActions={saving || Boolean(deletingId)}
+                  isDeleting={deletingId === turno._id}
+                  isRecordatorioUpdating={recordatorioUpdatingId === turno._id}
+                  isCompleting={completingId === turno._id}
+                  isPostponing={postponingId === turno._id}
+                  completeLabel="Soltar para completar"
+                  postponeLabel={`Soltar para posponer ${POSTPONE_MINUTES} min`}
+                />
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         {totalTurnos > (pagination.limit || ITEMS_PER_PAGE) && (
           <nav className="d-flex justify-content-center mt-3" aria-label="Paginación de turnos móvil">
