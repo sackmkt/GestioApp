@@ -441,6 +441,198 @@ footer.gestio-footer a {
   transform: rotate(-6deg) scale(1.08);
 }
 
+.gestio-page {
+  padding-block: clamp(1.5rem, 3vw, 3rem);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.5rem, 2vw, 2.75rem);
+}
+
+.gestio-page.container {
+  padding-left: clamp(1.5rem, 4vw, 3rem);
+  padding-right: clamp(1.5rem, 4vw, 3rem);
+}
+
+.gestio-page__header {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.25rem, 2vw, 2rem);
+  background: var(--gestio-surface);
+  border-radius: var(--gestio-radius-lg);
+  border: 1px solid var(--gestio-border);
+  padding: clamp(1.25rem, 2vw + 0.75rem, 2.5rem);
+  box-shadow: var(--gestio-shadow-soft);
+}
+
+.gestio-page__title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-width: 48rem;
+}
+
+.gestio-page__title {
+  margin: 0;
+  font-size: clamp(1.65rem, 2vw + 1rem, 2.65rem);
+  font-weight: 700;
+  color: var(--gestio-text-primary);
+}
+
+.gestio-page__description {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--gestio-text-muted);
+  line-height: 1.7;
+}
+
+.gestio-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-start;
+}
+
+.gestio-page__actions .btn {
+  min-width: 160px;
+  border-radius: var(--gestio-radius-pill);
+  padding-inline: 1.4rem;
+}
+
+.gestio-page__meta {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.gestio-page__meta-item {
+  background: var(--gestio-surface-alt);
+  border-radius: var(--gestio-radius-md);
+  border: 1px solid var(--gestio-border);
+  padding: 0.95rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 100px;
+  box-shadow: 0 16px 40px -30px rgba(15, 23, 42, 0.55);
+}
+
+.gestio-page__meta-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gestio-text-muted);
+}
+
+.gestio-page__meta-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--gestio-text-primary);
+}
+
+.gestio-summary-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.gestio-summary-card {
+  background: var(--gestio-surface);
+  border-radius: var(--gestio-radius-md);
+  border: 1px solid var(--gestio-border);
+  padding: clamp(1.1rem, 1.5vw + 0.75rem, 1.75rem);
+  box-shadow: var(--gestio-shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gestio-summary-card__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gestio-text-muted);
+}
+
+.gestio-summary-card__value {
+  font-size: clamp(1.35rem, 1.2vw + 1rem, 2rem);
+  font-weight: 700;
+  color: var(--gestio-text-primary);
+}
+
+.gestio-summary-card__helper {
+  font-size: 0.85rem;
+  color: var(--gestio-text-muted);
+  margin: 0;
+}
+
+.gestio-page__filters {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.gestio-page__filters-search {
+  background: var(--gestio-surface);
+  border-radius: var(--gestio-radius-md);
+  border: 1px solid var(--gestio-border);
+  padding: clamp(1.25rem, 1.5vw + 1rem, 1.75rem);
+  box-shadow: var(--gestio-shadow-soft);
+}
+
+.gestio-filter-card {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(59, 130, 246, 0.04));
+  border-radius: var(--gestio-radius-md);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  padding: clamp(1rem, 1.5vw + 0.75rem, 1.5rem);
+  box-shadow: 0 20px 50px -28px rgba(37, 99, 235, 0.45);
+}
+
+.gestio-filter-card__title {
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gestio-primary);
+  margin-bottom: 0.5rem;
+}
+
+.gestio-filter-card__text {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--gestio-text-muted);
+}
+
+.gestio-page__filters .input-group-text {
+  border-top-left-radius: var(--gestio-radius-pill);
+  border-bottom-left-radius: var(--gestio-radius-pill);
+}
+
+.gestio-page__filters .form-control,
+.gestio-page__filters .btn {
+  border-radius: var(--gestio-radius-pill);
+}
+
+@media (min-width: 992px) {
+  .gestio-page__header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .gestio-page__actions {
+    justify-content: flex-end;
+  }
+
+  .gestio-page__filters--split {
+    grid-template-columns: minmax(0, 2.25fr) minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .gestio-page__filters--split .gestio-page__filters-search {
+    height: 100%;
+  }
+}
+
 @media (max-width: 992px) {
   .gestio-navbar .container,
   footer.gestio-footer > .container,
@@ -470,6 +662,20 @@ footer.gestio-footer a {
   .gestio-main {
     padding-top: 2rem !important;
     padding-bottom: 2rem !important;
+  }
+
+  .gestio-page {
+    padding-block: 1.75rem;
+    gap: 1.75rem;
+  }
+
+  .gestio-page.container {
+    padding-left: 1.1rem;
+    padding-right: 1.1rem;
+  }
+
+  .gestio-page__actions .btn {
+    width: 100%;
   }
 
   .gestio-navbar .container,

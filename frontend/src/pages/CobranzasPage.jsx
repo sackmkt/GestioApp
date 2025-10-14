@@ -550,15 +550,17 @@ function CobranzasPage() {
   };
 
   return (
-    <section className="py-2">
-      <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3 mb-4">
-        <div>
-          <h1 className="h2 mb-1">Resumen de cobranzas</h1>
-          <p className="text-muted mb-0">
-            Controla los ingresos por facturación, identifica saldos pendientes y organiza tus cobros por paciente, obra social y mes.
+    <div className="gestio-page container">
+      <header className="gestio-page__header" aria-labelledby="cobranzas-heading">
+        <div className="gestio-page__title-group">
+          <h1 id="cobranzas-heading" className="gestio-page__title">
+            Resumen de cobranzas
+          </h1>
+          <p className="gestio-page__description">
+            Controlá los ingresos por facturación, identifica saldos pendientes y organiza tus cobros por paciente, obra social y mes.
           </p>
         </div>
-        <div className="d-flex align-items-center gap-2">
+        <div className="gestio-page__actions">
           <button type="button" className="btn btn-outline-secondary" onClick={() => setFilters(DEFAULT_FILTERS)} disabled={loading}>
             Limpiar filtros
           </button>
@@ -566,7 +568,7 @@ function CobranzasPage() {
             Actualizar datos
           </button>
         </div>
-      </div>
+      </header>
 
       <div className="card shadow-sm mb-4">
         <div className="card-body">
@@ -638,57 +640,41 @@ function CobranzasPage() {
         </div>
       </div>
 
-      <div className="row g-3 mb-4">
-        <div className="col-12 col-md-6 col-xl-3">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h3 className="h6 text-muted text-uppercase mb-2">Total facturado</h3>
-              <p className="h4 mb-0">{formatCurrency(cobranzasSummary.totals.totalFacturado)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-12 col-md-6 col-xl-3">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h3 className="h6 text-muted text-uppercase mb-2">Total cobrado</h3>
-              <p className="h4 text-success mb-0">{formatCurrency(cobranzasSummary.totals.totalCobrado)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-12 col-md-6 col-xl-3">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h3 className="h6 text-muted text-uppercase mb-2">Saldo pendiente</h3>
-              <p className="h4 text-danger mb-0">{formatCurrency(cobranzasSummary.totals.totalPendiente)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-12 col-md-6 col-xl-3">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h3 className="h6 text-muted text-uppercase mb-2">Estado de facturas</h3>
-              <ul className="list-unstyled mb-0 small text-muted">
-                <li className="d-flex justify-content-between">
-                  <span>Pagadas</span>
-                  <strong className="text-success">{formatNumber(cobranzasSummary.totals.facturasPagas)}</strong>
-                </li>
-                <li className="d-flex justify-content-between">
-                  <span>Pendientes</span>
-                  <strong className="text-warning">{formatNumber(cobranzasSummary.totals.facturasPendientes)}</strong>
-                </li>
-                <li className="d-flex justify-content-between">
-                  <span>Parciales</span>
-                  <strong className="text-primary">{formatNumber(cobranzasSummary.totals.facturasParcial)}</strong>
-                </li>
-                <li className="d-flex justify-content-between">
-                  <span>Observadas</span>
-                  <strong className="text-danger">{formatNumber(cobranzasSummary.totals.facturasObservadas)}</strong>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
+      <section className="gestio-summary-grid" aria-label="Indicadores de cobranzas">
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Total facturado</span>
+          <span className="gestio-summary-card__value">{formatCurrency(cobranzasSummary.totals.totalFacturado)}</span>
+        </article>
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Total cobrado</span>
+          <span className="gestio-summary-card__value text-success">{formatCurrency(cobranzasSummary.totals.totalCobrado)}</span>
+        </article>
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Saldo pendiente</span>
+          <span className="gestio-summary-card__value text-danger">{formatCurrency(cobranzasSummary.totals.totalPendiente)}</span>
+        </article>
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Estado de facturas</span>
+          <ul className="list-unstyled mb-0 small text-muted">
+            <li className="d-flex justify-content-between">
+              <span>Pagadas</span>
+              <strong className="text-success">{formatNumber(cobranzasSummary.totals.facturasPagas)}</strong>
+            </li>
+            <li className="d-flex justify-content-between">
+              <span>Pendientes</span>
+              <strong className="text-warning">{formatNumber(cobranzasSummary.totals.facturasPendientes)}</strong>
+            </li>
+            <li className="d-flex justify-content-between">
+              <span>Parciales</span>
+              <strong className="text-primary">{formatNumber(cobranzasSummary.totals.facturasParcial)}</strong>
+            </li>
+            <li className="d-flex justify-content-between">
+              <span>Observadas</span>
+              <strong className="text-danger">{formatNumber(cobranzasSummary.totals.facturasObservadas)}</strong>
+            </li>
+          </ul>
+        </article>
+      </section>
 
       <div className="card shadow-sm mb-4">
         <div className="card-body">
@@ -759,7 +745,7 @@ function CobranzasPage() {
           {renderActivePanel()}
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 

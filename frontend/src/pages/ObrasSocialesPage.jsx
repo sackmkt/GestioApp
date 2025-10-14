@@ -198,39 +198,47 @@ function ObrasSocialesPage() {
   }, [currentPage, totalPages]);
 
   return (
-    <div className="container mt-4">
-      <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
-        <div>
-          <h2 className="fw-bold mb-1">Obras Sociales</h2>
-          <p className="text-muted mb-0">Gestiona los convenios y datos de contacto de cada financiador.</p>
+    <div className="gestio-page container">
+      <header className="gestio-page__header" aria-labelledby="obras-heading">
+        <div className="gestio-page__title-group">
+          <h1 id="obras-heading" className="gestio-page__title">
+            Obras Sociales
+          </h1>
+          <p className="gestio-page__description">Gestiona los convenios y datos de contacto de cada financiador.</p>
         </div>
-        <div className="d-flex flex-wrap gap-3 justify-content-start justify-content-lg-end">
-          <div className="text-center flex-fill flex-lg-grow-0">
-            <span className="text-muted small d-block">Registradas</span>
-            <strong className="fs-5">{obrasSociales.length}</strong>
+        <div className="gestio-page__meta">
+          <div className="gestio-page__meta-item">
+            <span className="gestio-page__meta-label">Registradas</span>
+            <span className="gestio-page__meta-value">{obrasSociales.length}</span>
           </div>
-          <div className="text-center flex-fill flex-lg-grow-0">
-            <span className="text-muted small d-block">Coinciden con la búsqueda</span>
-            <strong className="fs-5 text-info">{filteredObrasSociales.length}</strong>
+          <div className="gestio-page__meta-item">
+            <span className="gestio-page__meta-label">Coinciden con la búsqueda</span>
+            <span className="gestio-page__meta-value text-primary">{filteredObrasSociales.length}</span>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="mb-4">
-        <label htmlFor="obrasSearch" className="form-label visually-hidden">Buscar obras sociales</label>
-        <div className="input-group">
-          <span className="input-group-text" id="obrasSearchIcon" aria-hidden="true">🔍</span>
-          <input
-            id="obrasSearch"
-            type="search"
-            className="form-control"
-            placeholder="Buscar por nombre o CUIT/CUIL"
-            value={searchTerm}
-            onChange={handleSearchChange}
-            aria-describedby="obrasSearchIcon"
-          />
+      <section className="gestio-page__filters" aria-label="Búsqueda de obras sociales">
+        <div className="gestio-page__filters-search">
+          <label htmlFor="obrasSearch" className="form-label fw-semibold">
+            Buscar obras sociales
+          </label>
+          <div className="input-group">
+            <span className="input-group-text" id="obrasSearchIcon" aria-hidden="true">
+              🔍
+            </span>
+            <input
+              id="obrasSearch"
+              type="search"
+              className="form-control"
+              placeholder="Buscar por nombre o CUIT/CUIL"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              aria-describedby="obrasSearchIcon"
+            />
+          </div>
         </div>
-      </div>
+      </section>
 
       <div className="card shadow-sm mb-4">
         <div className="card-header bg-info text-white">

@@ -424,15 +424,17 @@ function PagosCentrosPage() {
   };
 
   return (
-    <section className="py-2">
-      <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-lg-between gap-3 mb-4">
-        <div>
-          <h1 className="h2 mb-1">Pagos a centros de salud</h1>
-          <p className="text-muted mb-0">
-            Visualiza lo comprometido, pagado y pendiente por centro y paciente para organizar tus egresos mensuales.
+    <div className="gestio-page container">
+      <header className="gestio-page__header" aria-labelledby="pagos-centros-heading">
+        <div className="gestio-page__title-group">
+          <h1 id="pagos-centros-heading" className="gestio-page__title">
+            Pagos a centros de salud
+          </h1>
+          <p className="gestio-page__description">
+            Visualizá lo comprometido, pagado y pendiente por centro y paciente para organizar tus egresos mensuales.
           </p>
         </div>
-        <div className="d-flex align-items-center gap-2">
+        <div className="gestio-page__actions">
           <button type="button" className="btn btn-outline-secondary" onClick={() => setFilters(DEFAULT_FILTERS)} disabled={loading}>
             Limpiar filtros
           </button>
@@ -440,7 +442,7 @@ function PagosCentrosPage() {
             Actualizar datos
           </button>
         </div>
-      </div>
+      </header>
 
       <div className="card shadow-sm mb-4">
         <div className="card-body">
@@ -514,32 +516,20 @@ function PagosCentrosPage() {
         </div>
       </div>
 
-      <div className="row g-3 mb-4">
-        <div className="col-12 col-md-6 col-xl-4">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h3 className="h6 text-muted text-uppercase mb-2">Total comprometido</h3>
-              <p className="h4 mb-0">{formatCurrency(summary.totals.totalComprometido)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-12 col-md-6 col-xl-4">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h3 className="h6 text-muted text-uppercase mb-2">Pagado a centros</h3>
-              <p className="h4 text-success mb-0">{formatCurrency(summary.totals.totalPagado)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-12 col-md-6 col-xl-4">
-          <div className="card border-0 shadow-sm h-100">
-            <div className="card-body">
-              <h3 className="h6 text-muted text-uppercase mb-2">Saldo pendiente</h3>
-              <p className="h4 text-danger mb-0">{formatCurrency(summary.totals.totalPendiente)}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <section className="gestio-summary-grid" aria-label="Resumen de pagos a centros">
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Total comprometido</span>
+          <span className="gestio-summary-card__value">{formatCurrency(summary.totals.totalComprometido)}</span>
+        </article>
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Pagado a centros</span>
+          <span className="gestio-summary-card__value text-success">{formatCurrency(summary.totals.totalPagado)}</span>
+        </article>
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Saldo pendiente</span>
+          <span className="gestio-summary-card__value text-danger">{formatCurrency(summary.totals.totalPendiente)}</span>
+        </article>
+      </section>
 
       <div className="card shadow-sm mb-4">
         <div className="card-body">
@@ -806,7 +796,7 @@ function PagosCentrosPage() {
           )}
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 
