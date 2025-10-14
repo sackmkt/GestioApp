@@ -113,6 +113,7 @@ const ALLOWED_DASHBOARD_WIDGETS = new Set([
   'summaryHighlights',
   'dateRange',
   'financialSummary',
+  'collectionsOverview',
   'administrativeMetrics',
   'collectionsHealth',
   'centersSummary',
