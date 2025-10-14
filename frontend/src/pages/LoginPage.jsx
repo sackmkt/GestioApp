@@ -54,9 +54,9 @@ function LoginPage({ onAuthChange }) {
             Simplificamos la gestión integral de pacientes, turnos y facturación para profesionales de la salud.
           </p>
           <ul className="auth-card__highlights">
-            <li>Agenda inteligente y recordatorios automáticos</li>
-            <li>Información clínica ordenada en un solo lugar</li>
-            <li>Facturación y obras sociales sin complicaciones</li>
+            <li>Integración bidireccional con Google Calendar y Outlook</li>
+            <li>Automatizaciones no-code con plantillas de flujos</li>
+            <li>Webhooks y API pública para integraciones externas</li>
           </ul>
         </div>
         <div className="auth-card__form">

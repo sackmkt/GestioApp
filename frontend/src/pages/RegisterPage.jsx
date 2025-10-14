@@ -78,9 +78,9 @@ function RegisterPage({ onAuthChange }) {
             Diseñado para equipos que necesitan centralizar la información clínica y la administración sin perder tiempo.
           </p>
           <ul className="auth-card__highlights">
-            <li>Perfiles de pacientes completos y seguros</li>
-            <li>Flujos de alta y seguimiento simplificados</li>
-            <li>Colaboración con tu equipo en tiempo real</li>
+            <li>Integración bidireccional con Google Calendar y Outlook</li>
+            <li>Automatizaciones no-code con plantillas de flujos</li>
+            <li>Webhooks y API pública para integraciones externas</li>
           </ul>
         </div>
         <div className="auth-card__form">
