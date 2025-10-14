@@ -737,13 +737,17 @@ function PacientesPage() {
   };
 
   return (
-    <div className="container py-4">
-      <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-4">
-        <div>
-          <h2 className="fw-bold mb-1">Gestión de pacientes</h2>
-          <p className="text-muted mb-0">Centraliza el seguimiento de tus pacientes y accedé a su información clínica y administrativa en segundos.</p>
+    <div className="gestio-page container">
+      <header className="gestio-page__header" aria-labelledby="pacientes-heading">
+        <div className="gestio-page__title-group">
+          <h1 id="pacientes-heading" className="gestio-page__title">
+            Gestión de pacientes
+          </h1>
+          <p className="gestio-page__description">
+            Centraliza el seguimiento de tus pacientes y accedé a su información clínica y administrativa en segundos.
+          </p>
         </div>
-        <div className="d-flex flex-wrap gap-2 justify-content-start justify-content-lg-end">
+        <div className="gestio-page__actions">
           <button
             type="button"
             className="btn btn-outline-primary"
@@ -768,52 +772,40 @@ function PacientesPage() {
             {editingId ? 'Volver al formulario' : 'Nuevo paciente'}
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3 mb-4">
-        <div className="col">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <span className="text-muted text-uppercase small">Pacientes activos</span>
-              <h4 className="fw-bold mb-1">{summary.total}</h4>
-              <p className="text-muted small mb-0">Registros actuales en tu base</p>
-            </div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <span className="text-muted text-uppercase small">Atención particular</span>
-              <h4 className="fw-bold mb-1 text-success">{summary.particulares}</h4>
-              <p className="text-muted small mb-0">Pacientes que abonan sin derivación</p>
-            </div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <span className="text-muted text-uppercase small">Derivados por centros</span>
-              <h4 className="fw-bold mb-1 text-primary">{summary.porCentro}</h4>
-              <p className="text-muted small mb-0">{summary.centrosActivos} centros activos vinculados</p>
-            </div>
-          </div>
-        </div>
-        <div className="col">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <span className="text-muted text-uppercase small">Datos de contacto</span>
-              <h4 className="fw-bold mb-1">{summary.conContacto}</h4>
-              <p className="text-muted small mb-0">Pacientes con email o teléfono cargado</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <section className="gestio-summary-grid" aria-label="Indicadores de pacientes">
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Pacientes activos</span>
+          <span className="gestio-summary-card__value">{summary.total}</span>
+          <p className="gestio-summary-card__helper">Registros actuales en tu base</p>
+        </article>
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Atención particular</span>
+          <span className="gestio-summary-card__value text-success">{summary.particulares}</span>
+          <p className="gestio-summary-card__helper">Pacientes que abonan sin derivación</p>
+        </article>
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Derivados por centros</span>
+          <span className="gestio-summary-card__value text-primary">{summary.porCentro}</span>
+          <p className="gestio-summary-card__helper">{summary.centrosActivos} centros activos vinculados</p>
+        </article>
+        <article className="gestio-summary-card">
+          <span className="gestio-summary-card__label">Datos de contacto</span>
+          <span className="gestio-summary-card__value">{summary.conContacto}</span>
+          <p className="gestio-summary-card__helper">Pacientes con email o teléfono cargado</p>
+        </article>
+      </section>
 
-      <div className="row g-3 align-items-stretch mb-4">
-        <div className="col-lg-8">
-          <label htmlFor="pacientesSearch" className="form-label visually-hidden">Buscar pacientes</label>
+      <section className="gestio-page__filters gestio-page__filters--split" aria-label="Herramientas de búsqueda de pacientes">
+        <div className="gestio-page__filters-search">
+          <label htmlFor="pacientesSearch" className="form-label fw-semibold">
+            Buscar pacientes
+          </label>
           <div className="input-group input-group-lg">
-            <span className="input-group-text" id="pacientesSearchIcon" aria-hidden="true">🔍</span>
+            <span className="input-group-text" id="pacientesSearchIcon" aria-hidden="true">
+              🔍
+            </span>
             <input
               id="pacientesSearch"
               type="search"
@@ -829,22 +821,22 @@ function PacientesPage() {
               </button>
             )}
           </div>
-          <div className="small text-muted mt-2">
+          <p className="small text-muted mt-3 mb-0">
             {totalPacientes === 0
               ? 'Aún no hay pacientes cargados.'
               : `Mostrando ${showingFrom}-${showingTo} de ${totalPacientes} pacientes`}
-          </div>
+          </p>
         </div>
-        <div className="col-lg-4">
-          <div className="card h-100 border-0 shadow-sm bg-light">
-            <div className="card-body">
-              <h6 className="text-uppercase text-muted mb-2">Consejo rápido</h6>
-              <p className="small text-muted mb-2">Podés filtrar por DNI, email o teléfono para ubicar pacientes al instante.</p>
-              <p className="small text-muted mb-0">Seleccioná un paciente para adjuntar estudios y registrar nuevas observaciones.</p>
-            </div>
-          </div>
-        </div>
-      </div>
+        <aside className="gestio-filter-card" aria-label="Consejo rápido de uso">
+          <p className="gestio-filter-card__title">Consejo rápido</p>
+          <p className="gestio-filter-card__text">
+            Podés filtrar por DNI, email o teléfono para ubicar pacientes al instante.
+          </p>
+          <p className="gestio-filter-card__text mb-0">
+            Seleccioná un paciente para adjuntar estudios y registrar nuevas observaciones.
+          </p>
+        </aside>
+      </section>
 
       <div className="card shadow-sm mb-4">
         <div className="card-header bg-primary text-white">

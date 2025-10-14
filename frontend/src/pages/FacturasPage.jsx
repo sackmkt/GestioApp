@@ -900,6 +900,13 @@ function FacturasPage() {
     return counts;
   }, [facturas]);
 
+  const saldoPendienteTotal = useMemo(
+    () => facturas.reduce((total, factura) => total + getSaldoPendiente(factura), 0),
+    [facturas],
+  );
+
+  const facturasPendientes = Math.max(statusCounts.all - statusCounts.pagada, 0);
+
 
   const renderStatusTabs = () => {
     const tabs = [
@@ -1137,7 +1144,62 @@ function FacturasPage() {
   };
 
   return (
-    <div className="container mt-4">
+    <div className="gestio-page container">
+      <header className="gestio-page__header" aria-labelledby="facturas-heading">
+        <div className="gestio-page__title-group">
+          <h1 id="facturas-heading" className="gestio-page__title">
+            Gestión de facturación
+          </h1>
+          <p className="gestio-page__description">
+            Controlá la emisión, seguimiento y cobranzas de tus comprobantes en un único lugar.
+          </p>
+        </div>
+        <div className="gestio-page__actions">
+          <button
+            type="button"
+            className="btn btn-outline-primary"
+            onClick={handleExportFacturas}
+            disabled={exportLoading}
+          >
+            {exportLoading ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Generando...
+              </>
+            ) : (
+              <>Exportar facturas</>
+            )}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={() => setExportOptionsOpen((prev) => !prev)}
+            aria-expanded={exportOptionsOpen}
+          >
+            {exportOptionsOpen ? 'Ocultar opciones' : 'Opciones de exportación'}
+          </button>
+        </div>
+      </header>
+
+      <section className="gestio-page__meta" aria-label="Resumen de facturación">
+        <div className="gestio-page__meta-item">
+          <span className="gestio-page__meta-label">Facturas registradas</span>
+          <span className="gestio-page__meta-value">{statusCounts.all}</span>
+        </div>
+        <div className="gestio-page__meta-item">
+          <span className="gestio-page__meta-label">Pendientes de cobro</span>
+          <span className="gestio-page__meta-value text-warning">{facturasPendientes}</span>
+        </div>
+        <div className="gestio-page__meta-item">
+          <span className="gestio-page__meta-label">Pagadas</span>
+          <span className="gestio-page__meta-value text-success">{statusCounts.pagada}</span>
+        </div>
+        <div className="gestio-page__meta-item">
+          <span className="gestio-page__meta-label">Saldo pendiente</span>
+          <span className="gestio-page__meta-value text-danger">{formatCurrency(saldoPendienteTotal)}</span>
+        </div>
+      </section>
+
       <div className="card shadow-sm mb-4">
         <div className="card-header bg-success text-white">
           <h2 className="mb-0">Gestión de Facturación</h2>
@@ -1307,48 +1369,23 @@ function FacturasPage() {
       <div className="card shadow-sm mb-4">
         <div className="card-header">
           <div className="d-flex flex-column gap-3">
-            <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-              <h4 className="mb-0">Listado de Facturas</h4>
-              <div className="d-flex flex-column flex-sm-row align-items-stretch gap-2" style={{ maxWidth: '100%' }}>
-                <div className="input-group" style={{ minWidth: '240px' }}>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Buscar por paciente, punto de venta, factura u obra social"
-                    value={searchTerm}
-                    onChange={handleInputChange}
-                  />
-                  <button className="btn btn-outline-secondary" type="button" onClick={handleSearchClick}>
-                    Buscar
-                  </button>
-                </div>
-                <div className="d-flex flex-column flex-sm-row gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-outline-primary"
-                    onClick={handleExportFacturas}
-                    disabled={exportLoading}
-                  >
-                    {exportLoading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        Generando...
-                      </>
-                    ) : (
-                      <>Exportar facturas</>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    onClick={() => setExportOptionsOpen((prev) => !prev)}
-                    aria-expanded={exportOptionsOpen}
-                  >
-                    {exportOptionsOpen ? 'Ocultar opciones' : 'Opciones de exportación'}
-                  </button>
-                </div>
+          <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+            <h4 className="mb-0">Listado de Facturas</h4>
+            <div className="d-flex flex-column flex-sm-row align-items-stretch gap-2 w-100 w-lg-auto" style={{ maxWidth: '100%' }}>
+              <div className="input-group" style={{ minWidth: '240px' }}>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Buscar por paciente, punto de venta, factura u obra social"
+                  value={searchTerm}
+                  onChange={handleInputChange}
+                />
+                <button className="btn btn-outline-secondary" type="button" onClick={handleSearchClick}>
+                  Buscar
+                </button>
               </div>
             </div>
+          </div>
             {exportOptionsOpen && (
               <div className="border rounded bg-light p-3 mt-3">
                 <div className="row g-3">
