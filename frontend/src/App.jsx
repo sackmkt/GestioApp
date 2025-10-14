@@ -19,6 +19,8 @@ const DashboardPage = lazyWithPreload(() => import('./pages/DashboardPage'));
 const PacientesPage = lazyWithPreload(() => import('./pages/PacientesPage'));
 const ObrasSocialesPage = lazyWithPreload(() => import('./pages/ObrasSocialesPage'));
 const FacturasPage = lazyWithPreload(() => import('./pages/FacturasPage'));
+const CobranzasPage = lazyWithPreload(() => import('./pages/CobranzasPage'));
+const PagosCentrosPage = lazyWithPreload(() => import('./pages/PagosCentrosPage'));
 const TurnosPage = lazyWithPreload(() => import('./pages/TurnosPage'));
 const CentrosSaludPage = lazyWithPreload(() => import('./pages/CentrosSaludPage'));
 const LoginPage = lazyWithPreload(() => import('./pages/LoginPage'));
@@ -76,6 +78,15 @@ const resolveSectionFromPath = (pathname) => {
   if (pathname.startsWith('/centros-salud')) {
     return 'centrosSalud';
   }
+  if (pathname.startsWith('/finanzas/cobranzas')) {
+    return 'cobranzas';
+  }
+  if (pathname.startsWith('/finanzas/pagos-centros')) {
+    return 'pagosCentros';
+  }
+  if (pathname.startsWith('/finanzas')) {
+    return 'finanzas';
+  }
   if (pathname.startsWith('/dashboard') || pathname === '/') {
     return 'dashboard';
   }
@@ -89,6 +100,14 @@ const NAVIGATION_ITEMS = [
   { to: '/turnos', label: 'Agenda' },
   { to: '/obras-sociales', label: 'Obras Sociales' },
   { to: '/facturas', label: 'Facturación' },
+  {
+    label: 'Finanzas',
+    key: 'finanzas',
+    children: [
+      { to: '/finanzas/cobranzas', label: 'Cobranzas' },
+      { to: '/finanzas/pagos-centros', label: 'Pagos a Centros' },
+    ],
+  },
 ];
 
 function App() {
@@ -97,6 +116,7 @@ function App() {
   const { showInfo, showSuccess } = useFeedback();
   const [currentUser, setCurrentUser] = useState(() => getStoredUser());
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [openDropdownKey, setOpenDropdownKey] = useState(null);
   const inactivityTimerRef = useRef(null);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
   const mainContentRef = useRef(null);
@@ -255,12 +275,6 @@ function App() {
     };
   }, [handleLogout, isAuthenticated]);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setIsMenuOpen(false);
-    }
-  }, [isAuthenticated]);
-
   const navLinkClassName = useCallback(({ isActive }) => `nav-link ${isActive ? 'active' : ''}`, []);
 
   const toggleMenu = useCallback(() => {
@@ -275,6 +289,24 @@ function App() {
     closeMenu();
     handleLogout();
   }, [closeMenu, handleLogout]);
+
+  const toggleDropdown = useCallback((key) => {
+    setOpenDropdownKey((prev) => (prev === key ? null : key));
+  }, []);
+
+  const closeDropdowns = useCallback(() => {
+    setOpenDropdownKey(null);
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setIsMenuOpen(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    closeDropdowns();
+  }, [closeDropdowns, location.pathname]);
 
   const navigationContent = useMemo(
     () => (
@@ -300,13 +332,48 @@ function App() {
           <div className={`collapse navbar-collapse ${isMenuOpen ? 'show' : ''}`} id="navbarNav">
             <ul className="navbar-nav me-auto align-items-lg-center">
               {isAuthenticated
-                ? NAVIGATION_ITEMS.map((item) => (
-                    <li className="nav-item" key={item.to}>
-                      <NavLink className={navLinkClassName} to={item.to} onClick={closeMenu}>
-                        {item.label}
-                      </NavLink>
-                    </li>
-                  ))
+                ? NAVIGATION_ITEMS.map((item) => {
+                    if (item.children && item.children.length > 0) {
+                      const isActiveGroup = item.children.some((child) => location.pathname.startsWith(child.to));
+                      const isOpen = openDropdownKey === item.key;
+                      return (
+                        <li key={item.key || item.label} className={`nav-item dropdown ${isOpen ? 'show' : ''}`}>
+                          <button
+                            type="button"
+                            className={`nav-link dropdown-toggle ${isActiveGroup ? 'active' : ''}`}
+                            onClick={() => toggleDropdown(item.key)}
+                            aria-expanded={isOpen}
+                          >
+                            {item.label}
+                          </button>
+                          <ul className={`dropdown-menu ${isOpen ? 'show' : ''}`}>
+                            {item.children.map((child) => (
+                              <li key={child.to}>
+                                <NavLink
+                                  className={({ isActive }) => `dropdown-item ${isActive ? 'active' : ''}`}
+                                  to={child.to}
+                                  onClick={() => {
+                                    closeDropdowns();
+                                    closeMenu();
+                                  }}
+                                >
+                                  {child.label}
+                                </NavLink>
+                              </li>
+                            ))}
+                          </ul>
+                        </li>
+                      );
+                    }
+
+                    return (
+                      <li className="nav-item" key={item.to}>
+                        <NavLink className={navLinkClassName} to={item.to} onClick={closeMenu}>
+                          {item.label}
+                        </NavLink>
+                      </li>
+                    );
+                  })
                 : null}
             </ul>
             <ul className="navbar-nav ms-auto align-items-lg-center gap-lg-3">
@@ -342,7 +409,18 @@ function App() {
         </div>
       </nav>
     ),
-    [closeMenu, handleLogoutClick, isAuthenticated, isMenuOpen, navLinkClassName, toggleMenu],
+    [
+      closeDropdowns,
+      closeMenu,
+      handleLogoutClick,
+      isAuthenticated,
+      isMenuOpen,
+      location.pathname,
+      navLinkClassName,
+      openDropdownKey,
+      toggleDropdown,
+      toggleMenu,
+    ],
   );
 
   useEffect(() => {
@@ -354,6 +432,8 @@ function App() {
       DashboardPage.preload?.();
       PacientesPage.preload?.();
       TurnosPage.preload?.();
+      CobranzasPage.preload?.();
+      PagosCentrosPage.preload?.();
     };
 
     if (typeof window.requestIdleCallback === 'function') {
@@ -477,6 +557,8 @@ function App() {
                     <Route path="/turnos" element={<TurnosPage />} />
                     <Route path="/centros-salud" element={<CentrosSaludPage />} />
                     <Route path="/facturas" element={<FacturasPage />} />
+                    <Route path="/finanzas/cobranzas" element={<CobranzasPage />} />
+                    <Route path="/finanzas/pagos-centros" element={<PagosCentrosPage />} />
                     <Route path="/dashboard" element={<DashboardPage currentUser={currentUser} />} />
                     <Route path="/" element={<DashboardPage currentUser={currentUser} />} />
                     <Route path="*" element={<DashboardPage currentUser={currentUser} />} />
