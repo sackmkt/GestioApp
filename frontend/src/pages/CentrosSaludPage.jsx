@@ -186,12 +186,12 @@ function CentrosSaludPage() {
 
   return (
     <div className="container py-4">
-      <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center mb-4">
-        <div>
+      <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div className="w-100 w-lg-auto">
           <h2 className="fw-bold mb-1">Red de Centros de Salud</h2>
           <p className="text-muted mb-0">Administra los convenios vigentes y controla las retenciones asociadas.</p>
         </div>
-        <div className="text-lg-end mt-3 mt-lg-0">
+        <div className="text-lg-end mt-2 mt-lg-0 w-100 w-lg-auto">
           <h5 className="text-primary mb-1">Retención acumulada</h5>
           <h3 className="fw-bold">{formatCurrency(totalRetencion)}</h3>
         </div>
@@ -254,14 +254,14 @@ function CentrosSaludPage() {
 
       <div className="card shadow-sm">
         <div className="card-header bg-light d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-          <div>
+          <div className="w-100 w-lg-auto">
             <strong>Centros registrados</strong>
             <div className="text-muted small">
               Total: {resumenCentros.length}
               {hasSearch && ` · Coincidencias: ${filteredResumenCentros.length}`}
             </div>
           </div>
-          <div className="input-group input-group-sm" style={{ maxWidth: '260px' }}>
+          <div className="input-group input-group-sm flex-grow-1 flex-lg-grow-0 w-100 w-lg-auto">
             <span className="input-group-text" id="centrosSearchIcon" aria-hidden="true">🔍</span>
             <input
               id="centrosSearch"
@@ -278,44 +278,97 @@ function CentrosSaludPage() {
           {filteredResumenCentros.length === 0 ? (
             <p className="text-center text-muted py-4 mb-0">{emptyMessage}</p>
           ) : (
-            <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Centro</th>
-                    <th className="text-center">Retención</th>
-                    <th className="text-end">Facturación vinculada</th>
-                    <th className="text-end">Retención a pagar</th>
-                    <th className="text-center">Facturas</th>
-                    <th className="text-end">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <>
+              <div className="table-responsive d-none d-lg-block">
+                <table className="table table-hover mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Centro</th>
+                      <th className="text-center">Retención</th>
+                      <th className="text-end">Facturación vinculada</th>
+                      <th className="text-end">Retención a pagar</th>
+                      <th className="text-center">Facturas</th>
+                      <th className="text-end">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredResumenCentros.map(({ centro, totalFacturado, totalRetencion, cantidadFacturas }) => (
+                      <tr key={centro._id}>
+                        <td>
+                          <div className="fw-semibold">{centro.nombre}</div>
+                          <small className="text-muted">Actualizado el {new Date(centro.updatedAt).toLocaleDateString()}</small>
+                        </td>
+                        <td className="text-center">{centro.porcentajeRetencion}%</td>
+                        <td className="text-end">{formatCurrency(totalFacturado)}</td>
+                        <td className="text-end fw-bold text-primary">{formatCurrency(totalRetencion)}</td>
+                        <td className="text-center">{cantidadFacturas}</td>
+                        <td className="text-end">
+                          <div className="btn-group btn-group-sm" role="group">
+                            <button className="btn btn-outline-secondary" onClick={() => handleEdit(centro)} disabled={loading}>
+                              Editar
+                            </button>
+                            <button className="btn btn-outline-danger" onClick={() => handleDelete(centro._id)} disabled={loading}>
+                              Eliminar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="d-lg-none p-3">
+                <div className="centros-list-mobile" role="list">
                   {filteredResumenCentros.map(({ centro, totalFacturado, totalRetencion, cantidadFacturas }) => (
-                    <tr key={centro._id}>
-                      <td>
-                        <div className="fw-semibold">{centro.nombre}</div>
-                        <small className="text-muted">Actualizado el {new Date(centro.updatedAt).toLocaleDateString()}</small>
-                      </td>
-                      <td className="text-center">{centro.porcentajeRetencion}%</td>
-                      <td className="text-end">{formatCurrency(totalFacturado)}</td>
-                      <td className="text-end fw-bold text-primary">{formatCurrency(totalRetencion)}</td>
-                      <td className="text-center">{cantidadFacturas}</td>
-                      <td className="text-end">
-                        <div className="btn-group btn-group-sm" role="group">
-                          <button className="btn btn-outline-secondary" onClick={() => handleEdit(centro)} disabled={loading}>
+                    <article key={centro._id} className="centros-list-mobile__item" role="listitem" aria-label={`Centro ${centro.nombre}`}>
+                      <header className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                        <div>
+                          <h3 className="h6 mb-1">{centro.nombre}</h3>
+                          <p className="text-muted small mb-0">Actualizado el {new Date(centro.updatedAt).toLocaleDateString()}</p>
+                        </div>
+                        <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">
+                          {centro.porcentajeRetencion}% Retención
+                        </span>
+                      </header>
+
+                      <div className="centros-list-mobile__metrics mb-3">
+                        <div>
+                          <span className="centros-list-mobile__metric-label">Facturación vinculada</span>
+                          <span className="centros-list-mobile__metric-value">{formatCurrency(totalFacturado)}</span>
+                        </div>
+                        <div>
+                          <span className="centros-list-mobile__metric-label">Retención a pagar</span>
+                          <span className="centros-list-mobile__metric-value text-primary">{formatCurrency(totalRetencion)}</span>
+                        </div>
+                      </div>
+
+                      <div className="d-flex flex-column flex-sm-row gap-2 align-items-stretch align-items-sm-center">
+                        <span className="badge bg-light text-primary border border-primary-subtle">
+                          Facturas: {cantidadFacturas}
+                        </span>
+                        <div className="d-flex flex-column flex-sm-row gap-2 w-100 justify-content-sm-end">
+                          <button
+                            className="btn btn-outline-secondary"
+                            onClick={() => handleEdit(centro)}
+                            disabled={loading}
+                          >
                             Editar
                           </button>
-                          <button className="btn btn-outline-danger" onClick={() => handleDelete(centro._id)} disabled={loading}>
+                          <button
+                            className="btn btn-outline-danger"
+                            onClick={() => handleDelete(centro._id)}
+                            disabled={loading}
+                          >
                             Eliminar
                           </button>
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </article>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

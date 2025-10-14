@@ -270,6 +270,38 @@ main:focus {
   transition: background-color var(--gestio-transition-base), box-shadow var(--gestio-transition-base), border-color var(--gestio-transition-base);
 }
 
+.centros-list-mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.centros-list-mobile__item {
+  background: var(--gestio-surface);
+  border-radius: var(--gestio-radius-md);
+  border: var(--gestio-border-width) solid var(--gestio-border);
+  box-shadow: var(--gestio-shadow-soft);
+  padding: 1.25rem;
+}
+
+.centros-list-mobile__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.centros-list-mobile__metric-label {
+  color: var(--gestio-text-muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+}
+
+.centros-list-mobile__metric-value {
+  font-weight: 600;
+  display: block;
+  margin-top: 0.15rem;
+}
+
 .gestio-heading {
   color: var(--gestio-text-primary);
 }
@@ -407,6 +439,59 @@ footer.gestio-footer a {
 .gestio-theme-toggle:hover .gestio-theme-toggle__icon,
 .gestio-theme-toggle:focus-visible .gestio-theme-toggle__icon {
   transform: rotate(-6deg) scale(1.08);
+}
+
+@media (max-width: 992px) {
+  .gestio-navbar .container,
+  footer.gestio-footer > .container,
+  .gestio-main > .container {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .gestio-navbar .container,
+  footer.gestio-footer > .container,
+  .gestio-main > .container {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .gestio-main .gestio-content {
+    padding: 1.75rem;
+  }
+
+  .centros-list-mobile__metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 576px) {
+  .gestio-main {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+  }
+
+  .gestio-navbar .container,
+  footer.gestio-footer > .container,
+  .gestio-main > .container {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .gestio-main .gestio-content {
+    padding: 1.25rem;
+    border-radius: var(--gestio-radius-md);
+    box-shadow: 0 24px 48px -30px rgba(15, 23, 42, 0.55);
+  }
+
+  .centros-list-mobile__item {
+    padding: 1rem;
+  }
+
+  .gestio-navbar .navbar-brand img {
+    height: 48px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
