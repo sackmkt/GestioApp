@@ -517,6 +517,11 @@ footer.gestio-footer a {
   box-shadow: 0 16px 40px -30px rgba(15, 23, 42, 0.55);
 }
 
+.gestio-page .row {
+  --bs-gutter-x: clamp(1rem, 3vw, 1.75rem);
+  --bs-gutter-y: clamp(1rem, 3vw, 1.75rem);
+}
+
 .gestio-page__meta-label {
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -639,6 +644,15 @@ footer.gestio-footer a {
   .gestio-main > .container {
     max-width: 100%;
   }
+
+  .gestio-page.container {
+    padding-left: clamp(1.25rem, 4vw, 2.25rem);
+    padding-right: clamp(1.25rem, 4vw, 2.25rem);
+  }
+
+  .gestio-main .gestio-content {
+    padding: clamp(2rem, 5vw, 2.5rem);
+  }
 }
 
 @media (max-width: 768px) {
@@ -649,8 +663,69 @@ footer.gestio-footer a {
     padding-right: 1.25rem;
   }
 
+  .gestio-page.container {
+    padding-left: clamp(1.1rem, 5vw, 1.6rem);
+    padding-right: clamp(1.1rem, 5vw, 1.6rem);
+  }
+
   .gestio-main .gestio-content {
     padding: 1.75rem;
+  }
+
+  .gestio-page {
+    gap: clamp(1.25rem, 5vw, 1.75rem);
+  }
+
+  .gestio-page__header {
+    padding: clamp(1.25rem, 5vw, 1.75rem);
+  }
+
+  .gestio-page__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gestio-page__actions .btn {
+    width: 100%;
+  }
+
+  .gestio-summary-grid,
+  .gestio-page__filters,
+  .gestio-page__meta {
+    gap: clamp(0.85rem, 4vw, 1.25rem);
+  }
+
+  .gestio-summary-grid,
+  .gestio-page__meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gestio-page__filters--split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gestio-page__filters-search,
+  .gestio-summary-card,
+  .gestio-filter-card,
+  .gestio-page__meta-item {
+    padding: clamp(1rem, 4vw, 1.5rem);
+  }
+
+  .gestio-summary-card {
+    gap: 0.35rem;
+  }
+
+  .card .card-body {
+    padding: clamp(1rem, 4vw, 1.5rem);
+  }
+
+  .card .card-header {
+    padding: clamp(0.85rem, 3.5vw, 1.25rem);
+  }
+
+  .gestio-page .row {
+    --bs-gutter-x: clamp(0.85rem, 4vw, 1.25rem);
+    --bs-gutter-y: clamp(0.85rem, 4vw, 1.25rem);
   }
 
   .centros-list-mobile__metrics {
@@ -665,17 +740,29 @@ footer.gestio-footer a {
   }
 
   .gestio-page {
-    padding-block: 1.75rem;
-    gap: 1.75rem;
+    padding-block: 1.6rem;
+    gap: 1.6rem;
   }
 
   .gestio-page.container {
-    padding-left: 1.1rem;
-    padding-right: 1.1rem;
+    padding-left: clamp(0.85rem, 6vw, 1rem);
+    padding-right: clamp(0.85rem, 6vw, 1rem);
   }
 
   .gestio-page__actions .btn {
     width: 100%;
+  }
+
+  .gestio-page__header,
+  .gestio-summary-card,
+  .gestio-page__filters-search,
+  .gestio-filter-card,
+  .gestio-page__meta-item {
+    border-radius: calc(var(--gestio-radius-md) - 0.25rem);
+  }
+
+  .gestio-page__filters {
+    gap: 0.85rem;
   }
 
   .gestio-navbar .container,
@@ -686,9 +773,26 @@ footer.gestio-footer a {
   }
 
   .gestio-main .gestio-content {
-    padding: 1.25rem;
+    padding: clamp(1.1rem, 5vw, 1.3rem);
     border-radius: var(--gestio-radius-md);
     box-shadow: 0 24px 48px -30px rgba(15, 23, 42, 0.55);
+  }
+
+  .gestio-page .row {
+    --bs-gutter-x: 0.75rem;
+    --bs-gutter-y: 1rem;
+  }
+
+  .card .card-body {
+    padding: clamp(0.9rem, 5vw, 1.25rem);
+  }
+
+  .card .card-header {
+    padding: clamp(0.75rem, 5vw, 1rem);
+  }
+
+  .gestio-summary-card__value {
+    font-size: clamp(1.2rem, 5vw, 1.55rem);
   }
 
   .centros-list-mobile__item {
@@ -697,6 +801,29 @@ footer.gestio-footer a {
 
   .gestio-navbar .navbar-brand img {
     height: 48px;
+  }
+}
+
+@media (max-width: 420px) {
+  .gestio-page.container {
+    padding-left: clamp(0.65rem, 7vw, 0.85rem);
+    padding-right: clamp(0.65rem, 7vw, 0.85rem);
+  }
+
+  .gestio-page__header,
+  .gestio-summary-card,
+  .gestio-page__filters-search,
+  .gestio-filter-card,
+  .gestio-page__meta-item {
+    padding: clamp(0.9rem, 6vw, 1.2rem);
+  }
+
+  .card .card-body {
+    padding: clamp(0.85rem, 6vw, 1.15rem);
+  }
+
+  .card .card-header {
+    padding: clamp(0.7rem, 6vw, 0.95rem);
   }
 }
 

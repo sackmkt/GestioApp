@@ -81,19 +81,19 @@ function LoginPage({ onAuthChange }) {
             </span>
           </h2>
           <p className="auth-card__brand-subtitle">
-            Simplificamos la gestión integral de pacientes, turnos y facturación para profesionales de la salud.
+            Organiza turnos, pacientes y finanzas desde un único panel moderno y confiable.
           </p>
           <ul className="auth-card__highlights">
-            <li>Agenda inteligente y recordatorios automáticos</li>
-            <li>Información clínica ordenada en un solo lugar</li>
-            <li>Facturación y obras sociales sin complicaciones</li>
+            <li>Agenda inteligente con recordatorios automáticos</li>
+            <li>Historias clínicas y datos siempre sincronizados</li>
+            <li>Facturación y cobranzas sin complejidad</li>
           </ul>
         </div>
         <div className="auth-card__form">
           <header>
             <h1 className="auth-card__form-title">Inicia sesión</h1>
             <p className="auth-card__form-description">
-              Accede a tu panel para coordinar turnos, pacientes y la gestión diaria de tu consultorio.
+              Ingresa para coordinar tu consultorio en segundos y continuar donde lo dejaste.
             </p>
           </header>
           {error && <div className="auth-alert">{error}</div>}
