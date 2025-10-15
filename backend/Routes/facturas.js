@@ -78,6 +78,108 @@ const decodeBase64File = (base64String) => {
   }
 };
 
+const MES_SERVICIO_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+const buildMesServicioFromDate = (dateInput) => {
+  if (!dateInput) {
+    return null;
+  }
+
+  const parsed = new Date(dateInput);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
+
+const normalizeMesServicio = (value, fallbackDate) => {
+  if (value === undefined) {
+    return buildMesServicioFromDate(fallbackDate);
+  }
+
+  if (value === null || value === '') {
+    return null;
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (MES_SERVICIO_REGEX.test(trimmed)) {
+    return trimmed;
+  }
+
+  const numeric = Number(trimmed);
+  if (Number.isFinite(numeric) && numeric >= 1 && numeric <= 12) {
+    const fallback = buildMesServicioFromDate(fallbackDate);
+    const baseYear = fallback ? Number(fallback.slice(0, 4)) : new Date().getFullYear();
+    const normalizedMonth = String(Math.trunc(numeric)).padStart(2, '0');
+    return `${baseYear}-${normalizedMonth}`;
+  }
+
+  throw createValidationError('El mes de servicio debe tener el formato AAAA-MM.');
+};
+
+const parseMesServicioQuery = (rawValue) => {
+  if (rawValue === undefined || rawValue === null) {
+    return { type: 'none' };
+  }
+
+  const trimmed = String(rawValue).trim();
+  if (!trimmed || trimmed.toLowerCase() === 'all') {
+    return { type: 'none' };
+  }
+
+  if (MES_SERVICIO_REGEX.test(trimmed)) {
+    return { type: 'value', value: trimmed };
+  }
+
+  const lowered = trimmed.toLowerCase();
+  if (['sin-fecha', 'sin-mes', 'none', 'null', 'empty'].includes(lowered)) {
+    return { type: 'empty' };
+  }
+
+  return { type: 'invalid', value: trimmed };
+};
+
+const applyMesServicioFilterToQuery = (query, rawValue) => {
+  const parsed = parseMesServicioQuery(rawValue);
+
+  if (parsed.type === 'invalid') {
+    return { error: 'El mes de servicio indicado no es válido.' };
+  }
+
+  if (parsed.type === 'value') {
+    query.mesServicio = parsed.value;
+  } else if (parsed.type === 'empty') {
+    query.$or = [
+      { mesServicio: { $exists: false } },
+      { mesServicio: null },
+      { mesServicio: '' },
+    ];
+  }
+
+  return { parsed };
+};
+
+const formatMesServicioLabel = (value) => {
+  if (typeof value !== 'string' || !MES_SERVICIO_REGEX.test(value)) {
+    return '';
+  }
+
+  const [yearStr, monthStr] = value.split('-');
+  const date = new Date(Number(yearStr), Number(monthStr) - 1, 1);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+};
+
 const buildFacturaDocumentResponse = (document, facturaId) => {
   if (!document) {
     return null;
@@ -130,8 +232,12 @@ const buildFacturaResponse = (facturaDoc) => {
   delete sanitizedPlain.pagos;
   delete sanitizedPlain.pagosCentro;
 
+  const mesServicioNormalizado = sanitizedPlain.mesServicio || buildMesServicioFromDate(sanitizedPlain.fechaEmision);
+
   return {
     ...sanitizedPlain,
+    mesServicio: mesServicioNormalizado || null,
+    mesServicioLabel: formatMesServicioLabel(mesServicioNormalizado) || null,
     pagos,
     pagosCentro,
     montoCobrado,
@@ -345,7 +451,18 @@ const formatCentroPaymentsForExport = (payments) => {
     .join('\n\n');
 };
 
-const allowedUpdateFields = ['paciente', 'obraSocial', 'puntoVenta', 'numeroFactura', 'montoTotal', 'fechaEmision', 'fechaVencimiento', 'observaciones', 'centroSalud'];
+const allowedUpdateFields = [
+  'paciente',
+  'obraSocial',
+  'puntoVenta',
+  'numeroFactura',
+  'montoTotal',
+  'fechaEmision',
+  'fechaVencimiento',
+  'mesServicio',
+  'observaciones',
+  'centroSalud',
+];
 
 const resolveCentroSaludId = async ({ centroSaludId, pacienteId, userId }) => {
   if (centroSaludId === null || centroSaludId === '') {
@@ -447,6 +564,7 @@ router.post('/', protect, async (req, res) => {
       montoTotal: montoTotalValor,
       fechaEmision: req.body.fechaEmision,
       fechaVencimiento: req.body.fechaVencimiento || null,
+      mesServicio: normalizeMesServicio(req.body.mesServicio, req.body.fechaEmision) || null,
       observaciones: typeof req.body.observaciones === 'string' ? req.body.observaciones.trim() : '',
       centroSalud: centroSaludId || null,
       user: req.user._id,
@@ -486,7 +604,13 @@ router.post('/', protect, async (req, res) => {
 // Obtiene todas las facturas del usuario autenticado
 router.get('/', protect, async (req, res) => {
   try {
-    const facturas = await Factura.find({ user: req.user._id })
+    const filters = { user: req.user._id };
+    const { error: mesServicioError } = applyMesServicioFilterToQuery(filters, req.query.mesServicio ?? req.query.mes);
+    if (mesServicioError) {
+      return res.status(400).json({ error: mesServicioError });
+    }
+
+    const facturas = await Factura.find(filters)
       .populate({
         path: 'paciente',
         select: 'nombre apellido dni tipoAtencion centroSalud',
@@ -520,6 +644,11 @@ router.get('/export', protect, async (req, res) => {
     }
 
     const filters = { user: req.user._id };
+
+    const { error: mesServicioError } = applyMesServicioFilterToQuery(filters, req.query.mesServicio ?? req.query.mes);
+    if (mesServicioError) {
+      return res.status(400).json({ error: mesServicioError });
+    }
 
     const startInput = (startDate || fechaDesde || '').toString().trim();
     const endInput = (endDate || fechaHasta || '').toString().trim();
@@ -621,6 +750,10 @@ router.get('/export', protect, async (req, res) => {
       { header: 'Saldo pendiente', value: (factura) => formatNumber(factura.saldoPendiente) },
       { header: 'Estado', value: (factura) => resolveEstadoLabel(factura.estado) },
       { header: 'Fecha de emisión', value: (factura) => formatDateTime(factura.fechaEmision) },
+      {
+        header: 'Mes del servicio',
+        value: (factura) => formatMesServicioLabel(factura.mesServicio || buildMesServicioFromDate(factura.fechaEmision)),
+      },
       { header: 'Fecha de vencimiento', value: (factura) => formatDateTime(factura.fechaVencimiento) },
       { header: 'Observaciones', value: (factura) => factura.observaciones || '' },
       {
@@ -725,6 +858,14 @@ router.put('/:id', protect, async (req, res) => {
         continue;
       }
 
+      if (field === 'mesServicio') {
+        factura.mesServicio = normalizeMesServicio(
+          req.body.mesServicio,
+          Object.prototype.hasOwnProperty.call(req.body, 'fechaEmision') ? req.body.fechaEmision : factura.fechaEmision,
+        ) || null;
+        continue;
+      }
+
       if (field === 'obraSocial') {
         factura.obraSocial = resolvedObraSocialId || null;
         continue;
@@ -819,6 +960,66 @@ router.post('/:id/pagos', protect, async (req, res) => {
   }
 });
 
+router.patch('/:id/pagos/:pagoId', protect, async (req, res) => {
+  try {
+    const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id });
+    if (!factura) {
+      return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
+    }
+
+    const pago = Array.isArray(factura.pagos) ? factura.pagos.id(req.params.pagoId) : null;
+    if (!pago) {
+      return res.status(404).json({ error: 'Pago no encontrado en esta factura.' });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'monto')) {
+      const montoValor = Number(req.body.monto);
+      if (!Number.isFinite(montoValor) || montoValor <= 0) {
+        return res.status(400).json({ error: 'El monto del pago debe ser un número positivo.' });
+      }
+      pago.monto = montoValor;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'fecha')) {
+      const { fecha } = req.body;
+      if (!fecha) {
+        pago.fecha = Date.now();
+      } else {
+        const parsed = new Date(fecha);
+        if (Number.isNaN(parsed.getTime())) {
+          return res.status(400).json({ error: 'La fecha del pago no es válida.' });
+        }
+        pago.fecha = parsed;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'metodo')) {
+      pago.metodo = req.body.metodo ? String(req.body.metodo).trim() : '';
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'nota')) {
+      pago.nota = req.body.nota ? String(req.body.nota).trim() : '';
+    }
+
+    factura.markModified('pagos');
+
+    const totalPagos = Array.isArray(factura.pagos)
+      ? factura.pagos.reduce((sum, pagoItem) => sum + (pagoItem.monto || 0), 0)
+      : 0;
+
+    if ((factura.montoTotal || 0) < totalPagos) {
+      return res.status(400).json({ error: 'El monto total no puede ser inferior a los pagos registrados.' });
+    }
+
+    syncEstadoDesdePagos(factura);
+    await factura.save();
+    await populateFactura(factura);
+    res.json(buildFacturaResponse(factura));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Elimina un pago registrado
 router.delete('/:id/pagos/:pagoId', protect, async (req, res) => {
   try {
@@ -880,6 +1081,57 @@ router.post('/:id/pagos-centro', protect, async (req, res) => {
     await factura.save();
     await populateFactura(factura);
     res.status(201).json(buildFacturaResponse(factura));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.patch('/:id/pagos-centro/:pagoId', protect, async (req, res) => {
+  try {
+    const factura = await Factura.findOne({ _id: req.params.id, user: req.user._id });
+    if (!factura) {
+      return res.status(404).json({ error: 'Factura no encontrada o no autorizada' });
+    }
+
+    const pagoCentro = Array.isArray(factura.pagosCentro) ? factura.pagosCentro.id(req.params.pagoId) : null;
+    if (!pagoCentro) {
+      return res.status(404).json({ error: 'Pago al centro no encontrado en esta factura.' });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'monto')) {
+      const montoValor = Number(req.body.monto);
+      if (!Number.isFinite(montoValor) || montoValor <= 0) {
+        return res.status(400).json({ error: 'El monto del pago debe ser un número positivo.' });
+      }
+      pagoCentro.monto = montoValor;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'fecha')) {
+      const { fecha } = req.body;
+      if (!fecha) {
+        pagoCentro.fecha = Date.now();
+      } else {
+        const parsed = new Date(fecha);
+        if (Number.isNaN(parsed.getTime())) {
+          return res.status(400).json({ error: 'La fecha del pago no es válida.' });
+        }
+        pagoCentro.fecha = parsed;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'metodo')) {
+      pagoCentro.metodo = req.body.metodo ? String(req.body.metodo).trim() : '';
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'nota')) {
+      pagoCentro.nota = req.body.nota ? String(req.body.nota).trim() : '';
+    }
+
+    factura.markModified('pagosCentro');
+
+    await factura.save();
+    await populateFactura(factura);
+    res.json(buildFacturaResponse(factura));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

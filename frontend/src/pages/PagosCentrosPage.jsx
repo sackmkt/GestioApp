@@ -10,7 +10,18 @@ const formatCurrency = (value) => {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(numericValue);
 };
 
-const getMonthKey = (value) => {
+const MONTH_KEY_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+const getMonthKey = (factura) => {
+  if (!factura) {
+    return 'sin-fecha';
+  }
+
+  if (factura.mesServicio && MONTH_KEY_REGEX.test(factura.mesServicio)) {
+    return factura.mesServicio;
+  }
+
+  const value = factura.fechaEmision || factura.fechaVencimiento || factura.createdAt;
   if (!value) {
     return 'sin-fecha';
   }
@@ -150,19 +161,29 @@ function PagosCentrosPage() {
 
   const availableMonths = useMemo(() => {
     const monthSet = new Set();
+    let hasUnassigned = false;
+
     facturas.forEach((factura) => {
       if (!factura.centroSalud?._id) {
         return;
       }
-      const key = getMonthKey(factura.fechaEmision || factura.fechaVencimiento || factura.createdAt);
-      if (key !== 'sin-fecha') {
+      const key = getMonthKey(factura);
+      if (key === 'sin-fecha') {
+        hasUnassigned = true;
+      } else {
         monthSet.add(key);
       }
     });
 
-    return Array.from(monthSet)
+    const options = Array.from(monthSet)
       .sort((a, b) => getMonthSortValue(b) - getMonthSortValue(a))
       .map((key) => ({ value: key, label: formatMonthLabel(key) }));
+
+    if (hasUnassigned) {
+      options.push({ value: 'sin-fecha', label: 'Sin mes asignado' });
+    }
+
+    return options;
   }, [facturas]);
 
   const centerOptions = useMemo(() => {
@@ -189,7 +210,7 @@ function PagosCentrosPage() {
         return false;
       }
 
-      const monthKey = getMonthKey(factura.fechaEmision || factura.fechaVencimiento || factura.createdAt);
+      const monthKey = getMonthKey(factura);
       if (filters.month !== 'all' && monthKey !== filters.month) {
         return false;
       }
@@ -281,7 +302,7 @@ function PagosCentrosPage() {
       pacienteEntry.totalPagado += pagadoCentro;
       pacienteEntry.totalPendiente += saldoCentro;
 
-      const monthKey = getMonthKey(factura.fechaEmision || factura.fechaVencimiento || factura.createdAt);
+      const monthKey = getMonthKey(factura);
       if (!mesesMap.has(monthKey)) {
         mesesMap.set(monthKey, {
           key: monthKey,

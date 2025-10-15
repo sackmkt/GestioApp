@@ -27,6 +27,63 @@ const ESTADO_BADGES = {
   pagada: 'bg-success',
 };
 
+const MONTH_KEY_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+const getMonthFromDateInput = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  if (typeof value === 'string' && value.length >= 7) {
+    return value.slice(0, 7);
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const resolveMesServicio = (factura) => {
+  if (!factura) {
+    return '';
+  }
+
+  if (factura.mesServicio && MONTH_KEY_REGEX.test(factura.mesServicio)) {
+    return factura.mesServicio;
+  }
+
+  return getMonthFromDateInput(factura.fechaEmision);
+};
+
+const getMonthFilterKey = (factura) => {
+  const key = resolveMesServicio(factura);
+  return key && MONTH_KEY_REGEX.test(key) ? key : 'sin-fecha';
+};
+
+const formatMonthLabel = (value) => {
+  if (!value || !MONTH_KEY_REGEX.test(value)) {
+    return 'Sin asignar';
+  }
+
+  const [yearStr, monthStr] = value.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month)) {
+    return 'Sin asignar';
+  }
+
+  const date = new Date(year, month - 1, 1);
+  if (Number.isNaN(date.getTime())) {
+    return 'Sin asignar';
+  }
+
+  return date.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+};
+
 const EMPTY_FORM = {
   paciente: '',
   obraSocial: '',
@@ -35,6 +92,7 @@ const EMPTY_FORM = {
   montoTotal: '',
   fechaEmision: '',
   fechaVencimiento: '',
+  mesServicio: '',
   estado: 'pendiente',
   observaciones: '',
   centroSalud: '',
@@ -255,14 +313,17 @@ function FacturasPage() {
   const [centrosSalud, setCentrosSalud] = useState([]);
   const [formData, setFormData] = useState(() => ({ ...EMPTY_FORM }));
   const [statusFilter, setStatusFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('all');
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSearchTerm, setFilterSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [expandedFacturaId, setExpandedFacturaId] = useState(null);
   const [paymentForms, setPaymentForms] = useState({});
+  const [paymentEditForms, setPaymentEditForms] = useState({});
   const [paymentErrors, setPaymentErrors] = useState({});
   const [centerPaymentForms, setCenterPaymentForms] = useState({});
+  const [centerPaymentEditForms, setCenterPaymentEditForms] = useState({});
   const [centerPaymentErrors, setCenterPaymentErrors] = useState({});
   const [documentForms, setDocumentForms] = useState({});
   const [documentInputKeys, setDocumentInputKeys] = useState({});
@@ -356,8 +417,20 @@ function FacturasPage() {
   }, [location.pathname, location.search, scrollToForm]);
 
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => {
+      if (name === 'fechaEmision') {
+        const updated = { ...prev, fechaEmision: value };
+        const previousEmissionMonth = getMonthFromDateInput(prev.fechaEmision);
+        if (!prev.mesServicio || prev.mesServicio === previousEmissionMonth) {
+          updated.mesServicio = getMonthFromDateInput(value);
+        }
+        return updated;
+      }
+
+      return { ...prev, [name]: value };
+    });
   };
 
   const handlePacienteChange = (e) => {
@@ -370,12 +443,12 @@ function FacturasPage() {
         ? pacienteSeleccionado?.centroSalud?._id || ''
         : '';
 
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       paciente: pacienteId,
       obraSocial: obraSocialId,
       centroSalud: centroId,
-    });
+    }));
   };
 
   const resetForm = () => {
@@ -395,6 +468,7 @@ function FacturasPage() {
     };
 
     payload.fechaVencimiento = payload.fechaVencimiento || null;
+    payload.mesServicio = formData.mesServicio || getMonthFromDateInput(formData.fechaEmision) || null;
     payload.observaciones = payload.observaciones ? payload.observaciones.trim() : '';
     payload.obraSocial = payload.obraSocial || null;
     payload.centroSalud = payload.centroSalud || null;
@@ -462,6 +536,7 @@ function FacturasPage() {
       montoTotal: factura.montoTotal,
       fechaEmision: factura.fechaEmision ? new Date(factura.fechaEmision).toISOString().substring(0, 10) : '',
       fechaVencimiento: factura.fechaVencimiento ? new Date(factura.fechaVencimiento).toISOString().substring(0, 10) : '',
+      mesServicio: resolveMesServicio(factura),
       estado,
       observaciones: factura.observaciones || '',
       centroSalud: factura.centroSalud?._id || '',
@@ -536,6 +611,73 @@ function FacturasPage() {
     }));
   };
 
+  const startEditPayment = (facturaId, pago) => {
+    setPaymentEditForms((prev) => ({
+      ...prev,
+      [pago._id]: {
+        facturaId,
+        monto: Number.isFinite(Number(pago.monto)) ? Number(pago.monto).toString() : '',
+        fecha: pago.fecha ? new Date(pago.fecha).toISOString().substring(0, 10) : '',
+        metodo: pago.metodo || '',
+        nota: pago.nota || '',
+      },
+    }));
+  };
+
+  const cancelEditPayment = (pagoId) => {
+    setPaymentEditForms((prev) => {
+      const next = { ...prev };
+      delete next[pagoId];
+      return next;
+    });
+  };
+
+  const handlePaymentEditChange = (pagoId, field, value) => {
+    setPaymentEditForms((prev) => ({
+      ...prev,
+      [pagoId]: {
+        ...prev[pagoId],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSavePaymentEdit = async (pagoId) => {
+    const form = paymentEditForms[pagoId];
+    if (!form) {
+      return;
+    }
+
+    const monto = Number(form.monto);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setPaymentErrors((prev) => ({
+        ...prev,
+        [form.facturaId]: 'Ingrese un monto válido para actualizar el pago.',
+      }));
+      return;
+    }
+
+    try {
+      await facturasService.actualizarPago(form.facturaId, pagoId, {
+        monto,
+        fecha: form.fecha || undefined,
+        metodo: form.metodo || undefined,
+        nota: form.nota || undefined,
+      });
+      cancelEditPayment(pagoId);
+      setPaymentErrors((prev) => ({ ...prev, [form.facturaId]: null }));
+      await fetchFacturas();
+      showSuccess('Pago actualizado correctamente.');
+    } catch (paymentError) {
+      const message = paymentError.response?.data?.error || 'Error al actualizar el pago.';
+      setPaymentErrors((prev) => ({
+        ...prev,
+        [form.facturaId]: message,
+      }));
+      showError(message);
+    }
+  };
+
   const handleCenterPaymentFormChange = (facturaId, field, value) => {
     setCenterPaymentForms((prev) => ({
       ...prev,
@@ -551,6 +693,73 @@ function FacturasPage() {
       ...prev,
       [facturaId]: { ...EMPTY_PAYMENT_FORM },
     }));
+  };
+
+  const startEditCenterPayment = (facturaId, pago) => {
+    setCenterPaymentEditForms((prev) => ({
+      ...prev,
+      [pago._id]: {
+        facturaId,
+        monto: Number.isFinite(Number(pago.monto)) ? Number(pago.monto).toString() : '',
+        fecha: pago.fecha ? new Date(pago.fecha).toISOString().substring(0, 10) : '',
+        metodo: pago.metodo || '',
+        nota: pago.nota || '',
+      },
+    }));
+  };
+
+  const cancelEditCenterPayment = (pagoId) => {
+    setCenterPaymentEditForms((prev) => {
+      const next = { ...prev };
+      delete next[pagoId];
+      return next;
+    });
+  };
+
+  const handleCenterPaymentEditChange = (pagoId, field, value) => {
+    setCenterPaymentEditForms((prev) => ({
+      ...prev,
+      [pagoId]: {
+        ...prev[pagoId],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveCenterPaymentEdit = async (pagoId) => {
+    const form = centerPaymentEditForms[pagoId];
+    if (!form) {
+      return;
+    }
+
+    const monto = Number(form.monto);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setCenterPaymentErrors((prev) => ({
+        ...prev,
+        [form.facturaId]: 'Ingrese un monto válido para actualizar el pago al centro.',
+      }));
+      return;
+    }
+
+    try {
+      await facturasService.actualizarPagoCentro(form.facturaId, pagoId, {
+        monto,
+        fecha: form.fecha || undefined,
+        metodo: form.metodo || undefined,
+        nota: form.nota || undefined,
+      });
+      cancelEditCenterPayment(pagoId);
+      setCenterPaymentErrors((prev) => ({ ...prev, [form.facturaId]: null }));
+      await fetchFacturas();
+      showSuccess('Pago al centro actualizado correctamente.');
+    } catch (paymentError) {
+      const message = paymentError.response?.data?.error || 'Error al actualizar el pago al centro.';
+      setCenterPaymentErrors((prev) => ({
+        ...prev,
+        [form.facturaId]: message,
+      }));
+      showError(message);
+    }
   };
 
   const handleRegisterPayment = async (facturaId) => {
@@ -589,6 +798,7 @@ function FacturasPage() {
   const handleDeletePayment = async (facturaId, pagoId) => {
     try {
       await facturasService.eliminarPago(facturaId, pagoId);
+      cancelEditPayment(pagoId);
       await fetchFacturas();
       showInfo('El pago se eliminó correctamente.');
     } catch (paymentError) {
@@ -637,6 +847,7 @@ function FacturasPage() {
   const handleDeleteCenterPayment = async (facturaId, pagoId) => {
     try {
       await facturasService.eliminarPagoCentro(facturaId, pagoId);
+      cancelEditCenterPayment(pagoId);
       await fetchFacturas();
       showInfo('El pago al centro se eliminó correctamente.');
     } catch (paymentError) {
@@ -743,8 +954,45 @@ function FacturasPage() {
 
   const appliedSearch = useMemo(() => filterSearchTerm.trim().toLowerCase(), [filterSearchTerm]);
 
-  const filteredFacturas = useMemo(() => {
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set();
+    let hasUnassigned = false;
+
+    facturas.forEach((factura) => {
+      const key = resolveMesServicio(factura);
+      if (key && MONTH_KEY_REGEX.test(key)) {
+        monthSet.add(key);
+      } else {
+        hasUnassigned = true;
+      }
+    });
+
+    const sorted = Array.from(monthSet).sort((a, b) => (a > b ? -1 : 1));
+    const options = sorted.map((key) => ({ value: key, label: formatMonthLabel(key) }));
+
+    if (hasUnassigned) {
+      options.push({ value: 'sin-fecha', label: 'Sin mes asignado' });
+    }
+
+    return options;
+  }, [facturas]);
+
+  const facturasByMonth = useMemo(() => {
+    if (monthFilter === 'all') {
+      return facturas;
+    }
+
     return facturas.filter((factura) => {
+      const key = getMonthFilterKey(factura);
+      if (monthFilter === 'sin-fecha') {
+        return key === 'sin-fecha';
+      }
+      return key === monthFilter;
+    });
+  }, [facturas, monthFilter]);
+
+  const filteredFacturas = useMemo(() => {
+    return facturasByMonth.filter((factura) => {
       const estado = normalizeEstado(factura);
       const matchesStatus = (() => {
         if (statusFilter === 'all') return true;
@@ -802,7 +1050,7 @@ function FacturasPage() {
         .map((value) => value.toLowerCase());
       return valuesToSearch.some((value) => value.includes(appliedSearch));
     });
-  }, [facturas, statusFilter, appliedSearch, startDateTime, endDateTime]);
+  }, [facturasByMonth, statusFilter, appliedSearch, startDateTime, endDateTime]);
 
   const deudores = useMemo(() => {
     const acumulado = new Map();
@@ -871,7 +1119,7 @@ function FacturasPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, appliedSearch, startDateTime, endDateTime]);
+  }, [statusFilter, appliedSearch, startDateTime, endDateTime, monthFilter]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -881,8 +1129,8 @@ function FacturasPage() {
 
   const statusCounts = useMemo(() => {
     const counts = {
-      all: facturas.length,
-      vencidas: facturas.filter((factura) => esFacturaVencida(factura)).length,
+      all: facturasByMonth.length,
+      vencidas: facturasByMonth.filter((factura) => esFacturaVencida(factura)).length,
       pendiente: 0,
       presentada: 0,
       observada: 0,
@@ -890,7 +1138,7 @@ function FacturasPage() {
       pagada: 0,
     };
 
-    facturas.forEach((factura) => {
+    facturasByMonth.forEach((factura) => {
       const estado = normalizeEstado(factura);
       if (counts[estado] !== undefined) {
         counts[estado] += 1;
@@ -898,11 +1146,11 @@ function FacturasPage() {
     });
 
     return counts;
-  }, [facturas]);
+  }, [facturasByMonth]);
 
   const saldoPendienteTotal = useMemo(
-    () => facturas.reduce((total, factura) => total + getSaldoPendiente(factura), 0),
-    [facturas],
+    () => facturasByMonth.reduce((total, factura) => total + getSaldoPendiente(factura), 0),
+    [facturasByMonth],
   );
 
   const facturasPendientes = Math.max(statusCounts.all - statusCounts.pagada, 0);
@@ -1121,10 +1369,13 @@ function FacturasPage() {
       }
 
       setExportLoading(true);
+      const mesServicioFilter = monthFilter !== 'all' ? monthFilter : undefined;
+
       const { blob, filename } = await facturasService.exportFacturas({
         startDate: trimmedStartDate || undefined,
         endDate: trimmedEndDate || undefined,
         userId: trimmedUserId || undefined,
+        mesServicio: mesServicioFilter,
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -1316,6 +1567,19 @@ function FacturasPage() {
                 />
               </div>
               <div className="col-md-6 col-lg-4">
+                <label htmlFor="mesServicio" className="form-label">Mes del servicio</label>
+                <input
+                  type="month"
+                  id="mesServicio"
+                  name="mesServicio"
+                  className="form-control"
+                  value={formData.mesServicio}
+                  onChange={handleChange}
+                  placeholder="Seleccioná el mes correspondiente"
+                />
+                <small className="text-muted">Utilizá este campo para indicar el mes real en el que se prestó el servicio.</small>
+              </div>
+              <div className="col-md-6 col-lg-4">
                 <label htmlFor="fechaVencimiento" className="form-label">Fecha de Vencimiento</label>
                 <input
                   type="date"
@@ -1383,6 +1647,22 @@ function FacturasPage() {
                 <button className="btn btn-outline-secondary" type="button" onClick={handleSearchClick}>
                   Buscar
                 </button>
+              </div>
+              <div className="d-flex align-items-stretch" style={{ minWidth: '200px' }}>
+                <label className="visually-hidden" htmlFor="monthFilterSelect">Mes del servicio</label>
+                <select
+                  id="monthFilterSelect"
+                  className="form-select"
+                  value={monthFilter}
+                  onChange={(event) => setMonthFilter(event.target.value)}
+                >
+                  <option value="all">Todos los meses</option>
+                  {availableMonths.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -1526,6 +1806,7 @@ function FacturasPage() {
                   <th>Paciente</th>
                   <th>Monto</th>
                   <th>Emitida</th>
+                  <th>Mes servicio</th>
                   <th>Vence</th>
                   <th>Estado</th>
                   <th>Saldo</th>
@@ -1553,6 +1834,8 @@ function FacturasPage() {
                     const centroTotal = getCentroTotal(factura);
                     const centroPagado = getCentroPagado(factura);
                     const centroSaldo = getCentroSaldoPendiente(factura);
+                    const mesServicioKey = resolveMesServicio(factura);
+                    const mesServicioLabel = formatMonthLabel(mesServicioKey);
                     return (
                       <React.Fragment key={factura._id}>
                         <tr className={factura.pagado ? 'table-success' : ''}>
@@ -1560,6 +1843,7 @@ function FacturasPage() {
                           <td>{factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</td>
                           <td>{formatCurrency(factura.montoTotal)}</td>
                           <td>{formatDate(factura.fechaEmision)}</td>
+                          <td>{mesServicioLabel}</td>
                           <td>
                             {formatDate(factura.fechaVencimiento)}
                             {isVencida && (
@@ -1623,6 +1907,7 @@ function FacturasPage() {
                                   <p className="mb-1"><strong>Observaciones:</strong> {factura.observaciones || '—'}</p>
                                   <p className="mb-1"><strong>Punto de venta:</strong> {puntoVentaDisplay}</p>
                                   <p className="mb-1"><strong>Número de factura:</strong> {numeroFacturaDisplay}</p>
+                                  <p className="mb-1"><strong>Mes del servicio:</strong> {mesServicioLabel}</p>
                                   <p className="mb-1"><strong>Saldo Pendiente:</strong> {formatCurrency(saldoPendiente)}</p>
                                   <p className="mb-1"><strong>Total a centro:</strong> {factura.centroSalud ? formatCurrency(centroTotal) : '—'}</p>
                                   <p className="mb-1"><strong>Pagado al centro:</strong> {factura.centroSalud ? formatCurrency(centroPagado) : '—'}</p>
@@ -1665,23 +1950,104 @@ function FacturasPage() {
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {factura.pagos.map((pago) => (
-                                            <tr key={pago._id}>
-                                              <td>{formatCurrency(pago.monto)}</td>
-                                              <td>{formatDate(pago.fecha)}</td>
-                                              <td>{pago.metodo || '—'}</td>
-                                              <td>{pago.nota || '—'}</td>
-                                              <td className="text-end">
-                                                <button
-                                                  className="btn btn-outline-danger btn-sm"
-                                                  type="button"
-                                                  onClick={() => handleDeletePayment(factura._id, pago._id)}
-                                                >
-                                                  Eliminar
-                                                </button>
-                                              </td>
-                                            </tr>
-                                          ))}
+                                          {factura.pagos.map((pago) => {
+                                            const editForm = paymentEditForms[pago._id];
+                                            return (
+                                              <tr key={pago._id}>
+                                                <td className="w-25">
+                                                  {editForm ? (
+                                                    <input
+                                                      type="number"
+                                                      className="form-control form-control-sm"
+                                                      min="0"
+                                                      step="0.01"
+                                                      value={editForm.monto}
+                                                      onChange={(event) => handlePaymentEditChange(pago._id, 'monto', event.target.value)}
+                                                    />
+                                                  ) : (
+                                                    formatCurrency(pago.monto)
+                                                  )}
+                                                </td>
+                                                <td className="w-25">
+                                                  {editForm ? (
+                                                    <input
+                                                      type="date"
+                                                      className="form-control form-control-sm"
+                                                      value={editForm.fecha}
+                                                      onChange={(event) => handlePaymentEditChange(pago._id, 'fecha', event.target.value)}
+                                                    />
+                                                  ) : (
+                                                    formatDate(pago.fecha)
+                                                  )}
+                                                </td>
+                                                <td>
+                                                  {editForm ? (
+                                                    <select
+                                                      className="form-select form-select-sm"
+                                                      value={editForm.metodo}
+                                                      onChange={(event) => handlePaymentEditChange(pago._id, 'metodo', event.target.value)}
+                                                    >
+                                                      <option value="">Selecciona el método</option>
+                                                      <option value="Efectivo">Efectivo</option>
+                                                      <option value="Transferencia bancaria">Transferencia bancaria</option>
+                                                    </select>
+                                                  ) : (
+                                                    pago.metodo || '—'
+                                                  )}
+                                                </td>
+                                                <td className="w-25">
+                                                  {editForm ? (
+                                                    <input
+                                                      type="text"
+                                                      className="form-control form-control-sm"
+                                                      value={editForm.nota}
+                                                      placeholder="Nota"
+                                                      onChange={(event) => handlePaymentEditChange(pago._id, 'nota', event.target.value)}
+                                                    />
+                                                  ) : (
+                                                    pago.nota || '—'
+                                                  )}
+                                                </td>
+                                                <td className="text-end">
+                                                  {editForm ? (
+                                                    <div className="btn-group btn-group-sm" role="group">
+                                                      <button
+                                                        type="button"
+                                                        className="btn btn-success"
+                                                        onClick={() => handleSavePaymentEdit(pago._id)}
+                                                      >
+                                                        Guardar
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        className="btn btn-outline-secondary"
+                                                        onClick={() => cancelEditPayment(pago._id)}
+                                                      >
+                                                        Cancelar
+                                                      </button>
+                                                    </div>
+                                                  ) : (
+                                                    <div className="btn-group btn-group-sm" role="group">
+                                                      <button
+                                                        className="btn btn-outline-primary"
+                                                        type="button"
+                                                        onClick={() => startEditPayment(factura._id, pago)}
+                                                      >
+                                                        Editar
+                                                      </button>
+                                                      <button
+                                                        className="btn btn-outline-danger"
+                                                        type="button"
+                                                        onClick={() => handleDeletePayment(factura._id, pago._id)}
+                                                      >
+                                                        Eliminar
+                                                      </button>
+                                                    </div>
+                                                  )}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
                                         </tbody>
                                       </table>
                                     </div>
@@ -1693,27 +2059,39 @@ function FacturasPage() {
                                     <h6 className="text-uppercase text-muted">Registrar nuevo pago</h6>
                                     <div className="row g-2">
                                       <div className="col-sm-3">
+                                        <label htmlFor={`nuevoPagoMonto-${factura._id}`} className="form-label form-label-sm text-muted">
+                                          Monto
+                                        </label>
                                         <input
                                           type="number"
                                           min="0"
                                           step="0.01"
                                           className="form-control"
                                           placeholder="Monto"
+                                          id={`nuevoPagoMonto-${factura._id}`}
                                           value={getPaymentForm(factura._id).monto}
                                           onChange={(e) => handlePaymentFormChange(factura._id, 'monto', e.target.value)}
                                         />
                                       </div>
                                       <div className="col-sm-3">
+                                        <label htmlFor={`nuevoPagoFecha-${factura._id}`} className="form-label form-label-sm text-muted">
+                                          Fecha de cobro
+                                        </label>
                                         <input
                                           type="date"
                                           className="form-control"
+                                          id={`nuevoPagoFecha-${factura._id}`}
                                           value={getPaymentForm(factura._id).fecha}
                                           onChange={(e) => handlePaymentFormChange(factura._id, 'fecha', e.target.value)}
                                         />
                                       </div>
                                       <div className="col-sm-3">
+                                        <label htmlFor={`nuevoPagoMetodo-${factura._id}`} className="form-label form-label-sm text-muted">
+                                          Método
+                                        </label>
                                         <select
                                           className="form-select"
+                                          id={`nuevoPagoMetodo-${factura._id}`}
                                           value={getPaymentForm(factura._id).metodo || ''}
                                           onChange={(e) => handlePaymentFormChange(factura._id, 'metodo', e.target.value)}
                                         >
@@ -1723,10 +2101,14 @@ function FacturasPage() {
                                         </select>
                                       </div>
                                       <div className="col-sm-3">
+                                        <label htmlFor={`nuevoPagoNota-${factura._id}`} className="form-label form-label-sm text-muted">
+                                          Nota (opcional)
+                                        </label>
                                         <input
                                           type="text"
                                           className="form-control"
                                           placeholder="Nota"
+                                          id={`nuevoPagoNota-${factura._id}`}
                                           value={getPaymentForm(factura._id).nota}
                                           onChange={(e) => handlePaymentFormChange(factura._id, 'nota', e.target.value)}
                                         />
@@ -1772,23 +2154,104 @@ function FacturasPage() {
                                                 </tr>
                                               </thead>
                                               <tbody>
-                                                {factura.pagosCentro.map((pago) => (
-                                                  <tr key={pago._id}>
-                                                    <td>{formatCurrency(pago.monto)}</td>
-                                                    <td>{formatDate(pago.fecha)}</td>
-                                                    <td>{pago.metodo || '—'}</td>
-                                                    <td>{pago.nota || '—'}</td>
-                                                    <td className="text-end">
-                                                      <button
-                                                        className="btn btn-outline-danger btn-sm"
-                                                        type="button"
-                                                        onClick={() => handleDeleteCenterPayment(factura._id, pago._id)}
-                                                      >
-                                                        Eliminar
-                                                      </button>
-                                                    </td>
-                                                  </tr>
-                                                ))}
+                                                {factura.pagosCentro.map((pago) => {
+                                                  const editForm = centerPaymentEditForms[pago._id];
+                                                  return (
+                                                    <tr key={pago._id}>
+                                                      <td className="w-25">
+                                                        {editForm ? (
+                                                          <input
+                                                            type="number"
+                                                            className="form-control form-control-sm"
+                                                            min="0"
+                                                            step="0.01"
+                                                            value={editForm.monto}
+                                                            onChange={(event) => handleCenterPaymentEditChange(pago._id, 'monto', event.target.value)}
+                                                          />
+                                                        ) : (
+                                                          formatCurrency(pago.monto)
+                                                        )}
+                                                      </td>
+                                                      <td className="w-25">
+                                                        {editForm ? (
+                                                          <input
+                                                            type="date"
+                                                            className="form-control form-control-sm"
+                                                            value={editForm.fecha}
+                                                            onChange={(event) => handleCenterPaymentEditChange(pago._id, 'fecha', event.target.value)}
+                                                          />
+                                                        ) : (
+                                                          formatDate(pago.fecha)
+                                                        )}
+                                                      </td>
+                                                      <td>
+                                                        {editForm ? (
+                                                          <select
+                                                            className="form-select form-select-sm"
+                                                            value={editForm.metodo}
+                                                            onChange={(event) => handleCenterPaymentEditChange(pago._id, 'metodo', event.target.value)}
+                                                          >
+                                                            <option value="">Selecciona el método</option>
+                                                            <option value="Efectivo">Efectivo</option>
+                                                            <option value="Transferencia bancaria">Transferencia bancaria</option>
+                                                          </select>
+                                                        ) : (
+                                                          pago.metodo || '—'
+                                                        )}
+                                                      </td>
+                                                      <td className="w-25">
+                                                        {editForm ? (
+                                                          <input
+                                                            type="text"
+                                                            className="form-control form-control-sm"
+                                                            value={editForm.nota}
+                                                            placeholder="Nota"
+                                                            onChange={(event) => handleCenterPaymentEditChange(pago._id, 'nota', event.target.value)}
+                                                          />
+                                                        ) : (
+                                                          pago.nota || '—'
+                                                        )}
+                                                      </td>
+                                                      <td className="text-end">
+                                                        {editForm ? (
+                                                          <div className="btn-group btn-group-sm" role="group">
+                                                            <button
+                                                              type="button"
+                                                              className="btn btn-success"
+                                                              onClick={() => handleSaveCenterPaymentEdit(pago._id)}
+                                                            >
+                                                              Guardar
+                                                            </button>
+                                                            <button
+                                                              type="button"
+                                                              className="btn btn-outline-secondary"
+                                                              onClick={() => cancelEditCenterPayment(pago._id)}
+                                                            >
+                                                              Cancelar
+                                                            </button>
+                                                          </div>
+                                                        ) : (
+                                                          <div className="btn-group btn-group-sm" role="group">
+                                                            <button
+                                                              className="btn btn-outline-primary"
+                                                              type="button"
+                                                              onClick={() => startEditCenterPayment(factura._id, pago)}
+                                                            >
+                                                              Editar
+                                                            </button>
+                                                            <button
+                                                              className="btn btn-outline-danger"
+                                                              type="button"
+                                                              onClick={() => handleDeleteCenterPayment(factura._id, pago._id)}
+                                                            >
+                                                              Eliminar
+                                                            </button>
+                                                          </div>
+                                                        )}
+                                                      </td>
+                                                    </tr>
+                                                  );
+                                                })}
                                               </tbody>
                                             </table>
                                           </div>
@@ -1799,27 +2262,39 @@ function FacturasPage() {
                                         <div className="mt-3">
                                           <div className="row g-2">
                                             <div className="col-sm-3">
+                                              <label htmlFor={`nuevoPagoCentroMonto-${factura._id}`} className="form-label form-label-sm text-muted">
+                                                Monto
+                                              </label>
                                               <input
                                                 type="number"
                                                 min="0"
                                                 step="0.01"
                                                 className="form-control"
                                                 placeholder="Monto"
+                                                id={`nuevoPagoCentroMonto-${factura._id}`}
                                                 value={getCenterPaymentForm(factura._id).monto}
                                                 onChange={(e) => handleCenterPaymentFormChange(factura._id, 'monto', e.target.value)}
                                               />
                                             </div>
                                             <div className="col-sm-3">
+                                              <label htmlFor={`nuevoPagoCentroFecha-${factura._id}`} className="form-label form-label-sm text-muted">
+                                                Fecha de pago
+                                              </label>
                                               <input
                                                 type="date"
                                                 className="form-control"
+                                                id={`nuevoPagoCentroFecha-${factura._id}`}
                                                 value={getCenterPaymentForm(factura._id).fecha}
                                                 onChange={(e) => handleCenterPaymentFormChange(factura._id, 'fecha', e.target.value)}
                                               />
                                             </div>
                                             <div className="col-sm-3">
+                                              <label htmlFor={`nuevoPagoCentroMetodo-${factura._id}`} className="form-label form-label-sm text-muted">
+                                                Método
+                                              </label>
                                               <select
                                                 className="form-select"
+                                                id={`nuevoPagoCentroMetodo-${factura._id}`}
                                                 value={getCenterPaymentForm(factura._id).metodo || ''}
                                                 onChange={(e) => handleCenterPaymentFormChange(factura._id, 'metodo', e.target.value)}
                                               >
@@ -1829,10 +2304,14 @@ function FacturasPage() {
                                               </select>
                                             </div>
                                             <div className="col-sm-3">
+                                              <label htmlFor={`nuevoPagoCentroNota-${factura._id}`} className="form-label form-label-sm text-muted">
+                                                Nota (opcional)
+                                              </label>
                                               <input
                                                 type="text"
                                                 className="form-control"
                                                 placeholder="Nota"
+                                                id={`nuevoPagoCentroNota-${factura._id}`}
                                                 value={getCenterPaymentForm(factura._id).nota}
                                                 onChange={(e) => handleCenterPaymentFormChange(factura._id, 'nota', e.target.value)}
                                               />
@@ -2004,6 +2483,8 @@ function FacturasPage() {
                   const centroTotal = getCentroTotal(factura);
                   const centroPagado = getCentroPagado(factura);
                   const centroSaldo = getCentroSaldoPendiente(factura);
+                  const mesServicioKey = resolveMesServicio(factura);
+                  const mesServicioLabel = formatMonthLabel(mesServicioKey);
                   const isVencida = esFacturaVencida(factura);
                   const isExpanded = expandedFacturaId === factura._id;
                   return (
@@ -2016,6 +2497,7 @@ function FacturasPage() {
                             <p className="mb-1"><strong>Paciente:</strong> {factura.paciente ? `${factura.paciente.nombre} ${factura.paciente.apellido}` : 'N/A'}</p>
                             <p className="mb-1"><strong>Monto:</strong> {formatCurrency(factura.montoTotal)}</p>
                             <p className="mb-1"><strong>Emitida:</strong> {formatDate(factura.fechaEmision)}</p>
+                            <p className="mb-1"><strong>Mes del servicio:</strong> {mesServicioLabel}</p>
                             <p className="mb-1">
                               <strong>Vence:</strong> {formatDate(factura.fechaVencimiento)}
                               {isVencida && <span className="badge bg-danger ms-2">Vencida</span>}
@@ -2068,6 +2550,7 @@ function FacturasPage() {
                             <h6 className="text-uppercase text-muted">Detalle de facturación</h6>
                             <p className="mb-1"><strong>Punto de venta:</strong> {puntoVentaDisplay}</p>
                             <p className="mb-1"><strong>Número de factura:</strong> {numeroFacturaDisplay}</p>
+                            <p className="mb-1"><strong>Mes del servicio:</strong> {mesServicioLabel}</p>
                             <p className="mb-1"><strong>Monto cobrado:</strong> {formatCurrency(montoCobrado)}</p>
                             <p className="mb-1"><strong>Obra Social:</strong> {factura.obraSocial ? factura.obraSocial.nombre : 'Sin obra social'}</p>
                             <p className="mb-1"><strong>Centro:</strong> {factura.centroSalud ? `${factura.centroSalud.nombre} · Ret. ${factura.centroSalud.porcentajeRetencion}%` : 'Sin centro asociado'}</p>
@@ -2081,24 +2564,93 @@ function FacturasPage() {
                           <h6 className="text-uppercase text-muted">Pagos</h6>
                           {factura.pagos && factura.pagos.length > 0 ? (
                             <ul className="list-group mb-2">
-                              {factura.pagos.map((pago) => (
-                                <li className="list-group-item d-flex justify-content-between align-items-start" key={pago._id}>
-                                  <div>
-                                    <div>{formatCurrency(pago.monto)} • {formatDate(pago.fecha)}</div>
-                                    <small className="text-muted">{pago.metodo || 'Método no especificado'} - {pago.nota || 'Sin nota'}</small>
-                                  </div>
-                                  <button
-                                    className="btn btn-outline-danger btn-sm"
-                                    type="button"
-                                    onClick={() => handleDeletePayment(factura._id, pago._id)}
-                                  >
-                                    Eliminar
-                                  </button>
-                                </li>
-                              ))}
+                              {factura.pagos.map((pago) => {
+                                const editForm = paymentEditForms[pago._id];
+                                return (
+                                  <li className="list-group-item" key={pago._id}>
+                                    {editForm ? (
+                                      <div className="row g-2">
+                                        <div className="col-6">
+                                          <label htmlFor={`editPagoMonto-${pago._id}`} className="form-label form-label-sm text-muted">Monto</label>
+                                          <input
+                                            id={`editPagoMonto-${pago._id}`}
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            className="form-control form-control-sm"
+                                            value={editForm.monto}
+                                            onChange={(event) => handlePaymentEditChange(pago._id, 'monto', event.target.value)}
+                                          />
+                                        </div>
+                                        <div className="col-6">
+                                          <label htmlFor={`editPagoFecha-${pago._id}`} className="form-label form-label-sm text-muted">Fecha</label>
+                                          <input
+                                            id={`editPagoFecha-${pago._id}`}
+                                            type="date"
+                                            className="form-control form-control-sm"
+                                            value={editForm.fecha}
+                                            onChange={(event) => handlePaymentEditChange(pago._id, 'fecha', event.target.value)}
+                                          />
+                                        </div>
+                                        <div className="col-6">
+                                          <label htmlFor={`editPagoMetodo-${pago._id}`} className="form-label form-label-sm text-muted">Método</label>
+                                          <select
+                                            id={`editPagoMetodo-${pago._id}`}
+                                            className="form-select form-select-sm"
+                                            value={editForm.metodo}
+                                            onChange={(event) => handlePaymentEditChange(pago._id, 'metodo', event.target.value)}
+                                          >
+                                            <option value="">Selecciona el método</option>
+                                            <option value="Efectivo">Efectivo</option>
+                                            <option value="Transferencia bancaria">Transferencia bancaria</option>
+                                          </select>
+                                        </div>
+                                        <div className="col-6">
+                                          <label htmlFor={`editPagoNota-${pago._id}`} className="form-label form-label-sm text-muted">Nota</label>
+                                          <input
+                                            id={`editPagoNota-${pago._id}`}
+                                            type="text"
+                                            className="form-control form-control-sm"
+                                            value={editForm.nota}
+                                            onChange={(event) => handlePaymentEditChange(pago._id, 'nota', event.target.value)}
+                                          />
+                                        </div>
+                                        <div className="col-12 d-flex justify-content-end gap-2">
+                                          <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => cancelEditPayment(pago._id)}>
+                                            Cancelar
+                                          </button>
+                                          <button className="btn btn-success btn-sm" type="button" onClick={() => handleSavePaymentEdit(pago._id)}>
+                                            Guardar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="d-flex justify-content-between align-items-start">
+                                        <div>
+                                          <div>{formatCurrency(pago.monto)} • {formatDate(pago.fecha)}</div>
+                                          <small className="text-muted">{pago.metodo || 'Método no especificado'} - {pago.nota || 'Sin nota'}</small>
+                                        </div>
+                                        <div className="btn-group btn-group-sm" role="group">
+                                          <button className="btn btn-outline-primary" type="button" onClick={() => startEditPayment(factura._id, pago)}>
+                                            Editar
+                                          </button>
+                                          <button className="btn btn-outline-danger" type="button" onClick={() => handleDeletePayment(factura._id, pago._id)}>
+                                            Eliminar
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           ) : (
                             <p className="text-muted">Sin pagos registrados.</p>
+                          )}
+                          {paymentErrors[factura._id] && (
+                            <div className="alert alert-danger mt-2 mb-0" role="alert">
+                              {paymentErrors[factura._id]}
+                            </div>
                           )}
                         </div>
 
@@ -2113,24 +2665,93 @@ function FacturasPage() {
                               </p>
                               {factura.pagosCentro && factura.pagosCentro.length > 0 ? (
                                 <ul className="list-group mb-2">
-                                  {factura.pagosCentro.map((pago) => (
-                                    <li className="list-group-item d-flex justify-content-between align-items-start" key={pago._id}>
-                                      <div>
-                                        <div>{formatCurrency(pago.monto)} • {formatDate(pago.fecha)}</div>
-                                        <small className="text-muted">{pago.metodo || 'Método no especificado'} - {pago.nota || 'Sin nota'}</small>
-                                      </div>
-                                      <button
-                                        className="btn btn-outline-danger btn-sm"
-                                        type="button"
-                                        onClick={() => handleDeleteCenterPayment(factura._id, pago._id)}
-                                      >
-                                        Eliminar
-                                      </button>
-                                    </li>
-                                  ))}
+                                  {factura.pagosCentro.map((pago) => {
+                                    const editForm = centerPaymentEditForms[pago._id];
+                                    return (
+                                      <li className="list-group-item" key={pago._id}>
+                                        {editForm ? (
+                                          <div className="row g-2">
+                                            <div className="col-6">
+                                              <label htmlFor={`editPagoCentroMonto-${pago._id}`} className="form-label form-label-sm text-muted">Monto</label>
+                                              <input
+                                                id={`editPagoCentroMonto-${pago._id}`}
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                className="form-control form-control-sm"
+                                                value={editForm.monto}
+                                                onChange={(event) => handleCenterPaymentEditChange(pago._id, 'monto', event.target.value)}
+                                              />
+                                            </div>
+                                            <div className="col-6">
+                                              <label htmlFor={`editPagoCentroFecha-${pago._id}`} className="form-label form-label-sm text-muted">Fecha</label>
+                                              <input
+                                                id={`editPagoCentroFecha-${pago._id}`}
+                                                type="date"
+                                                className="form-control form-control-sm"
+                                                value={editForm.fecha}
+                                                onChange={(event) => handleCenterPaymentEditChange(pago._id, 'fecha', event.target.value)}
+                                              />
+                                            </div>
+                                            <div className="col-6">
+                                              <label htmlFor={`editPagoCentroMetodo-${pago._id}`} className="form-label form-label-sm text-muted">Método</label>
+                                              <select
+                                                id={`editPagoCentroMetodo-${pago._id}`}
+                                                className="form-select form-select-sm"
+                                                value={editForm.metodo}
+                                                onChange={(event) => handleCenterPaymentEditChange(pago._id, 'metodo', event.target.value)}
+                                              >
+                                                <option value="">Selecciona el método</option>
+                                                <option value="Efectivo">Efectivo</option>
+                                                <option value="Transferencia bancaria">Transferencia bancaria</option>
+                                              </select>
+                                            </div>
+                                            <div className="col-6">
+                                              <label htmlFor={`editPagoCentroNota-${pago._id}`} className="form-label form-label-sm text-muted">Nota</label>
+                                              <input
+                                                id={`editPagoCentroNota-${pago._id}`}
+                                                type="text"
+                                                className="form-control form-control-sm"
+                                                value={editForm.nota}
+                                                onChange={(event) => handleCenterPaymentEditChange(pago._id, 'nota', event.target.value)}
+                                              />
+                                            </div>
+                                            <div className="col-12 d-flex justify-content-end gap-2">
+                                              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => cancelEditCenterPayment(pago._id)}>
+                                                Cancelar
+                                              </button>
+                                              <button className="btn btn-success btn-sm" type="button" onClick={() => handleSaveCenterPaymentEdit(pago._id)}>
+                                                Guardar
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="d-flex justify-content-between align-items-start">
+                                            <div>
+                                              <div>{formatCurrency(pago.monto)} • {formatDate(pago.fecha)}</div>
+                                              <small className="text-muted">{pago.metodo || 'Método no especificado'} - {pago.nota || 'Sin nota'}</small>
+                                            </div>
+                                            <div className="btn-group btn-group-sm" role="group">
+                                              <button className="btn btn-outline-primary" type="button" onClick={() => startEditCenterPayment(factura._id, pago)}>
+                                                Editar
+                                              </button>
+                                              <button className="btn btn-outline-danger" type="button" onClick={() => handleDeleteCenterPayment(factura._id, pago._id)}>
+                                                Eliminar
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </li>
+                                    );
+                                  })}
                                 </ul>
                               ) : (
                                 <p className="text-muted">Sin pagos registrados al centro.</p>
+                              )}
+                              {centerPaymentErrors[factura._id] && (
+                                <div className="alert alert-danger mt-2 mb-0" role="alert">
+                                  {centerPaymentErrors[factura._id]}
+                                </div>
                               )}
 
                               <div className="row g-2 mb-2">

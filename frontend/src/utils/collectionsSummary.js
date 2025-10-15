@@ -63,8 +63,18 @@ const normalizeEstado = (factura) => {
   return factura.pagado ? 'pagada' : 'pendiente';
 };
 
+const MONTH_KEY_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 const getMonthKey = (factura) => {
-  const rawDate = factura?.fechaEmision || factura?.fechaVencimiento || factura?.createdAt;
+  if (!factura) {
+    return 'sin-fecha';
+  }
+
+  if (factura.mesServicio && MONTH_KEY_REGEX.test(factura.mesServicio)) {
+    return factura.mesServicio;
+  }
+
+  const rawDate = factura.fechaEmision || factura.fechaVencimiento || factura.createdAt;
 
   if (!rawDate) {
     return 'sin-fecha';

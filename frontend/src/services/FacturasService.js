@@ -32,9 +32,49 @@ const extractFilename = (disposition, fallback = 'documento.pdf') => {
   return match ? decodeURIComponent(match[1]) : fallback;
 };
 
-const getFacturas = async () => {
+const appendMesServicioParam = (params, mesServicio) => {
+  if (mesServicio === undefined || mesServicio === null) {
+    return;
+  }
+
+  const value = String(mesServicio).trim();
+  if (!value) {
+    return;
+  }
+
+  params.append('mesServicio', value);
+};
+
+const buildGetFacturasQuery = (filters = {}) => {
+  const params = new URLSearchParams();
+  appendMesServicioParam(params, filters.mesServicio);
+  return params.toString() ? `?${params.toString()}` : '';
+};
+
+const buildExportFacturasQuery = (filters = {}) => {
+  const params = new URLSearchParams();
+
+  if (filters.startDate) {
+    params.append('startDate', filters.startDate);
+  }
+
+  if (filters.endDate) {
+    params.append('endDate', filters.endDate);
+  }
+
+  if (filters.userId) {
+    params.append('usuarioId', filters.userId);
+  }
+
+  appendMesServicioParam(params, filters.mesServicio);
+
+  return params.toString() ? `?${params.toString()}` : '';
+};
+
+const getFacturas = async (filters = {}) => {
   try {
-    const response = await axios.get(API_URL, getHeaders());
+    const queryString = buildGetFacturasQuery(filters);
+    const response = await axios.get(`${API_URL}${queryString}`, getHeaders());
     return response.data;
   } catch (error) {
     console.error('Error al obtener facturas:', error);
@@ -81,6 +121,16 @@ const registrarPago = async (id, pagoData) => {
   }
 };
 
+const actualizarPago = async (facturaId, pagoId, pagoData) => {
+  try {
+    const response = await axios.patch(`${API_URL}/${facturaId}/pagos/${pagoId}`, pagoData, getHeaders());
+    return response.data;
+  } catch (error) {
+    console.error('Error al actualizar pago:', error);
+    throw error;
+  }
+};
+
 const eliminarPago = async (facturaId, pagoId) => {
   try {
     const response = await axios.delete(`${API_URL}/${facturaId}/pagos/${pagoId}`, getHeaders());
@@ -97,6 +147,16 @@ const registrarPagoCentro = async (id, pagoData) => {
     return response.data;
   } catch (error) {
     console.error('Error al registrar pago al centro:', error);
+    throw error;
+  }
+};
+
+const actualizarPagoCentro = async (facturaId, pagoId, pagoData) => {
+  try {
+    const response = await axios.patch(`${API_URL}/${facturaId}/pagos-centro/${pagoId}`, pagoData, getHeaders());
+    return response.data;
+  } catch (error) {
+    console.error('Error al actualizar pago al centro:', error);
     throw error;
   }
 };
@@ -151,17 +211,7 @@ const downloadDocumento = async (facturaId, documentoId) => {
 
 const exportFacturas = async (filters = {}) => {
   try {
-    const params = new URLSearchParams();
-    if (filters.startDate) {
-      params.append('startDate', filters.startDate);
-    }
-    if (filters.endDate) {
-      params.append('endDate', filters.endDate);
-    }
-    if (filters.userId) {
-      params.append('usuarioId', filters.userId);
-    }
-    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const queryString = buildExportFacturasQuery(filters);
 
     const response = await axios.get(`${API_URL}/export${queryString}`, getHeadersWithConfig({ responseType: 'blob' }));
     const filename = extractFilename(response.headers['content-disposition'], 'facturas.xls');
@@ -182,8 +232,10 @@ export default {
   updateFactura,
   deleteFactura,
   registrarPago,
+  actualizarPago,
   eliminarPago,
   registrarPagoCentro,
+  actualizarPagoCentro,
   eliminarPagoCentro,
   uploadDocumento,
   deleteDocumento,
