@@ -103,21 +103,26 @@ function RegisterPage({ onAuthChange }) {
       <div className="auth-card">
         <div className="auth-card__brand">
           <img src={GestioLogo} alt="Gestio" className="auth-card__brand-logo" />
-          <h2 className="auth-card__brand-title">GESTIO</h2>
+          <h2 className="auth-card__brand-title">
+            <span className="gestio-brand" aria-label="GestioApp">
+              <span className="gestio-brand__strong">GESTIO</span>
+              <span className="gestio-brand__light">APP</span>
+            </span>
+          </h2>
           <p className="auth-card__brand-subtitle">
-            Diseñado para equipos que necesitan centralizar la información clínica y la administración sin perder tiempo.
+            Sumá tu equipo a una plataforma clara para administrar pacientes, turnos y facturación en minutos.
           </p>
           <ul className="auth-card__highlights">
-            <li>Perfiles de pacientes completos y seguros</li>
-            <li>Flujos de alta y seguimiento simplificados</li>
-            <li>Colaboración con tu equipo en tiempo real</li>
+            <li>Registros clínicos seguros y siempre disponibles</li>
+            <li>Onboarding guiado para tu consultorio</li>
+            <li>Integración con recordatorios y cobranzas</li>
           </ul>
         </div>
         <div className="auth-card__form">
           <header>
             <h1 className="auth-card__form-title">Crea tu cuenta</h1>
             <p className="auth-card__form-description">
-              Configura tu acceso para comenzar a utilizar la plataforma y completar tu perfil profesional.
+              Crea tu usuario para comenzar a trabajar con GestioApp y completar tu perfil profesional.
             </p>
           </header>
           {error && <div className="auth-alert">{error}</div>}
