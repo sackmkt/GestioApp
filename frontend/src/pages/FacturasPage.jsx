@@ -105,7 +105,7 @@ const EMPTY_PAYMENT_FORM = {
   nota: '',
 };
 
-const ITEMS_PER_PAGE = 16;
+const ITEMS_PER_PAGE = 10;
 
 const getMontoCobrado = (factura) => {
   if (!factura) {
@@ -304,6 +304,202 @@ const isAllowedDocumentFile = (file) => {
 
 const exceedsMaxDocumentSize = (file) => Boolean(file && file.size > MAX_DOCUMENT_SIZE_BYTES);
 
+function FacturaForm({
+  data,
+  pacientes,
+  obrasSociales,
+  centrosSalud,
+  onChange,
+  onPacienteChange,
+  onSubmit,
+  submitLabel,
+  onCancel,
+  errorMessage,
+  formRef,
+  idPrefix = 'factura',
+  submitButtonClass = 'btn btn-success',
+}) {
+  const values = data || EMPTY_FORM;
+  const fieldId = (name) => `${idPrefix}-${name}`;
+
+  return (
+    <form onSubmit={onSubmit} ref={formRef}>
+      {errorMessage && (
+        <div className="alert alert-danger" role="alert">
+          {errorMessage}
+        </div>
+      )}
+      <div className="row g-3">
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('paciente')} className="form-label">Paciente</label>
+          <select
+            id={fieldId('paciente')}
+            name="paciente"
+            className="form-select"
+            value={values.paciente}
+            onChange={onPacienteChange}
+            required
+          >
+            <option value="">Seleccione Paciente</option>
+            {pacientes.map((paciente) => (
+              <option key={paciente._id} value={paciente._id}>
+                {`${paciente.nombre} ${paciente.apellido}`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('obraSocial')} className="form-label">Obra Social</label>
+          <select
+            id={fieldId('obraSocial')}
+            name="obraSocial"
+            className="form-select"
+            value={values.obraSocial}
+            onChange={onChange}
+          >
+            <option value="">Sin obra social</option>
+            {obrasSociales.map((obra) => (
+              <option key={obra._id} value={obra._id}>{obra.nombre}</option>
+            ))}
+          </select>
+        </div>
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('centroSalud')} className="form-label">Centro de Salud</label>
+          <select
+            id={fieldId('centroSalud')}
+            name="centroSalud"
+            className="form-select"
+            value={values.centroSalud}
+            onChange={onChange}
+          >
+            <option value="">Sin centro asociado</option>
+            {centrosSalud.map((centro) => (
+              <option key={centro._id} value={centro._id}>
+                {centro.nombre} ({centro.porcentajeRetencion}% ret.)
+              </option>
+            ))}
+          </select>
+          <small className="text-muted">Se completa automáticamente si el paciente proviene de un centro.</small>
+        </div>
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('puntoVenta')} className="form-label">Punto de Venta</label>
+          <input
+            type="number"
+            id={fieldId('puntoVenta')}
+            name="puntoVenta"
+            className="form-control"
+            placeholder="Ej. 1"
+            value={values.puntoVenta}
+            onChange={onChange}
+            min="0"
+            required
+          />
+        </div>
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('numeroFactura')} className="form-label">Número de Factura</label>
+          <input
+            type="number"
+            id={fieldId('numeroFactura')}
+            name="numeroFactura"
+            className="form-control"
+            placeholder="Ej. 12345"
+            value={values.numeroFactura}
+            onChange={onChange}
+            required
+          />
+        </div>
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('montoTotal')} className="form-label">Monto Total</label>
+          <input
+            type="number"
+            id={fieldId('montoTotal')}
+            name="montoTotal"
+            className="form-control"
+            placeholder="Ej. 500.50"
+            value={values.montoTotal}
+            onChange={onChange}
+            min="0"
+            step="0.01"
+            required
+          />
+        </div>
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('fechaEmision')} className="form-label">Fecha de Emisión</label>
+          <input
+            type="date"
+            id={fieldId('fechaEmision')}
+            name="fechaEmision"
+            className="form-control"
+            value={values.fechaEmision}
+            onChange={onChange}
+            required
+          />
+        </div>
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('mesServicio')} className="form-label">Mes del servicio</label>
+          <input
+            type="month"
+            id={fieldId('mesServicio')}
+            name="mesServicio"
+            className="form-control"
+            value={values.mesServicio}
+            onChange={onChange}
+            placeholder="Seleccioná el mes correspondiente"
+          />
+          <small className="text-muted">Utilizá este campo para indicar el mes real en el que se prestó el servicio.</small>
+        </div>
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('fechaVencimiento')} className="form-label">Fecha de Vencimiento</label>
+          <input
+            type="date"
+            id={fieldId('fechaVencimiento')}
+            name="fechaVencimiento"
+            className="form-control"
+            value={values.fechaVencimiento}
+            onChange={onChange}
+          />
+        </div>
+        <div className="col-md-6 col-lg-4">
+          <label htmlFor={fieldId('estado')} className="form-label">Estado de Cobranza</label>
+          <select
+            id={fieldId('estado')}
+            name="estado"
+            className="form-select"
+            value={values.estado}
+            onChange={onChange}
+          >
+            {ESTADO_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="col-12">
+          <label htmlFor={fieldId('observaciones')} className="form-label">Observaciones</label>
+          <textarea
+            id={fieldId('observaciones')}
+            name="observaciones"
+            className="form-control"
+            rows="2"
+            placeholder="Notas internas sobre la factura"
+            value={values.observaciones}
+            onChange={onChange}
+          />
+        </div>
+        <div className="col-12 mt-3 d-flex justify-content-end">
+          {onCancel && (
+            <button type="button" className="btn btn-outline-secondary me-2" onClick={onCancel}>
+              Cancelar
+            </button>
+          )}
+          <button type="submit" className={submitButtonClass}>
+            {submitLabel}
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
 function FacturasPage() {
   const { showError, showSuccess, showInfo } = useFeedback();
   const location = useLocation();
@@ -311,13 +507,15 @@ function FacturasPage() {
   const [pacientes, setPacientes] = useState([]);
   const [obrasSociales, setObrasSociales] = useState([]);
   const [centrosSalud, setCentrosSalud] = useState([]);
-  const [formData, setFormData] = useState(() => ({ ...EMPTY_FORM }));
+  const [createFormData, setCreateFormData] = useState(() => ({ ...EMPTY_FORM }));
   const [statusFilter, setStatusFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('all');
   const [error, setError] = useState(null);
+  const [editError, setEditError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSearchTerm, setFilterSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
+  const [editFormData, setEditFormData] = useState(null);
   const [expandedFacturaId, setExpandedFacturaId] = useState(null);
   const [paymentForms, setPaymentForms] = useState({});
   const [paymentEditForms, setPaymentEditForms] = useState({});
@@ -336,13 +534,17 @@ function FacturasPage() {
   const [dateFilter, setDateFilter] = useState('last10Days');
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [currentPage, setCurrentPage] = useState(1);
+  const [isCreateSectionOpen, setIsCreateSectionOpen] = useState(true);
+  const [isListSectionOpen, setIsListSectionOpen] = useState(true);
+  const [showDeudores, setShowDeudores] = useState(false);
   const formRef = useRef(null);
 
   const scrollToForm = useCallback(() => {
+    setIsCreateSectionOpen(true);
     window.requestAnimationFrame(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-  }, []);
+  }, [setIsCreateSectionOpen]);
 
   const fetchFacturas = useCallback(async () => {
     try {
@@ -402,7 +604,7 @@ function FacturasPage() {
     }
 
     setEditingId(null);
-    setFormData((prev) => ({
+    setCreateFormData((prev) => ({
       ...EMPTY_FORM,
       fechaEmision: new Date().toISOString().substring(0, 10),
       centroSalud: prev.centroSalud,
@@ -415,11 +617,9 @@ function FacturasPage() {
     const remaining = params.toString();
     window.history.replaceState({}, '', `${location.pathname}${remaining ? `?${remaining}` : ''}`);
   }, [location.pathname, location.search, scrollToForm]);
-
-
-  const handleChange = (event) => {
+  const handleCreateChange = (event) => {
     const { name, value } = event.target;
-    setFormData((prev) => {
+    setCreateFormData((prev) => {
       if (name === 'fechaEmision') {
         const updated = { ...prev, fechaEmision: value };
         const previousEmissionMonth = getMonthFromDateInput(prev.fechaEmision);
@@ -433,8 +633,8 @@ function FacturasPage() {
     });
   };
 
-  const handlePacienteChange = (e) => {
-    const pacienteId = e.target.value;
+  const handleCreatePacienteChange = (event) => {
+    const pacienteId = event.target.value;
     const pacienteSeleccionado = pacientes.find((p) => p._id === pacienteId);
 
     const obraSocialId = pacienteSeleccionado?.obraSocial?._id || '';
@@ -443,7 +643,7 @@ function FacturasPage() {
         ? pacienteSeleccionado?.centroSalud?._id || ''
         : '';
 
-    setFormData((prev) => ({
+    setCreateFormData((prev) => ({
       ...prev,
       paciente: pacienteId,
       obraSocial: obraSocialId,
@@ -451,48 +651,54 @@ function FacturasPage() {
     }));
   };
 
-  const resetForm = () => {
-    setFormData(() => ({ ...EMPTY_FORM }));
-    setEditingId(null);
+  const resetCreateForm = () => {
+    setCreateFormData(() => ({ ...EMPTY_FORM }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-
+  const buildFacturaPayload = (data) => {
     const payload = {
-      ...formData,
-      puntoVenta: Number(formData.puntoVenta),
-      numeroFactura: Number(formData.numeroFactura),
-      montoTotal: Number(formData.montoTotal),
+      ...data,
+      puntoVenta: Number(data.puntoVenta),
+      numeroFactura: Number(data.numeroFactura),
+      montoTotal: Number(data.montoTotal),
     };
 
     payload.fechaVencimiento = payload.fechaVencimiento || null;
-    payload.mesServicio = formData.mesServicio || getMonthFromDateInput(formData.fechaEmision) || null;
+    payload.mesServicio = data.mesServicio || getMonthFromDateInput(data.fechaEmision) || null;
     payload.observaciones = payload.observaciones ? payload.observaciones.trim() : '';
     payload.obraSocial = payload.obraSocial || null;
     payload.centroSalud = payload.centroSalud || null;
 
+    return payload;
+  };
+
+  const validateFacturaPayload = (payload, onError) => {
     if (!Number.isFinite(payload.puntoVenta) || !Number.isFinite(payload.numeroFactura) || !Number.isFinite(payload.montoTotal)) {
-      setError('El punto de venta, el número de factura y el monto deben ser valores numéricos.');
-      return;
+      onError('El punto de venta, el número de factura y el monto deben ser valores numéricos.');
+      return false;
     }
 
     if (payload.puntoVenta < 0 || payload.numeroFactura < 0) {
-      setError('El punto de venta y el número de factura no pueden ser negativos.');
+      onError('El punto de venta y el número de factura no pueden ser negativos.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleCreateSubmit = async (event) => {
+    event.preventDefault();
+    setError(null);
+
+    const payload = buildFacturaPayload(createFormData);
+    if (!validateFacturaPayload(payload, setError)) {
       return;
     }
 
     try {
-      if (editingId) {
-        await facturasService.updateFactura(editingId, payload);
-        showSuccess('Factura actualizada correctamente.');
-      } else {
-        await facturasService.createFactura(payload);
-        showSuccess('Factura creada correctamente.');
-      }
-
-      resetForm();
+      await facturasService.createFactura(payload);
+      showSuccess('Factura creada correctamente.');
+      resetCreateForm();
       await fetchFacturas();
     } catch (submitError) {
       if (submitError.response && submitError.response.status === 400) {
@@ -501,7 +707,7 @@ function FacturasPage() {
         setError(message);
         showError(message);
       } else {
-        const message = 'Ocurrió un error al intentar crear o actualizar la factura.';
+        const message = 'Ocurrió un error al intentar crear la factura.';
         setError(message);
         showError(message);
       }
@@ -528,7 +734,9 @@ function FacturasPage() {
   const handleEdit = (factura) => {
     const estado = normalizeEstado(factura);
     setEditingId(factura._id);
-    setFormData({
+    setEditError(null);
+    setIsListSectionOpen(true);
+    setEditFormData({
       paciente: factura.paciente?._id || '',
       obraSocial: factura.obraSocial?._id || '',
       puntoVenta: factura.puntoVenta ?? '',
@@ -541,11 +749,83 @@ function FacturasPage() {
       observaciones: factura.observaciones || '',
       centroSalud: factura.centroSalud?._id || '',
     });
-    scrollToForm();
+  };
+
+  const handleEditChange = (event) => {
+    const { name, value } = event.target;
+    setEditFormData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+
+      if (name === 'fechaEmision') {
+        const updated = { ...prev, fechaEmision: value };
+        const previousEmissionMonth = getMonthFromDateInput(prev.fechaEmision);
+        if (!prev.mesServicio || prev.mesServicio === previousEmissionMonth) {
+          updated.mesServicio = getMonthFromDateInput(value);
+        }
+        return updated;
+      }
+
+      return { ...prev, [name]: value };
+    });
+  };
+
+  const handleEditPacienteChange = (event) => {
+    const pacienteId = event.target.value;
+    const pacienteSeleccionado = pacientes.find((p) => p._id === pacienteId);
+
+    const obraSocialId = pacienteSeleccionado?.obraSocial?._id || '';
+    const centroId =
+      pacienteSeleccionado?.tipoAtencion === 'centro'
+        ? pacienteSeleccionado?.centroSalud?._id || ''
+        : '';
+
+    setEditFormData((prev) => (prev ? {
+      ...prev,
+      paciente: pacienteId,
+      obraSocial: obraSocialId,
+      centroSalud: centroId,
+    } : prev));
+  };
+
+  const handleUpdateSubmit = async (event) => {
+    event.preventDefault();
+    if (!editingId || !editFormData) {
+      return;
+    }
+
+    setEditError(null);
+
+    const payload = buildFacturaPayload(editFormData);
+    if (!validateFacturaPayload(payload, setEditError)) {
+      return;
+    }
+
+    try {
+      await facturasService.updateFactura(editingId, payload);
+      showSuccess('Factura actualizada correctamente.');
+      setEditingId(null);
+      setEditFormData(null);
+      await fetchFacturas();
+    } catch (submitError) {
+      if (submitError.response && submitError.response.status === 400) {
+        const message = submitError.response.data?.error
+          || 'Ya existe una factura con el mismo punto de venta y número. Verifique los datos ingresados.';
+        setEditError(message);
+        showError(message);
+      } else {
+        const message = 'Ocurrió un error al intentar actualizar la factura.';
+        setEditError(message);
+        showError(message);
+      }
+    }
   };
 
   const handleCancelEdit = () => {
-    resetForm();
+    setEditingId(null);
+    setEditFormData(null);
+    setEditError(null);
   };
 
   const handleInputChange = (e) => {
@@ -1451,187 +1731,61 @@ function FacturasPage() {
         </div>
       </section>
 
-      <div className="card shadow-sm mb-4">
-        <div className="card-header bg-success text-white">
-          <h2 className="mb-0">Gestión de Facturación</h2>
+      <section className="mb-4">
+        <button
+          type="button"
+          className="btn btn-light border w-100 d-flex justify-content-between align-items-center"
+          onClick={() => setIsCreateSectionOpen((prev) => !prev)}
+          aria-expanded={isCreateSectionOpen}
+          aria-controls="facturas-create-section"
+        >
+          <span className="fw-semibold text-start">Carga de facturas</span>
+          <span className="ms-2" aria-hidden="true">{isCreateSectionOpen ? '▲' : '▼'}</span>
+        </button>
+        <div
+          id="facturas-create-section"
+          className={`collapse mt-3 ${isCreateSectionOpen ? 'show' : ''}`}
+        >
+          <div className="card shadow-sm">
+            <div className="card-header bg-success text-white">
+              <h2 className="mb-0 fs-5">Carga de facturas</h2>
+            </div>
+            <div className="card-body">
+              <FacturaForm
+                data={createFormData}
+                pacientes={pacientes}
+                obrasSociales={obrasSociales}
+                centrosSalud={centrosSalud}
+                onChange={handleCreateChange}
+                onPacienteChange={handleCreatePacienteChange}
+                onSubmit={handleCreateSubmit}
+                submitLabel="Agregar factura"
+                errorMessage={error}
+                formRef={formRef}
+                idPrefix="create"
+              />
+            </div>
+          </div>
         </div>
-        <div className="card-body">
-          {error && (
-            <div className="alert alert-danger" role="alert">
-              {error}
-            </div>
-          )}
-          <form onSubmit={handleSubmit} ref={formRef}>
-            <div className="row g-3">
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="paciente" className="form-label">Paciente</label>
-                <select
-                  id="paciente"
-                  name="paciente"
-                  className="form-select"
-                  value={formData.paciente}
-                  onChange={handlePacienteChange}
-                  required
-                >
-                  <option value="">Seleccione Paciente</option>
-                  {pacientes.map((p) => (
-                    <option key={p._id} value={p._id}>{`${p.nombre} ${p.apellido}`}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="obraSocial" className="form-label">Obra Social</label>
-                <select
-                  id="obraSocial"
-                  name="obraSocial"
-                  className="form-select"
-                  value={formData.obraSocial}
-                  onChange={handleChange}
-                >
-                  <option value="">Sin obra social</option>
-                  {obrasSociales.map((os) => (
-                    <option key={os._id} value={os._id}>{os.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="centroSalud" className="form-label">Centro de Salud</label>
-                <select
-                  id="centroSalud"
-                  name="centroSalud"
-                  className="form-select"
-                  value={formData.centroSalud}
-                  onChange={handleChange}
-                >
-                  <option value="">Sin centro asociado</option>
-                  {centrosSalud.map((centro) => (
-                    <option key={centro._id} value={centro._id}>
-                      {centro.nombre} ({centro.porcentajeRetencion}% ret.)
-                    </option>
-                  ))}
-                </select>
-                <small className="text-muted">Se completa automáticamente si el paciente proviene de un centro.</small>
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="puntoVenta" className="form-label">Punto de Venta</label>
-                <input
-                  type="number"
-                  id="puntoVenta"
-                  name="puntoVenta"
-                  className="form-control"
-                  placeholder="Ej. 1"
-                  value={formData.puntoVenta}
-                  onChange={handleChange}
-                  min="0"
-                  required
-                />
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="numeroFactura" className="form-label">Número de Factura</label>
-                <input
-                  type="number"
-                  id="numeroFactura"
-                  name="numeroFactura"
-                  className="form-control"
-                  placeholder="Ej. 12345"
-                  value={formData.numeroFactura}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="montoTotal" className="form-label">Monto Total</label>
-                <input
-                  type="number"
-                  id="montoTotal"
-                  name="montoTotal"
-                  className="form-control"
-                  placeholder="Ej. 500.50"
-                  value={formData.montoTotal}
-                  onChange={handleChange}
-                  min="0"
-                  step="0.01"
-                  required
-                />
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="fechaEmision" className="form-label">Fecha de Emisión</label>
-                <input
-                  type="date"
-                  id="fechaEmision"
-                  name="fechaEmision"
-                  className="form-control"
-                  value={formData.fechaEmision}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="mesServicio" className="form-label">Mes del servicio</label>
-                <input
-                  type="month"
-                  id="mesServicio"
-                  name="mesServicio"
-                  className="form-control"
-                  value={formData.mesServicio}
-                  onChange={handleChange}
-                  placeholder="Seleccioná el mes correspondiente"
-                />
-                <small className="text-muted">Utilizá este campo para indicar el mes real en el que se prestó el servicio.</small>
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="fechaVencimiento" className="form-label">Fecha de Vencimiento</label>
-                <input
-                  type="date"
-                  id="fechaVencimiento"
-                  name="fechaVencimiento"
-                  className="form-control"
-                  value={formData.fechaVencimiento}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="col-md-6 col-lg-4">
-                <label htmlFor="estado" className="form-label">Estado de Cobranza</label>
-                <select
-                  id="estado"
-                  name="estado"
-                  className="form-select"
-                  value={formData.estado}
-                  onChange={handleChange}
-                >
-                  {ESTADO_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-12">
-                <label htmlFor="observaciones" className="form-label">Observaciones</label>
-                <textarea
-                  id="observaciones"
-                  name="observaciones"
-                  className="form-control"
-                  rows="2"
-                  placeholder="Notas internas sobre la factura"
-                  value={formData.observaciones}
-                  onChange={handleChange}
-                />
-              </div>
-              <div className="col-12 mt-3 d-flex justify-content-end">
-                {editingId && (
-                  <button type="button" className="btn btn-secondary me-2" onClick={handleCancelEdit}>
-                    Cancelar
-                  </button>
-                )}
-                <button type="submit" className="btn btn-success">
-                  {editingId ? 'Actualizar Factura' : 'Agregar Factura'}
-                </button>
-              </div>
-            </div>
-          </form>
-      </div>
-    </div>
-      <div className="card shadow-sm mb-4">
-        <div className="card-header">
+      </section>
+
+      <section className="mb-4">
+        <button
+          type="button"
+          className="btn btn-light border w-100 d-flex justify-content-between align-items-center"
+          onClick={() => setIsListSectionOpen((prev) => !prev)}
+          aria-expanded={isListSectionOpen}
+          aria-controls="facturas-list-section"
+        >
+          <span className="fw-semibold text-start">Listado de facturas</span>
+          <span className="ms-2" aria-hidden="true">{isListSectionOpen ? '▲' : '▼'}</span>
+        </button>
+        <div
+          id="facturas-list-section"
+          className={`collapse mt-3 ${isListSectionOpen ? 'show' : ''}`}
+        >
+          <div className="card shadow-sm">
+            <div className="card-header">
           <div className="d-flex flex-column gap-3">
           <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
             <h4 className="mb-0">Listado de Facturas</h4>
@@ -1775,23 +1929,66 @@ function FacturasPage() {
           {renderStatusTabs()}
         </div>
         <div className="card-body">
-          <div className="mb-4">
-            <h6 className="text-uppercase text-muted fw-semibold mb-2">Pacientes con saldo pendiente</h6>
-            {deudores.length === 0 ? (
-              <p className="text-muted mb-0 small">No hay pacientes con saldo pendiente en el período seleccionado.</p>
-            ) : (
-              <div className="list-group small">
-                {deudores.map((deudor) => (
-                  <div key={deudor.id} className="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                      <div className="fw-semibold">{deudor.nombre}</div>
-                      <span className="text-muted">{deudor.facturas} {deudor.facturas === 1 ? 'factura' : 'facturas'} con saldo</span>
-                    </div>
-                    <span className="badge bg-warning text-dark fs-6">{formatCurrency(deudor.total)}</span>
-                  </div>
-                ))}
+          {editingId && editFormData && (
+            <div className="card border-warning mb-4">
+              <div className="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h3 className="fs-6 mb-0">Modificar factura</h3>
+                <button
+                  type="button"
+                  className="btn-close"
+                  aria-label="Cancelar edición"
+                  onClick={handleCancelEdit}
+                ></button>
               </div>
-            )}
+              <div className="card-body">
+                <FacturaForm
+                  data={editFormData}
+                  pacientes={pacientes}
+                  obrasSociales={obrasSociales}
+                  centrosSalud={centrosSalud}
+                  onChange={handleEditChange}
+                  onPacienteChange={handleEditPacienteChange}
+                  onSubmit={handleUpdateSubmit}
+                  submitLabel="Guardar cambios"
+                  onCancel={handleCancelEdit}
+                  errorMessage={editError}
+                  idPrefix="edit"
+                  submitButtonClass="btn btn-warning"
+                />
+              </div>
+            </div>
+          )}
+          <div className="mb-4">
+            <button
+              type="button"
+              className="btn btn-outline-primary w-100 d-flex justify-content-between align-items-center"
+              onClick={() => setShowDeudores((prev) => !prev)}
+              aria-expanded={showDeudores}
+              aria-controls="deudores-section"
+            >
+              <span className="fw-semibold text-start">Pacientes con saldo pendiente</span>
+              <span className="ms-2" aria-hidden="true">{showDeudores ? '▲' : '▼'}</span>
+            </button>
+            <div
+              id="deudores-section"
+              className={`collapse ${showDeudores ? 'show' : ''} mt-3`}
+            >
+              {deudores.length === 0 ? (
+                <p className="text-muted mb-0 small">No hay pacientes con saldo pendiente en el período seleccionado.</p>
+              ) : (
+                <div className="list-group small">
+                  {deudores.map((deudor) => (
+                    <div key={deudor.id} className="list-group-item d-flex justify-content-between align-items-center">
+                      <div>
+                        <div className="fw-semibold">{deudor.nombre}</div>
+                        <span className="text-muted">{deudor.facturas} {deudor.facturas === 1 ? 'factura' : 'facturas'} con saldo</span>
+                      </div>
+                      <span className="badge bg-warning text-dark fs-6">{formatCurrency(deudor.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {totalFacturas === 0 ? (
@@ -3038,6 +3235,9 @@ function FacturasPage() {
       )}
         </div>
       </div>
+    </div>
+      </section>
+
     </div>
   );
 }
