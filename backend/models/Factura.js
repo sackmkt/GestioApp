@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 
 const ESTADOS_FACTURA = ['pendiente', 'presentada', 'observada', 'pagada_parcial', 'pagada'];
 
+const MES_SERVICIO_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 const facturaSchema = new mongoose.Schema({
   paciente: { type: mongoose.Schema.Types.ObjectId, ref: 'Paciente', required: true },
   obraSocial: { type: mongoose.Schema.Types.ObjectId, ref: 'ObraSocial' },
@@ -11,6 +13,19 @@ const facturaSchema = new mongoose.Schema({
   montoTotal: { type: Number, required: true, min: 0 },
   fechaEmision: { type: Date, required: true },
   fechaVencimiento: { type: Date },
+  mesServicio: {
+    type: String,
+    default: null,
+    validate: {
+      validator(value) {
+        if (value === null || value === undefined || value === '') {
+          return true;
+        }
+        return MES_SERVICIO_REGEX.test(value);
+      },
+      message: 'El mes de servicio debe tener el formato AAAA-MM.',
+    },
+  },
   estado: { type: String, enum: ESTADOS_FACTURA, default: 'pendiente' },
   observaciones: { type: String, trim: true },
   pagos: [{

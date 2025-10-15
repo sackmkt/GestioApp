@@ -24,6 +24,8 @@ const ESTADO_LABELS = {
   pagada: 'Pagada',
 };
 
+const MONTH_KEY_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 const ESTADO_COLOR_MAP = {
   pendiente: { background: 'rgba(255, 193, 7, 0.6)', border: 'rgba(255, 193, 7, 1)' },
   presentada: { background: 'rgba(23, 162, 184, 0.6)', border: 'rgba(23, 162, 184, 1)' },
@@ -571,31 +573,57 @@ function DashboardPage({ currentUser }) {
 
     const monthlyData = {};
     const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-    filteredFacturas.forEach(f => {
-      const date = new Date(f.fechaEmision);
-      const month = date.getMonth();
-      const year = date.getFullYear();
-      const key = `${monthNames[month]} ${year}`;
+
+    const formatMonthKey = (key) => {
+      if (!key || key === 'sin-fecha') {
+        return 'Sin fecha';
+      }
+      const [yearStr, monthStr] = key.split('-');
+      const monthIndex = Number(monthStr) - 1;
+      const year = Number(yearStr);
+      if (!Number.isFinite(monthIndex) || !Number.isFinite(year) || monthIndex < 0 || monthIndex > 11) {
+        return key;
+      }
+      return `${monthNames[monthIndex]} ${year}`;
+    };
+
+    filteredFacturas.forEach((factura) => {
+      let key = null;
+      if (factura.mesServicio && MONTH_KEY_REGEX.test(factura.mesServicio)) {
+        key = factura.mesServicio;
+      } else {
+        const fallbackDate = factura.fechaEmision || factura.fechaVencimiento || factura.createdAt;
+        if (!fallbackDate) {
+          return;
+        }
+        const parsed = new Date(fallbackDate);
+        if (Number.isNaN(parsed.getTime())) {
+          return;
+        }
+        key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}`;
+      }
+
       if (!monthlyData[key]) {
         monthlyData[key] = 0;
       }
-      monthlyData[key] += f.montoTotal;
+      monthlyData[key] += factura.montoTotal;
     });
 
-    const sortedMonths = Object.keys(monthlyData).sort((a, b) => new Date(a.replace(/(\w{3})\s(\d{4})/, '1 $1 $2')) - new Date(b.replace(/(\w{3})\s(\d{4})/, '1 $1 $2')));
+    const sortedMonthKeys = Object.keys(monthlyData).sort();
     const monthlyBarChartData = {
-      labels: sortedMonths,
+      labels: sortedMonthKeys.map((key) => formatMonthKey(key)),
       datasets: [{
         label: 'Facturación Mensual',
-        data: sortedMonths.map(month => monthlyData[month]),
+        data: sortedMonthKeys.map((key) => monthlyData[key]),
         backgroundColor: 'rgba(23, 162, 184, 0.6)',
         borderColor: 'rgba(23, 162, 184, 1)',
         borderWidth: 1,
       }],
     };
-    const monthlyEntries = sortedMonths.map((label) => ({
-      label,
-      total: monthlyData[label],
+    const monthlyEntries = sortedMonthKeys.map((key) => ({
+      key,
+      label: formatMonthKey(key),
+      total: monthlyData[key],
     }));
     const lastMonthEntry = monthlyEntries.length > 0 ? monthlyEntries[monthlyEntries.length - 1] : null;
     const bestMonthEntry = monthlyEntries.reduce((best, entry) => {
