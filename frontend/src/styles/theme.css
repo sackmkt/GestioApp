@@ -318,15 +318,19 @@ main:focus {
   top: calc(100% + 0.65rem);
   left: 50%;
   transform: translate(-50%, -10px);
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: var(--gestio-radius-lg);
-  border: 1px solid color-mix(in srgb, var(--gestio-border) 70%, transparent);
-  box-shadow: 0 20px 45px -25px rgba(15, 23, 42, 0.5);
-  padding: 0.6rem;
-  min-width: 12rem;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  padding: 0.35rem 0;
+  min-width: 11rem;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  align-items: flex-start;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  text-align: left;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -342,20 +346,24 @@ main:focus {
 }
 
 .gestio-navbar__dropdown-item {
-  border-radius: var(--gestio-radius-pill);
-  padding: 0.45rem 0.75rem;
+  border-radius: 0;
+  padding: 0.35rem 0;
   font-weight: 500;
-  color: var(--gestio-text-muted);
+  color: var(--gestio-text-primary);
   display: block;
+  width: 100%;
   text-decoration: none;
-  transition: background-color var(--gestio-transition-base), color var(--gestio-transition-base);
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+  transition: color var(--gestio-transition-base);
 }
 
 .gestio-navbar__dropdown-item.is-active,
 .gestio-navbar__dropdown-item:focus-visible,
 .gestio-navbar__dropdown-item:hover {
   color: var(--gestio-primary);
-  background: color-mix(in srgb, var(--gestio-primary) 12%, transparent);
+  background: transparent;
 }
 
 .gestio-navbar__actions {
@@ -960,8 +968,8 @@ footer.gestio-footer a {
   }
 
   .gestio-navbar__dropdown-item {
-    padding: 0.5rem 0.75rem;
-    border-radius: var(--gestio-radius-md);
+    padding: 0.4rem 0;
+    border-radius: 0;
   }
 
   .gestio-navbar__actions {
