@@ -100,107 +100,98 @@ function RegisterPage({ onAuthChange }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-card__brand">
-          <img src={GestioLogo} alt="Gestio" className="auth-card__brand-logo" />
-          <h2 className="auth-card__brand-title">
-            <span className="gestio-brand" aria-label="GestioApp">
-              <span className="gestio-brand__strong">GESTIO</span>
-              <span className="gestio-brand__light">APP</span>
-            </span>
-          </h2>
-          <p className="auth-card__brand-subtitle">
-            Sumá tu equipo a una plataforma clara para administrar pacientes, turnos y facturación en minutos.
-          </p>
-          <ul className="auth-card__highlights">
-            <li>Registros clínicos seguros y siempre disponibles</li>
-            <li>Onboarding guiado para tu consultorio</li>
-            <li>Integración con recordatorios y cobranzas</li>
-          </ul>
-        </div>
-        <div className="auth-card__form">
-          <header>
-            <h1 className="auth-card__form-title">Crea tu cuenta</h1>
-            <p className="auth-card__form-description">
-              Crea tu usuario para comenzar a trabajar con GestioApp y completar tu perfil profesional.
-            </p>
-          </header>
-          {error && <div className="auth-alert">{error}</div>}
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <div className="auth-form-group">
-              <label htmlFor="registerUsername">Nombre de usuario</label>
-              <input
-                id="registerUsername"
-                type="text"
-                name="username"
-                value={formData.username}
-                onChange={handleChange}
-                className="auth-input"
-                autoComplete="username"
-                required
-              />
-            </div>
-            <div className="auth-form-group">
-              <label htmlFor="registerEmail">Correo electrónico</label>
-              <input
-                id="registerEmail"
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className="auth-input"
-                autoComplete="email"
-                required
-              />
-            </div>
-            <div className="auth-form-group">
-              <label htmlFor="registerPassword">Contraseña</label>
-              <input
-                id="registerPassword"
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className="auth-input"
-                autoComplete="new-password"
-                required
-              />
-            </div>
-            <div className="auth-form-group">
-              <label htmlFor="registerConfirm">Confirmar contraseña</label>
-              <input
-                id="registerConfirm"
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className="auth-input"
-                autoComplete="new-password"
-                required
-              />
-            </div>
-            <button type="submit" className="auth-submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creando cuenta…' : 'Registrarse'}
-            </button>
-          </form>
-          <div className="auth-divider">
-            <span>O regístrate con</span>
+      <div className="auth-panel">
+        <div className="auth-panel__header">
+          <img src={GestioLogo} alt="Gestio" className="auth-panel__logo" />
+          <div>
+            <h1 className="auth-panel__title">
+              <span className="gestio-brand" aria-label="GestioApp">
+                <span className="gestio-brand__strong">GESTIO</span>
+                <span className="gestio-brand__light">APP</span>
+              </span>
+            </h1>
+            <p className="auth-panel__subtitle">Sumate a una plataforma enfocada en lo esencial para tu consultorio.</p>
           </div>
-          <div className={`auth-social ${isSubmitting ? 'auth-social--disabled' : ''}`}>
-            <GoogleAuthButton
-              onCredential={handleGoogleCredential}
-              onError={handleGoogleError}
-              text="signup_with"
-              disabled={isSubmitting}
+        </div>
+        <div className="auth-panel__body">
+          <h2 className="auth-panel__heading">Crea tu cuenta</h2>
+          <p className="auth-panel__description">Completá tus datos para comenzar a utilizar GestioApp.</p>
+        </div>
+        {error && <div className="auth-alert">{error}</div>}
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <div className="auth-form-group">
+            <label htmlFor="registerUsername">Nombre de usuario</label>
+            <input
+              id="registerUsername"
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              className="auth-input"
+              autoComplete="username"
+              required
             />
           </div>
-          <p className="auth-switch">
-            ¿Ya tienes una cuenta?{' '}
-            <NavLink to="/login" className="auth-link">
-              Inicia sesión aquí
-            </NavLink>
-          </p>
+          <div className="auth-form-group">
+            <label htmlFor="registerEmail">Correo electrónico</label>
+            <input
+              id="registerEmail"
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              className="auth-input"
+              autoComplete="email"
+              required
+            />
+          </div>
+          <div className="auth-form-group">
+            <label htmlFor="registerPassword">Contraseña</label>
+            <input
+              id="registerPassword"
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              className="auth-input"
+              autoComplete="new-password"
+              required
+            />
+          </div>
+          <div className="auth-form-group">
+            <label htmlFor="registerConfirm">Confirmar contraseña</label>
+            <input
+              id="registerConfirm"
+              type="password"
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              className="auth-input"
+              autoComplete="new-password"
+              required
+            />
+          </div>
+          <button type="submit" className="auth-submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Creando cuenta…' : 'Registrarse'}
+          </button>
+        </form>
+        <div className="auth-divider">
+          <span>O regístrate con</span>
         </div>
+        <div className={`auth-social ${isSubmitting ? 'auth-social--disabled' : ''}`}>
+          <GoogleAuthButton
+            onCredential={handleGoogleCredential}
+            onError={handleGoogleError}
+            text="signup_with"
+            disabled={isSubmitting}
+          />
+        </div>
+        <p className="auth-switch">
+          ¿Ya tienes una cuenta?{' '}
+          <NavLink to="/login" className="auth-link">
+            Inicia sesión aquí
+          </NavLink>
+        </p>
       </div>
     </div>
   );

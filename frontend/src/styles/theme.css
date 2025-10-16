@@ -182,27 +182,72 @@ main:focus {
   color: var(--gestio-text-muted);
   font-weight: 500;
   position: relative;
-  transition: color var(--gestio-transition-base), transform var(--gestio-transition-base);
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--gestio-radius-pill);
+  border: 1px solid transparent;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition:
+    color var(--gestio-transition-base),
+    background-color var(--gestio-transition-base),
+    border-color var(--gestio-transition-base),
+    box-shadow var(--gestio-transition-base);
 }
 
 .gestio-navbar .nav-link::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: -0.35rem;
-  width: 100%;
-  height: 2px;
-  background-color: var(--gestio-primary);
-  transform: scaleX(0);
-  transform-origin: center;
-  transition: transform var(--gestio-transition-base);
+  display: none;
 }
 
 .gestio-navbar .nav-link.active,
 .gestio-navbar .nav-link:hover,
 .gestio-navbar .nav-link:focus-visible {
   color: var(--gestio-primary);
-  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--gestio-primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--gestio-primary) 24%, transparent);
+  box-shadow: 0 16px 24px -22px rgba(37, 99, 235, 0.55);
+}
+
+.gestio-navbar .navbar-collapse {
+  flex-grow: 1;
+}
+
+.gestio-navlist {
+  gap: 0.5rem;
+}
+
+.gestio-navlist .nav-item {
+  display: flex;
+}
+
+.gestio-navlist .nav-link,
+.gestio-navlist .dropdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.gestio-navbar .dropdown-menu {
+  border-radius: var(--gestio-radius-md);
+  border: 1px solid var(--gestio-border);
+  box-shadow: var(--gestio-shadow-soft);
+  padding: 0.65rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+}
+
+.gestio-navbar .dropdown-item {
+  border-radius: var(--gestio-radius-pill);
+  padding: 0.45rem 0.75rem;
+  font-weight: 500;
+  color: var(--gestio-text-muted);
+  transition: background-color var(--gestio-transition-base), color var(--gestio-transition-base);
+}
+
+.gestio-navbar .dropdown-item.active,
+.gestio-navbar .dropdown-item:focus,
+.gestio-navbar .dropdown-item:hover {
+  color: var(--gestio-primary);
+  background: color-mix(in srgb, var(--gestio-primary) 12%, transparent);
 }
 
 .dashboard-root {
@@ -250,24 +295,21 @@ main:focus {
   height: 1.1rem;
 }
 
-.gestio-navbar .nav-link.active::after,
-.gestio-navbar .nav-link:hover::after,
-.gestio-navbar .nav-link:focus-visible::after {
-  transform: scaleX(1);
-}
-
 .gestio-main {
   background: transparent;
 }
 
-.gestio-main .gestio-content {
-  background: var(--gestio-surface-alt);
+.gestio-shell {
+  background: rgba(255, 255, 255, 0.88);
   border-radius: var(--gestio-radius-lg);
-  padding: 2.5rem;
-  box-shadow: var(--gestio-card-shadow);
-  backdrop-filter: blur(18px);
-  border: var(--gestio-border-width) solid var(--gestio-border-strong);
-  transition: background-color var(--gestio-transition-base), box-shadow var(--gestio-transition-base), border-color var(--gestio-transition-base);
+  padding: clamp(1.5rem, 4vw, 2.25rem);
+  box-shadow: var(--gestio-shadow-soft);
+  backdrop-filter: blur(16px);
+  border: var(--gestio-border-width) solid color-mix(in srgb, var(--gestio-border) 75%, transparent);
+  transition:
+    background-color var(--gestio-transition-base),
+    box-shadow var(--gestio-transition-base),
+    border-color var(--gestio-transition-base);
 }
 
 .centros-list-mobile {
@@ -618,6 +660,22 @@ footer.gestio-footer a {
 }
 
 @media (min-width: 992px) {
+  .gestio-navbar .navbar-collapse {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+  }
+
+  .gestio-navlist {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .gestio-navlist .nav-item {
+    flex: 0 0 auto;
+  }
+
   .gestio-page__header {
     flex-direction: row;
     justify-content: space-between;
@@ -645,13 +703,23 @@ footer.gestio-footer a {
     max-width: 100%;
   }
 
+  .gestio-navlist {
+    gap: 0.75rem;
+  }
+
+  .gestio-navlist .nav-link,
+  .gestio-navlist .dropdown-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+
   .gestio-page.container {
     padding-left: clamp(1.25rem, 4vw, 2.25rem);
     padding-right: clamp(1.25rem, 4vw, 2.25rem);
   }
 
-  .gestio-main .gestio-content {
-    padding: clamp(2rem, 5vw, 2.5rem);
+  .gestio-shell {
+    padding: clamp(1.75rem, 5vw, 2.25rem);
   }
 }
 
@@ -668,8 +736,8 @@ footer.gestio-footer a {
     padding-right: clamp(1.1rem, 5vw, 1.6rem);
   }
 
-  .gestio-main .gestio-content {
-    padding: 1.75rem;
+  .gestio-shell {
+    padding: clamp(1.4rem, 6vw, 1.75rem);
   }
 
   .gestio-page {
@@ -772,10 +840,10 @@ footer.gestio-footer a {
     padding-right: 0.75rem;
   }
 
-  .gestio-main .gestio-content {
-    padding: clamp(1.1rem, 5vw, 1.3rem);
+  .gestio-shell {
+    padding: clamp(1.1rem, 5vw, 1.35rem);
     border-radius: var(--gestio-radius-md);
-    box-shadow: 0 24px 48px -30px rgba(15, 23, 42, 0.55);
+    box-shadow: 0 24px 48px -30px rgba(15, 23, 42, 0.45);
   }
 
   .gestio-page .row {
