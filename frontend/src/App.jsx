@@ -29,6 +29,7 @@ const ForgotPasswordPage = lazyWithPreload(() => import('./pages/ForgotPasswordP
 const ResetPasswordPage = lazyWithPreload(() => import('./pages/ResetPasswordPage'));
 const CompleteProfilePage = lazyWithPreload(() => import('./pages/CompleteProfilePage'));
 const ProfilePage = lazyWithPreload(() => import('./pages/ProfilePage'));
+const AIAssistantPage = lazyWithPreload(() => import('./pages/AIAssistantPage'));
 
 const SuspenseFallback = (
   <div className="d-flex justify-content-center py-5" aria-live="polite" aria-busy="true">
@@ -78,6 +79,9 @@ const resolveSectionFromPath = (pathname) => {
   if (pathname.startsWith('/centros-salud')) {
     return 'centrosSalud';
   }
+  if (pathname.startsWith('/asistente-ia')) {
+    return 'asistenteIA';
+  }
   if (pathname.startsWith('/finanzas/cobranzas')) {
     return 'cobranzas';
   }
@@ -100,6 +104,7 @@ const NAVIGATION_ITEMS = [
   { to: '/turnos', label: 'Agenda' },
   { to: '/obras-sociales', label: 'Obras Sociales' },
   { to: '/facturas', label: 'Facturación' },
+  { to: '/asistente-ia', label: 'Asistente IA' },
   {
     label: 'Finanzas',
     key: 'finanzas',
@@ -472,6 +477,7 @@ function App() {
       TurnosPage.preload?.();
       CobranzasPage.preload?.();
       PagosCentrosPage.preload?.();
+      AIAssistantPage.preload?.();
     };
 
     if (typeof window.requestIdleCallback === 'function') {
@@ -595,6 +601,7 @@ function App() {
                     <Route path="/turnos" element={<TurnosPage />} />
                     <Route path="/centros-salud" element={<CentrosSaludPage />} />
                     <Route path="/facturas" element={<FacturasPage />} />
+                    <Route path="/asistente-ia" element={<AIAssistantPage currentUser={currentUser} />} />
                     <Route path="/finanzas/cobranzas" element={<CobranzasPage />} />
                     <Route path="/finanzas/pagos-centros" element={<PagosCentrosPage />} />
                     <Route path="/dashboard" element={<DashboardPage currentUser={currentUser} />} />

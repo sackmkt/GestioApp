@@ -15,6 +15,7 @@ const facturasRoutes = require('./Routes/facturas');
 const turnosRoutes = require('./Routes/turnos');
 const userRoutes = require('./Routes/userRoutes');
 const centrosSaludRoutes = require('./Routes/centrosSalud');
+const aiRoutes = require('./Routes/ai');
 
 dotenv.config();
 
@@ -63,6 +64,7 @@ app.use('/api/centros-salud', centrosSaludRoutes);
 app.use('/api/facturas', facturasRoutes);
 app.use('/api/turnos', turnosRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/ai', aiRoutes);
 
 const frontendDistPath = path.resolve(__dirname, '..', 'frontend', 'dist');
 const frontendIndexPath = path.join(frontendDistPath, 'index.html');
