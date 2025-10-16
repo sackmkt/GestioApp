@@ -71,79 +71,84 @@ function LoginPage({ onAuthChange }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-panel">
-        <div className="auth-panel__header">
-          <img src={GestioLogo} alt="Gestio" className="auth-panel__logo" />
-          <div>
-            <h1 className="auth-panel__title">
-              <span className="gestio-brand" aria-label="GestioApp">
-                <span className="gestio-brand__strong">GESTIO</span>
-                <span className="gestio-brand__light">APP</span>
-              </span>
-            </h1>
-            <p className="auth-panel__subtitle">
-              Tu agenda, pacientes y finanzas en un espacio claro y moderno.
+      <div className="auth-layout">
+        <section className="auth-intro" aria-label="Descripción de GestioApp">
+          <img src={GestioLogo} alt="Gestio" className="auth-intro__logo" />
+          <h1 className="auth-intro__brand">
+            <span className="gestio-brand" aria-label="GestioApp">
+              <span className="gestio-brand__strong">GESTIO</span>
+              <span className="gestio-brand__light">APP</span>
+            </span>
+          </h1>
+          <p className="auth-intro__tagline">Plataforma profesional para ordenar tu práctica de salud.</p>
+          <ul className="auth-intro__list">
+            <li>Agenda sincronizada con recordatorios inteligentes.</li>
+            <li>Historias clínicas accesibles y seguras.</li>
+            <li>Indicadores financieros claros en tiempo real.</li>
+          </ul>
+        </section>
+        <div className="auth-card">
+          <header className="auth-card__header">
+            <h2 className="auth-card__title">Inicia sesión</h2>
+            <p className="auth-card__subtitle">
+              Accede con tus credenciales para continuar gestionando tu consultorio.
             </p>
+          </header>
+          {error && <div className="auth-alert">{error}</div>}
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <div className="auth-form-group">
+              <label htmlFor="loginUsername">Nombre de usuario</label>
+              <input
+                id="loginUsername"
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                className="auth-input"
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div className="auth-form-group">
+              <label htmlFor="loginPassword">Contraseña</label>
+              <input
+                id="loginPassword"
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="auth-input"
+                autoComplete="current-password"
+                required
+              />
+            </div>
+            <div className="auth-links auth-links--align-end">
+              <NavLink to="/forgot-password" className="auth-link">
+                ¿Olvidaste tu contraseña?
+              </NavLink>
+            </div>
+            <button type="submit" className="auth-submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Ingresando…' : 'Acceder'}
+            </button>
+          </form>
+          <div className="auth-divider">
+            <span>O continúa con</span>
           </div>
-        </div>
-        <div className="auth-panel__body">
-          <h2 className="auth-panel__heading">Inicia sesión</h2>
-          <p className="auth-panel__description">Ingresa con tus credenciales para continuar gestionando tu consultorio.</p>
-        </div>
-        {error && <div className="auth-alert">{error}</div>}
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="auth-form-group">
-            <label htmlFor="loginUsername">Nombre de usuario</label>
-            <input
-              id="loginUsername"
-              type="text"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              className="auth-input"
-              autoComplete="username"
-              required
+          <div className={`auth-social ${isSubmitting ? 'auth-social--disabled' : ''}`}>
+            <GoogleAuthButton
+              onCredential={handleGoogleCredential}
+              onError={handleGoogleError}
+              text="signin_with"
+              disabled={isSubmitting}
             />
           </div>
-          <div className="auth-form-group">
-            <label htmlFor="loginPassword">Contraseña</label>
-            <input
-              id="loginPassword"
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="auth-input"
-              autoComplete="current-password"
-              required
-            />
-          </div>
-          <div className="auth-links auth-links--align-end">
-            <NavLink to="/forgot-password" className="auth-link">
-              ¿Olvidaste tu contraseña?
+          <p className="auth-switch">
+            ¿No tienes una cuenta?{' '}
+            <NavLink to="/register" className="auth-link">
+              Regístrate aquí
             </NavLink>
-          </div>
-          <button type="submit" className="auth-submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Ingresando…' : 'Acceder'}
-          </button>
-        </form>
-        <div className="auth-divider">
-          <span>O continúa con</span>
+          </p>
         </div>
-        <div className={`auth-social ${isSubmitting ? 'auth-social--disabled' : ''}`}>
-          <GoogleAuthButton
-            onCredential={handleGoogleCredential}
-            onError={handleGoogleError}
-            text="signin_with"
-            disabled={isSubmitting}
-          />
-        </div>
-        <p className="auth-switch">
-          ¿No tienes una cuenta?{' '}
-          <NavLink to="/register" className="auth-link">
-            Regístrate aquí
-          </NavLink>
-        </p>
       </div>
     </div>
   );
