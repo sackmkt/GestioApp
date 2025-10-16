@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { FaPaperPlane, FaRobot, FaUser, FaInfoCircle, FaLightbulb } from 'react-icons/fa';
 import aiAssistantService from '../services/AIAssistantService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
+import '../styles/ai-assistant.css';
 
 const SUGGESTED_QUESTIONS = [
   '¿Cómo está el estado de mis facturas y qué deudas tengo pendientes?',
@@ -158,117 +159,96 @@ function AIAssistantPage({ currentUser }) {
   );
 
   return (
-    <div className="row justify-content-center">
-      <div className="col-12 col-lg-10 col-xl-8">
-        <div className="card shadow-sm border-0">
-          <div className="card-header bg-white border-0 pb-0">
-            <div className="d-flex align-items-start gap-3">
-              <div className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style={{ width: '48px', height: '48px' }}>
-                <FaRobot size={22} />
-              </div>
-              <div>
-                <h2 className="h4 fw-bold mb-1">Asistente inteligente</h2>
-                <p className="text-muted mb-2">
-                  Consulta en lenguaje natural por pacientes, turnos, facturación, obras sociales y más. GestioBot prepara las respuestas con los datos más recientes de tu cuenta.
-                </p>
-                <div className="alert alert-info d-flex align-items-center gap-2 py-2 px-3 mb-0">
-                  <FaInfoCircle />
-                  <small>
-                    Las respuestas se basan en la información registrada en GestioApp. Si falta un dato, el asistente te indicará cómo completarlo.
-                    {professionalName ? ` ¡Vamos, ${professionalName}!` : ''}
-                  </small>
-                </div>
-              </div>
-            </div>
+    <div className="ai-assistant-page">
+      <div className="ai-assistant-shell" role="main">
+        <header className="ai-assistant-header">
+          <div className="ai-assistant-header__icon" aria-hidden="true">
+            <FaRobot size={26} />
           </div>
-          <div className="card-body pt-4 d-flex flex-column" style={{ minHeight: '520px' }}>
-            <div className="mb-4">
-              <div className="d-flex align-items-center gap-2 text-muted mb-2">
-                <FaLightbulb />
-                <span className="fw-semibold">Preguntas sugeridas</span>
-              </div>
-              <div className="d-flex flex-wrap gap-2">
-                {SUGGESTED_QUESTIONS.map((question) => (
-                  <button
-                    key={question}
-                    type="button"
-                    className="btn btn-sm btn-outline-primary"
-                    onClick={() => handleSuggestionClick(question)}
-                    disabled={isSending}
-                  >
-                    {question}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex-grow-1 overflow-auto pe-1" style={{ maxHeight: '420px' }}>
-              <div className="d-flex flex-column gap-3">
-                {messages.map((message) => {
-                  const isUser = message.role === 'user';
-                  return (
-                    <div
-                      key={message.id}
-                      className={`d-flex ${isUser ? 'justify-content-end' : 'justify-content-start'}`}
-                      aria-live="polite"
-                    >
-                      <div className={`d-flex align-items-start gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
-                        <div
-                          className={`rounded-circle d-flex align-items-center justify-content-center ${
-                            isUser ? 'bg-primary text-white' : 'bg-light text-primary'
-                          }`}
-                          style={{ width: '40px', height: '40px' }}
-                        >
-                          {isUser ? <FaUser /> : <FaRobot />}
-                        </div>
-                        <div
-                          className={`rounded-4 shadow-sm px-3 py-2 ${
-                            isUser ? 'bg-primary text-white' : 'bg-white'
-                          }`}
-                          style={{ maxWidth: '540px' }}
-                        >
-                          <div className={`small mb-1 ${isUser ? 'text-white-50' : 'text-muted'}`}>
-                            {isUser ? 'Tú' : 'GestioBot'} · {formatDateTime(message.createdAt)}
-                          </div>
-                          {renderMessageContent(message.content)}
-                          {!isUser && message.snapshotGeneratedAt ? (
-                            <div className="small text-muted mt-2">
-                              Datos actualizados: {formatDateTime(message.snapshotGeneratedAt)}
-                            </div>
-                          ) : null}
-                          {!isUser && message.usage ? (
-                            <div className="small text-muted mt-1">
-                              Tokens — entrada: {message.usage.promptTokenCount ?? '—'}, salida: {message.usage.candidatesTokenCount ?? '—'}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
+          <div className="ai-assistant-header__copy">
+            <h1>Asistente inteligente</h1>
+            <p>
+              Consulta en lenguaje natural por pacientes, turnos, facturación, obras sociales y más. GestioBot te responde con datos actualizados y próximos pasos claros.
+            </p>
           </div>
-          <div className="card-footer bg-white border-0 pt-0">
-            <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
-              <textarea
-                className="form-control"
-                rows="3"
-                placeholder="Escribe tu consulta..."
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={handleKeyDown}
+        </header>
+        <section className="ai-assistant-banner" aria-live="polite">
+          <FaInfoCircle aria-hidden="true" />
+          <p>
+            Las respuestas se basan en la información registrada en GestioApp. Si falta algo, el asistente te guiará para completarlo.
+            {professionalName ? ` ¡Vamos, ${professionalName}!` : ''}
+          </p>
+        </section>
+        <section className="ai-assistant-suggestions" aria-label="Preguntas sugeridas">
+          <div className="ai-assistant-suggestions__title">
+            <FaLightbulb aria-hidden="true" />
+            <span>Ideas para comenzar</span>
+          </div>
+          <div className="ai-assistant-suggestions__list">
+            {SUGGESTED_QUESTIONS.map((question) => (
+              <button
+                key={question}
+                type="button"
+                className="ai-assistant-chip"
+                onClick={() => handleSuggestionClick(question)}
                 disabled={isSending}
-                aria-label="Consulta para el asistente de GestioApp"
-              ></textarea>
-              <div className="d-flex justify-content-end">
-                <button type="submit" className="btn btn-primary d-flex align-items-center gap-2" disabled={isSending || !input.trim()}>
-                  <FaPaperPlane />
-                  {isSending ? 'Enviando...' : 'Enviar consulta'}
-                </button>
-              </div>
-            </form>
+              >
+                {question}
+              </button>
+            ))}
           </div>
+        </section>
+        <div className="ai-chat" role="region" aria-live="polite" aria-label="Conversación con GestioBot">
+          <div className="ai-chat__messages">
+            {messages.map((message) => {
+              const isUser = message.role === 'user';
+              return (
+                <article
+                  key={message.id}
+                  className={`ai-message ${isUser ? 'ai-message--user' : 'ai-message--assistant'}`}
+                >
+                  <div className="ai-message__avatar" aria-hidden="true">
+                    {isUser ? <FaUser /> : <FaRobot />}
+                  </div>
+                  <div className="ai-message__bubble">
+                    <div className="ai-message__meta">
+                      <span>{isUser ? 'Tú' : 'GestioBot'}</span>
+                      <span>{formatDateTime(message.createdAt)}</span>
+                    </div>
+                    <div className="ai-message__content">{renderMessageContent(message.content)}</div>
+                    {!isUser && message.snapshotGeneratedAt ? (
+                      <div className="ai-message__note">
+                        Datos actualizados: {formatDateTime(message.snapshotGeneratedAt)}
+                      </div>
+                    ) : null}
+                    {!isUser && message.usage ? (
+                      <div className="ai-message__note">
+                        Tokens — entrada: {message.usage.promptTokenCount ?? '—'}, salida: {message.usage.candidatesTokenCount ?? '—'}
+                      </div>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
+          <form onSubmit={handleSubmit} className="ai-chat__composer">
+            <textarea
+              id="aiMessage"
+              className="ai-chat__input"
+              rows="3"
+              placeholder="Escribe tu consulta..."
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isSending}
+              aria-label="Consulta para el asistente de GestioApp"
+            ></textarea>
+            <button type="submit" className="ai-chat__send" disabled={isSending || !input.trim()}>
+              <FaPaperPlane aria-hidden="true" />
+              <span>{isSending ? 'Enviando…' : 'Enviar consulta'}</span>
+            </button>
+          </form>
         </div>
       </div>
     </div>

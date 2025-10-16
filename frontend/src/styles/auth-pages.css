@@ -24,6 +24,173 @@
   margin: 0 auto;
 }
 
+.auth-layout {
+  width: min(1080px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: clamp(1.75rem, 4vw, 2.5rem);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 30px 80px -48px rgba(15, 23, 42, 0.5);
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+
+.auth-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.8rem, 4vw, 2.6rem);
+  padding: clamp(2rem, 5vw, 3rem);
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.28), rgba(15, 23, 42, 0.96));
+  color: #e2e8f0;
+  isolation: isolate;
+}
+
+.auth-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.32), transparent 55%),
+    radial-gradient(circle at 20% 80%, rgba(14, 165, 233, 0.18), transparent 60%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.auth-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-hero__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.auth-hero__logo {
+  width: clamp(52px, 6vw, 64px);
+  height: auto;
+}
+
+.auth-hero__brand .gestio-brand {
+  font-size: clamp(1.15rem, 3vw, 1.4rem);
+  color: #f8fafc;
+  letter-spacing: 0.12em;
+}
+
+.auth-hero__content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.auth-hero__content h2 {
+  margin: 0;
+  font-size: clamp(1.75rem, 3.5vw, 2.2rem);
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.auth-hero__content p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.85);
+  font-size: clamp(0.95rem, 2.4vw, 1.05rem);
+  line-height: 1.7;
+}
+
+.auth-hero__content ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.auth-hero__content li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.95rem;
+  color: rgba(241, 245, 249, 0.92);
+}
+
+.auth-hero__content li::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
+  flex-shrink: 0;
+}
+
+.auth-hero__footer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.auth-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: clamp(2rem, 5vw, 3.2rem);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.auth-panel__header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.auth-panel__header h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.1rem);
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.auth-panel__header p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.98rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 1024px) {
+  .auth-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-hero {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  }
+
+  .auth-panel {
+    padding: clamp(1.85rem, 6vw, 2.6rem);
+  }
+}
+
+@media (max-width: 768px) {
+  .auth-hero {
+    gap: 1.6rem;
+  }
+
+  .auth-hero__brand {
+    justify-content: flex-start;
+  }
+
+  .auth-hero__content ul {
+    gap: 0.65rem;
+  }
+}
+
 .auth-card__brand {
   display: flex;
   align-items: center;
@@ -275,6 +442,32 @@
 }
 
 @media (max-width: 640px) {
+  .auth-layout {
+    border-radius: 1.75rem;
+  }
+
+  .auth-hero {
+    padding: clamp(1.75rem, 8vw, 2.2rem);
+  }
+
+  .auth-hero__brand {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .auth-hero__logo {
+    width: clamp(50px, 14vw, 60px);
+  }
+
+  .auth-hero__brand .gestio-brand {
+    font-size: clamp(1.15rem, 4vw, 1.35rem);
+  }
+
+  .auth-panel {
+    padding: clamp(1.75rem, 8vw, 2.3rem);
+  }
+
   .auth-card {
     padding: clamp(1.6rem, 8vw, 2.1rem);
     border-radius: 1.6rem;
@@ -293,6 +486,30 @@
 @media (max-width: 480px) {
   .auth-page {
     padding: clamp(2rem, 10vw, 2.75rem) clamp(1.25rem, 6vw, 2rem);
+  }
+
+  .auth-hero {
+    gap: 1.3rem;
+  }
+
+  .auth-hero__content h2 {
+    font-size: clamp(1.45rem, 8vw, 1.7rem);
+  }
+
+  .auth-hero__content p {
+    font-size: 0.95rem;
+  }
+
+  .auth-hero__footer {
+    font-size: 0.85rem;
+  }
+
+  .auth-panel__header h1 {
+    font-size: clamp(1.5rem, 7vw, 1.75rem);
+  }
+
+  .auth-panel__header p {
+    font-size: 0.95rem;
   }
 
   .auth-card__brand {

@@ -5,6 +5,12 @@ import GoogleAuthButton from '../components/GoogleAuthButton.jsx';
 import GestioLogo from '../assets/GestioLogo.png';
 import '../styles/auth-pages.css';
 
+const LOGIN_FEATURES = [
+  'Agenda clínica sincronizada con recordatorios automáticos.',
+  'Seguimiento financiero centralizado y reportes listos para compartir.',
+  'Indicadores clave de pacientes, cobranzas y obras sociales en segundos.',
+];
+
 function LoginPage({ onAuthChange }) {
   const [formData, setFormData] = useState({
     username: '',
@@ -71,79 +77,90 @@ function LoginPage({ onAuthChange }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-card auth-card--single" role="main">
-        <div className="auth-card__brand" aria-label="GestioApp">
-          <img src={GestioLogo} alt="Gestio" className="auth-card__logo" />
-          <div>
-            <span className="gestio-brand">
+      <div className="auth-layout" role="main">
+        <section className="auth-hero" aria-label="Resumen de GestioApp">
+          <div className="auth-hero__brand">
+            <img src={GestioLogo} alt="Gestio" className="auth-hero__logo" />
+            <span className="gestio-brand" aria-label="GestioApp">
               <span className="gestio-brand__strong">GESTIO</span>
               <span className="gestio-brand__light">APP</span>
             </span>
-            <p className="auth-card__summary">Simplifica la administración integral de tu consultorio.</p>
           </div>
-        </div>
-        <ul className="auth-card__features">
-          <li>Agenda inteligente con recordatorios automáticos.</li>
-          <li>Indicadores financieros claros y actualizados.</li>
-        </ul>
-        <header className="auth-card__header">
-          <h1 className="auth-card__title">Inicia sesión</h1>
-          <p className="auth-card__subtitle">Accede con tus credenciales para continuar gestionando tu consultorio.</p>
-        </header>
-        {error && <div className="auth-alert">{error}</div>}
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="auth-form-group">
-            <label htmlFor="loginUsername">Nombre de usuario</label>
-            <input
-              id="loginUsername"
-              type="text"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              className="auth-input"
-              autoComplete="username"
-              required
+          <div className="auth-hero__content">
+            <h2>Tu consultorio, organizado y en equipo</h2>
+            <p>
+              Gestiona agenda, finanzas y seguimiento de pacientes desde un solo panel. Todo listo para tu jornada clínica.
+            </p>
+            <ul>
+              {LOGIN_FEATURES.map((feature) => (
+                <li key={feature}>{feature}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="auth-hero__footer">
+            <span>Comienza hoy mismo a tomar decisiones con datos confiables.</span>
+          </div>
+        </section>
+        <section className="auth-panel" aria-label="Formulario de inicio de sesión">
+          <header className="auth-panel__header">
+            <h1>Inicia sesión</h1>
+            <p>Accede con tus credenciales para continuar gestionando tu consultorio.</p>
+          </header>
+          {error && <div className="auth-alert">{error}</div>}
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <div className="auth-form-group">
+              <label htmlFor="loginUsername">Nombre de usuario</label>
+              <input
+                id="loginUsername"
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                className="auth-input"
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div className="auth-form-group">
+              <label htmlFor="loginPassword">Contraseña</label>
+              <input
+                id="loginPassword"
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                className="auth-input"
+                autoComplete="current-password"
+                required
+              />
+            </div>
+            <div className="auth-links auth-links--align-end">
+              <NavLink to="/forgot-password" className="auth-link">
+                ¿Olvidaste tu contraseña?
+              </NavLink>
+            </div>
+            <button type="submit" className="auth-submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Ingresando…' : 'Acceder'}
+            </button>
+          </form>
+          <div className="auth-divider">
+            <span>O continúa con</span>
+          </div>
+          <div className={`auth-social ${isSubmitting ? 'auth-social--disabled' : ''}`}>
+            <GoogleAuthButton
+              onCredential={handleGoogleCredential}
+              onError={handleGoogleError}
+              text="signin_with"
+              disabled={isSubmitting}
             />
           </div>
-          <div className="auth-form-group">
-            <label htmlFor="loginPassword">Contraseña</label>
-            <input
-              id="loginPassword"
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="auth-input"
-              autoComplete="current-password"
-              required
-            />
-          </div>
-          <div className="auth-links auth-links--align-end">
-            <NavLink to="/forgot-password" className="auth-link">
-              ¿Olvidaste tu contraseña?
+          <p className="auth-switch">
+            ¿No tienes una cuenta?{' '}
+            <NavLink to="/register" className="auth-link">
+              Regístrate aquí
             </NavLink>
-          </div>
-          <button type="submit" className="auth-submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Ingresando…' : 'Acceder'}
-          </button>
-        </form>
-        <div className="auth-divider">
-          <span>O continúa con</span>
-        </div>
-        <div className={`auth-social ${isSubmitting ? 'auth-social--disabled' : ''}`}>
-          <GoogleAuthButton
-            onCredential={handleGoogleCredential}
-            onError={handleGoogleError}
-            text="signin_with"
-            disabled={isSubmitting}
-          />
-        </div>
-        <p className="auth-switch">
-          ¿No tienes una cuenta?{' '}
-          <NavLink to="/register" className="auth-link">
-            Regístrate aquí
-          </NavLink>
-        </p>
+          </p>
+        </section>
       </div>
     </div>
   );
