@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useStat
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { FaRobot } from 'react-icons/fa';
 import GestioLogo from './assets/GestioLogo.png';
+import Navbar from './components/Navbar.jsx';
 import authService from './services/authService';
 import userService from './services/UserService';
 import { useFeedback } from './context/FeedbackContext.jsx';
@@ -103,16 +104,21 @@ const NAVIGATION_ITEMS = [
   { to: '/pacientes', label: 'Pacientes' },
   { to: '/centros-salud', label: 'Centros de Salud' },
   { to: '/turnos', label: 'Agenda' },
-  { to: '/obras-sociales', label: 'Obras Sociales' },
-  { to: '/facturas', label: 'Facturas' },
-  { to: '/asistente-ia', label: 'Asistente IA', ariaLabel: 'Consultar con el asistente virtual', icon: FaRobot },
   {
     label: 'Finanzas',
     key: 'finanzas',
     children: [
+      { to: '/facturas', label: 'Facturas' },
       { to: '/finanzas/cobranzas', label: 'Cobranzas' },
       { to: '/finanzas/pagos-centros', label: 'Pagos a Centros' },
     ],
+  },
+  { to: '/obras-sociales', label: 'Obras Sociales' },
+  {
+    to: '/asistente-ia',
+    label: 'Asistente IA',
+    ariaLabel: 'Consultar con el asistente virtual',
+    icon: FaRobot,
   },
 ];
 
@@ -121,8 +127,6 @@ function App() {
   const location = useLocation();
   const { showInfo, showSuccess } = useFeedback();
   const [currentUser, setCurrentUser] = useState(() => getStoredUser());
-  const [openDropdownKey, setOpenDropdownKey] = useState(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const inactivityTimerRef = useRef(null);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
   const mainContentRef = useRef(null);
@@ -319,180 +323,51 @@ function App() {
     };
   }, [handleLogout, isAuthenticated]);
 
-  const navLinkClassName = useCallback(
-    ({ isActive }) => `nav-link gestio-navbar__link ${isActive ? 'active' : ''}`,
-    [],
-  );
-
-  const toggleDropdown = useCallback((key) => {
-    setOpenDropdownKey((prev) => (prev === key ? null : key));
-  }, []);
-
-  const closeDropdowns = useCallback(() => {
-    setOpenDropdownKey(null);
-  }, []);
-
-  const closeMenu = useCallback(() => {
-    closeDropdowns();
-    setIsMenuOpen(false);
-  }, [closeDropdowns]);
-
-  const toggleMenu = useCallback(() => {
-    setIsMenuOpen((prev) => !prev);
-  }, []);
-
-  const handleLogoutClick = useCallback(() => {
-    closeMenu();
-    handleLogout();
-  }, [closeMenu, handleLogout]);
-
-  useEffect(() => {
-    closeDropdowns();
-    setIsMenuOpen(false);
-  }, [closeDropdowns, location.pathname]);
-
   const navigationContent = useMemo(
     () => (
-      <nav className="gestio-navbar sticky-top" aria-label="Barra de navegación principal">
-        <div className="container gestio-navbar__container">
-          <NavLink className="gestio-navbar__brand" to={isAuthenticated ? '/dashboard' : '/'} onClick={closeMenu}>
-            <img src={GestioLogo} alt="Gestio Logo" className="gestio-navbar__logo" />
+      <Navbar
+        brand={{
+          to: isAuthenticated ? '/dashboard' : '/',
+          logo: { src: GestioLogo, alt: 'Gestio Logo' },
+          content: (
             <span className="gestio-brand" aria-label="GestioApp">
               <span className="gestio-brand__strong">GESTIO</span>
               <span className="gestio-brand__light">APP</span>
             </span>
-          </NavLink>
-          <button
-            type="button"
-            className={`gestio-navbar__toggle ${isMenuOpen ? 'is-open' : ''}`}
-            onClick={toggleMenu}
-            aria-expanded={isMenuOpen}
-            aria-label={`${isMenuOpen ? 'Cerrar' : 'Abrir'} menú de navegación principal`}
-          >
-            <span aria-hidden="true"></span>
-            <span aria-hidden="true"></span>
-            <span aria-hidden="true"></span>
-          </button>
-          <div className={`gestio-navbar__content ${isMenuOpen ? 'is-open' : ''}`}>
-            {isAuthenticated ? (
-              <div className="gestio-navbar__main" role="navigation" aria-label="Secciones de la aplicación">
-                <ul className="gestio-navlist gestio-navbar__links">
-                  {NAVIGATION_ITEMS.map((item) => {
-                    if (item.children && item.children.length > 0) {
-                      const isActiveGroup = item.children.some((child) => location.pathname.startsWith(child.to));
-                      const isOpen = openDropdownKey === item.key;
-                      return (
-                        <li
-                          key={item.key || item.label}
-                          className={`gestio-navbar__item gestio-navbar__item--dropdown ${isOpen ? 'is-open' : ''}`}
-                        >
-                          <button
-                            type="button"
-                            className={`nav-link gestio-navbar__link gestio-navbar__link--dropdown ${
-                              isActiveGroup ? 'active' : ''
-                            }`}
-                            onClick={() => toggleDropdown(item.key)}
-                            aria-expanded={isOpen}
-                          >
-                            {item.label}
-                          </button>
-                          <ul className="gestio-navbar__dropdown" role="menu">
-                            {item.children.map((child) => (
-                              <li key={child.to} role="none">
-                                <NavLink
-                                  className={({ isActive }) =>
-                                    `gestio-navbar__dropdown-item ${isActive ? 'is-active' : ''}`
-                                  }
-                                  to={child.to}
-                                  onClick={() => {
-                                    closeDropdowns();
-                                    closeMenu();
-                                  }}
-                                  role="menuitem"
-                                >
-                                  {child.label}
-                                </NavLink>
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
-                      );
-                    }
-
-                    return (
-                      <li className="gestio-navbar__item" key={item.to}>
-                        <NavLink
-                          className={({ isActive }) =>
-                            `${navLinkClassName({ isActive })}${item.icon ? ' gestio-navbar__link--icon-only' : ''}`
-                          }
-                          to={item.to}
-                          onClick={closeMenu}
-                          aria-label={item.icon ? item.ariaLabel || item.label : undefined}
-                        >
-                          {item.icon ? (
-                            <>
-                              <item.icon className="gestio-navbar__icon" aria-hidden="true" focusable="false" />
-                              <span className="gestio-sr-only">{item.label}</span>
-                            </>
-                          ) : (
-                            item.label
-                          )}
-                        </NavLink>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
-            <div className="gestio-navbar__actions">
-              {isAuthenticated ? (
-                <>
-                  <NavLink
-                    className={({ isActive }) => `${navLinkClassName({ isActive })} gestio-navbar__action-link`}
-                    to="/profile"
-                    onClick={closeMenu}
-                  >
-                    Perfil
-                  </NavLink>
-                  <button onClick={handleLogoutClick} className="gestio-navbar__logout" type="button">
-                    Cerrar sesión
-                  </button>
-                </>
-              ) : (
-                <>
-                  <NavLink
-                    className={({ isActive }) => `${navLinkClassName({ isActive })} gestio-navbar__action-link`}
-                    to="/login"
-                    onClick={closeMenu}
-                  >
-                    Iniciar sesión
-                  </NavLink>
-                  <NavLink
-                    className={({ isActive }) => `${navLinkClassName({ isActive })} gestio-navbar__action-link`}
-                    to="/register"
-                    onClick={closeMenu}
-                  >
-                    Registrarse
-                  </NavLink>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+          ),
+        }}
+        navItems={isAuthenticated ? NAVIGATION_ITEMS : []}
+        renderActions={({ closeMenu }) =>
+          isAuthenticated ? (
+            <>
+              <NavLink className="app-navbar__action-link" to="/profile" onClick={closeMenu}>
+                Perfil
+              </NavLink>
+              <button
+                type="button"
+                className="app-navbar__logout"
+                onClick={() => {
+                  closeMenu();
+                  handleLogout();
+                }}
+              >
+                Cerrar sesión
+              </button>
+            </>
+          ) : (
+            <>
+              <NavLink className="app-navbar__action-link" to="/login" onClick={closeMenu}>
+                Iniciar sesión
+              </NavLink>
+              <NavLink className="app-navbar__action-link" to="/register" onClick={closeMenu}>
+                Registrarse
+              </NavLink>
+            </>
+          )
+        }
+      />
     ),
-    [
-      closeDropdowns,
-      closeMenu,
-      handleLogoutClick,
-      isAuthenticated,
-      isMenuOpen,
-      location.pathname,
-      navLinkClassName,
-      openDropdownKey,
-      toggleDropdown,
-      toggleMenu,
-    ],
+    [handleLogout, isAuthenticated],
   );
 
   useEffect(() => {
