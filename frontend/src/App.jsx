@@ -98,12 +98,12 @@ const resolveSectionFromPath = (pathname) => {
 };
 
 const NAVIGATION_ITEMS = [
-  { to: '/dashboard', label: 'Resumen' },
+  { to: '/dashboard', label: 'Inicio' },
   { to: '/pacientes', label: 'Pacientes' },
   { to: '/centros-salud', label: 'Centros de Salud' },
   { to: '/turnos', label: 'Agenda' },
   { to: '/obras-sociales', label: 'Obras Sociales' },
-  { to: '/facturas', label: 'Facturación' },
+  { to: '/facturas', label: 'Facturas' },
   { to: '/asistente-ia', label: 'Asistente IA' },
   {
     label: 'Finanzas',
@@ -120,7 +120,6 @@ function App() {
   const location = useLocation();
   const { showInfo, showSuccess } = useFeedback();
   const [currentUser, setCurrentUser] = useState(() => getStoredUser());
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openDropdownKey, setOpenDropdownKey] = useState(null);
   const inactivityTimerRef = useRef(null);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
@@ -320,19 +319,6 @@ function App() {
 
   const navLinkClassName = useCallback(({ isActive }) => `nav-link ${isActive ? 'active' : ''}`, []);
 
-  const toggleMenu = useCallback(() => {
-    setIsMenuOpen((prev) => !prev);
-  }, []);
-
-  const closeMenu = useCallback(() => {
-    setIsMenuOpen(false);
-  }, []);
-
-  const handleLogoutClick = useCallback(() => {
-    closeMenu();
-    handleLogout();
-  }, [closeMenu, handleLogout]);
-
   const toggleDropdown = useCallback((key) => {
     setOpenDropdownKey((prev) => (prev === key ? null : key));
   }, []);
@@ -341,11 +327,14 @@ function App() {
     setOpenDropdownKey(null);
   }, []);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setIsMenuOpen(false);
-    }
-  }, [isAuthenticated]);
+  const closeMenu = useCallback(() => {
+    closeDropdowns();
+  }, [closeDropdowns]);
+
+  const handleLogoutClick = useCallback(() => {
+    closeMenu();
+    handleLogout();
+  }, [closeMenu, handleLogout]);
 
   useEffect(() => {
     closeDropdowns();
@@ -353,111 +342,103 @@ function App() {
 
   const navigationContent = useMemo(
     () => (
-      <nav className="navbar navbar-expand-lg gestio-navbar sticky-top py-3">
+      <nav className="gestio-navbar sticky-top" aria-label="Barra de navegación principal">
         <div className="container gestio-navbar__container">
-          <NavLink
-            className="navbar-brand d-flex align-items-center gestio-navbar__brand"
-            to={isAuthenticated ? '/dashboard' : '/'}
-            onClick={closeMenu}
-          >
+          <NavLink className="gestio-navbar__brand" to={isAuthenticated ? '/dashboard' : '/'} onClick={closeMenu}>
             <img src={GestioLogo} alt="Gestio Logo" className="gestio-navbar__logo" />
             <span className="gestio-brand" aria-label="GestioApp">
               <span className="gestio-brand__strong">GESTIO</span>
               <span className="gestio-brand__light">APP</span>
             </span>
           </NavLink>
-          <button
-            className="navbar-toggler"
-            type="button"
-            onClick={toggleMenu}
-            aria-controls="navbarNav"
-            aria-expanded={isMenuOpen}
-            aria-label="Toggle navigation"
-          >
-            <span className="navbar-toggler-icon"></span>
-          </button>
-          <div className={`collapse navbar-collapse gestio-navbar__collapse ${isMenuOpen ? 'show' : ''}`} id="navbarNav">
-            <div className="gestio-navbar__content">
-              <ul className="navbar-nav gestio-navlist gestio-navbar__links">
-                {isAuthenticated
-                  ? NAVIGATION_ITEMS.map((item) => {
-                      if (item.children && item.children.length > 0) {
-                        const isActiveGroup = item.children.some((child) => location.pathname.startsWith(child.to));
-                        const isOpen = openDropdownKey === item.key;
-                        return (
-                          <li key={item.key || item.label} className={`nav-item dropdown ${isOpen ? 'show' : ''}`}>
-                            <button
-                              type="button"
-                              className={`nav-link dropdown-toggle ${isActiveGroup ? 'active' : ''}`}
-                              onClick={() => toggleDropdown(item.key)}
-                              aria-expanded={isOpen}
-                            >
-                              {item.label}
-                            </button>
-                            <ul className={`dropdown-menu ${isOpen ? 'show' : ''}`}>
-                              {item.children.map((child) => (
-                                <li key={child.to}>
-                                  <NavLink
-                                    className={({ isActive }) => `dropdown-item ${isActive ? 'active' : ''}`}
-                                    to={child.to}
-                                    onClick={() => {
-                                      closeDropdowns();
-                                      closeMenu();
-                                    }}
-                                  >
-                                    {child.label}
-                                  </NavLink>
-                                </li>
-                              ))}
-                            </ul>
-                          </li>
-                        );
-                      }
+          {isAuthenticated ? (
+            <div className="gestio-navbar__main" role="navigation" aria-label="Secciones de la aplicación">
+              <ul className="gestio-navlist gestio-navbar__links">
+                {NAVIGATION_ITEMS.map((item) => {
+                  if (item.children && item.children.length > 0) {
+                    const isActiveGroup = item.children.some((child) => location.pathname.startsWith(child.to));
+                    const isOpen = openDropdownKey === item.key;
+                    return (
+                      <li
+                        key={item.key || item.label}
+                        className={`gestio-navbar__item gestio-navbar__item--dropdown ${isOpen ? 'is-open' : ''}`}
+                      >
+                        <button
+                          type="button"
+                          className={`nav-link gestio-navbar__link gestio-navbar__link--dropdown ${
+                            isActiveGroup ? 'active' : ''
+                          }`}
+                          onClick={() => toggleDropdown(item.key)}
+                          aria-expanded={isOpen}
+                        >
+                          {item.label}
+                        </button>
+                        <ul className="gestio-navbar__dropdown" role="menu">
+                          {item.children.map((child) => (
+                            <li key={child.to} role="none">
+                              <NavLink
+                                className={({ isActive }) =>
+                                  `gestio-navbar__dropdown-item ${isActive ? 'is-active' : ''}`
+                                }
+                                to={child.to}
+                                onClick={() => {
+                                  closeDropdowns();
+                                  closeMenu();
+                                }}
+                                role="menuitem"
+                              >
+                                {child.label}
+                              </NavLink>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    );
+                  }
 
-                      return (
-                        <li className="nav-item" key={item.to}>
-                          <NavLink className={navLinkClassName} to={item.to} onClick={closeMenu}>
-                            {item.label}
-                          </NavLink>
-                        </li>
-                      );
-                    })
-                  : null}
+                  return (
+                    <li className="gestio-navbar__item" key={item.to}>
+                      <NavLink className={navLinkClassName} to={item.to} onClick={closeMenu}>
+                        {item.label}
+                      </NavLink>
+                    </li>
+                  );
+                })}
               </ul>
-              <div className="gestio-navbar__actions">
-                {isAuthenticated ? (
-                  <>
-                    <NavLink
-                      className={({ isActive }) => `${navLinkClassName({ isActive })} gestio-navbar__action-link`}
-                      to="/profile"
-                      onClick={closeMenu}
-                    >
-                      Perfil
-                    </NavLink>
-                    <button onClick={handleLogoutClick} className="btn gestio-navbar__logout">
-                      Cerrar sesión
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <NavLink
-                      className={({ isActive }) => `${navLinkClassName({ isActive })} gestio-navbar__action-link`}
-                      to="/login"
-                      onClick={closeMenu}
-                    >
-                      Iniciar sesión
-                    </NavLink>
-                    <NavLink
-                      className={({ isActive }) => `${navLinkClassName({ isActive })} gestio-navbar__action-link`}
-                      to="/register"
-                      onClick={closeMenu}
-                    >
-                      Registrarse
-                    </NavLink>
-                  </>
-                )}
-              </div>
             </div>
+          ) : null}
+          <div className="gestio-navbar__actions">
+            {isAuthenticated ? (
+              <>
+                <NavLink
+                  className={({ isActive }) => `${navLinkClassName({ isActive })} gestio-navbar__action-link`}
+                  to="/profile"
+                  onClick={closeMenu}
+                >
+                  Perfil
+                </NavLink>
+                <button onClick={handleLogoutClick} className="gestio-navbar__logout" type="button">
+                  Cerrar sesión
+                </button>
+              </>
+            ) : (
+              <>
+                <NavLink
+                  className={({ isActive }) => `${navLinkClassName({ isActive })} gestio-navbar__action-link`}
+                  to="/login"
+                  onClick={closeMenu}
+                >
+                  Iniciar sesión
+                </NavLink>
+                <NavLink
+                  className={({ isActive }) => `${navLinkClassName({ isActive })} gestio-navbar__action-link`}
+                  to="/register"
+                  onClick={closeMenu}
+                >
+                  Registrarse
+                </NavLink>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -467,12 +448,10 @@ function App() {
       closeMenu,
       handleLogoutClick,
       isAuthenticated,
-      isMenuOpen,
       location.pathname,
       navLinkClassName,
       openDropdownKey,
       toggleDropdown,
-      toggleMenu,
     ],
   );
 

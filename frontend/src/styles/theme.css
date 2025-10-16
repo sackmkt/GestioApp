@@ -117,24 +117,32 @@ main:focus {
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.4);
 }
 
-.navbar.gestio-navbar {
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 12px 32px -24px rgba(15, 23, 42, 0.45);
+.gestio-navbar {
+  background: rgba(248, 250, 252, 0.86);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 18px 40px -28px rgba(15, 23, 42, 0.55);
   transition: background-color var(--gestio-transition-base), box-shadow var(--gestio-transition-base), border-color var(--gestio-transition-base);
+  padding-block: 0.85rem;
+  width: 100%;
 }
 
 .gestio-navbar__container {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: clamp(0.85rem, 2vw, 1.75rem);
+  min-height: 3.5rem;
 }
 
 .gestio-navbar__brand {
-  gap: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
   color: var(--gestio-text-primary);
+  text-decoration: none;
+  font-weight: 600;
   transition: color var(--gestio-transition-base), transform var(--gestio-transition-base);
+  flex-shrink: 0;
 }
 
 .gestio-navbar__brand:hover,
@@ -144,7 +152,7 @@ main:focus {
 }
 
 .gestio-navbar__logo {
-  height: 48px;
+  height: 40px;
   width: auto;
 }
 
@@ -156,6 +164,7 @@ main:focus {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: inherit;
+  font-size: 0.95rem;
 }
 
 .gestio-brand__strong {
@@ -167,53 +176,43 @@ main:focus {
   letter-spacing: 0.04em;
 }
 
-.gestio-navbar .navbar-toggler {
-  border-color: transparent;
-  transition: transform var(--gestio-transition-base);
-}
-
-.gestio-navbar .navbar-toggler:focus {
-  box-shadow: none;
-}
-
-.gestio-navbar .navbar-toggler:focus-visible {
-  box-shadow: var(--gestio-focus-ring);
-}
-
-.gestio-navbar .navbar-toggler:hover {
-  transform: scale(1.04);
-}
-
-.gestio-navbar .navbar-toggler-icon {
-  filter: drop-shadow(0 2px 2px rgba(15, 23, 42, 0.16));
-}
-
-.gestio-navbar__collapse {
-  flex-grow: 1;
-}
-
-.gestio-navbar__content {
+.gestio-navbar__main {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 1.5rem;
-  width: 100%;
+  align-items: center;
+  justify-content: center;
 }
 
 .gestio-navlist {
-  gap: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.45rem, 1.4vw, 1rem);
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .gestio-navbar__links {
-  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.gestio-navlist .nav-item {
-  display: flex;
+.gestio-navbar__links::-webkit-scrollbar {
+  display: none;
 }
 
-.gestio-navlist .nav-link,
-.gestio-navlist .dropdown-toggle {
+.gestio-navbar__item {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.gestio-navbar__link {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -222,8 +221,9 @@ main:focus {
 .gestio-navbar .nav-link {
   color: var(--gestio-text-muted);
   font-weight: 500;
-  padding: 0.5rem 0.9rem;
-  border-radius: 999px;
+  font-size: clamp(0.82rem, 0.9rem, 0.95rem);
+  padding: 0.45rem 0.8rem;
+  border-radius: 0.75rem;
   border: 1px solid transparent;
   line-height: 1.2;
   white-space: nowrap;
@@ -238,61 +238,89 @@ main:focus {
 .gestio-navbar .nav-link:hover,
 .gestio-navbar .nav-link:focus-visible {
   color: var(--gestio-primary);
+  background: color-mix(in srgb, var(--gestio-primary) 10%, transparent);
+  border-color: color-mix(in srgb, var(--gestio-primary) 22%, transparent);
+  box-shadow: 0 16px 28px -24px rgba(37, 99, 235, 0.45);
+}
+
+.gestio-navbar__item--dropdown {
+  position: relative;
+}
+
+.gestio-navbar__dropdown {
+  position: absolute;
+  top: calc(100% + 0.65rem);
+  left: 50%;
+  transform: translate(-50%, -10px);
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: var(--gestio-radius-lg);
+  border: 1px solid color-mix(in srgb, var(--gestio-border) 70%, transparent);
+  box-shadow: 0 20px 45px -25px rgba(15, 23, 42, 0.5);
+  padding: 0.6rem;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--gestio-transition-fast), transform var(--gestio-transition-fast), visibility var(--gestio-transition-fast);
+  z-index: 20;
+}
+
+.gestio-navbar__item--dropdown.is-open .gestio-navbar__dropdown {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+.gestio-navbar__dropdown-item {
+  border-radius: var(--gestio-radius-pill);
+  padding: 0.45rem 0.75rem;
+  font-weight: 500;
+  color: var(--gestio-text-muted);
+  display: block;
+  text-decoration: none;
+  transition: background-color var(--gestio-transition-base), color var(--gestio-transition-base);
+}
+
+.gestio-navbar__dropdown-item.is-active,
+.gestio-navbar__dropdown-item:focus-visible,
+.gestio-navbar__dropdown-item:hover {
+  color: var(--gestio-primary);
   background: color-mix(in srgb, var(--gestio-primary) 12%, transparent);
-  border-color: color-mix(in srgb, var(--gestio-primary) 18%, transparent);
-  box-shadow: 0 12px 24px -20px rgba(37, 99, 235, 0.45);
 }
 
 .gestio-navbar__actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(0.45rem, 1.2vw, 1rem);
+  flex-shrink: 0;
 }
 
 .gestio-navbar__action-link {
-  padding-inline: 0.25rem;
+  padding-inline: 0.35rem;
+  font-size: 0.85rem;
 }
 
 .gestio-navbar__logout {
-  padding: 0.55rem 1.5rem;
+  padding: 0.45rem 1.15rem;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--gestio-primary) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gestio-primary) 35%, transparent);
   background: transparent;
   color: var(--gestio-primary);
   font-weight: 600;
+  font-size: 0.86rem;
   transition: background-color var(--gestio-transition-base), color var(--gestio-transition-base), box-shadow var(--gestio-transition-base), border-color var(--gestio-transition-base);
 }
 
 .gestio-navbar__logout:hover,
 .gestio-navbar__logout:focus-visible {
-  background: color-mix(in srgb, var(--gestio-primary) 12%, transparent);
-  box-shadow: 0 10px 18px -16px rgba(37, 99, 235, 0.45);
+  background: color-mix(in srgb, var(--gestio-primary) 14%, transparent);
+  box-shadow: 0 12px 24px -20px rgba(37, 99, 235, 0.45);
   color: var(--gestio-primary);
   border-color: color-mix(in srgb, var(--gestio-primary) 45%, transparent);
-}
-
-.gestio-navbar .dropdown-menu {
-  border-radius: var(--gestio-radius-md);
-  border: 1px solid var(--gestio-border);
-  box-shadow: var(--gestio-shadow-soft);
-  padding: 0.65rem;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-}
-
-.gestio-navbar .dropdown-item {
-  border-radius: var(--gestio-radius-pill);
-  padding: 0.45rem 0.75rem;
-  font-weight: 500;
-  color: var(--gestio-text-muted);
-  transition: background-color var(--gestio-transition-base), color var(--gestio-transition-base);
-}
-
-.gestio-navbar .dropdown-item.active,
-.gestio-navbar .dropdown-item:focus,
-.gestio-navbar .dropdown-item:hover {
-  color: var(--gestio-primary);
-  background: color-mix(in srgb, var(--gestio-primary) 12%, transparent);
 }
 
 .dashboard-root {
@@ -705,42 +733,24 @@ footer.gestio-footer a {
 }
 
 @media (min-width: 992px) {
-  .gestio-navbar__collapse {
-    display: flex !important;
-    align-items: center;
-  }
-
-  .gestio-navbar__content {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 2rem;
+  .gestio-navbar__container {
+    gap: clamp(1.25rem, 2vw, 2.75rem);
   }
 
   .gestio-navbar__links {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .gestio-navlist .nav-item {
-    flex: 0 0 auto;
+    justify-content: center;
   }
 
   .gestio-navbar__actions {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 1rem;
-    min-width: max-content;
+    gap: clamp(0.65rem, 1vw, 1.25rem);
   }
 
   .gestio-navbar__actions .nav-link {
-    padding-inline: 0.5rem;
+    padding-inline: 0.45rem;
   }
 
   .gestio-navbar__logout {
-    padding-inline: 1.75rem;
+    padding-inline: 1.45rem;
   }
 
   .gestio-page__header {
@@ -770,26 +780,30 @@ footer.gestio-footer a {
     max-width: 100%;
   }
 
-  .gestio-navbar__content {
-    align-items: stretch;
+  .gestio-navbar__container {
+    gap: clamp(0.75rem, 3vw, 1.4rem);
+  }
+
+  .gestio-navbar__main {
+    justify-content: flex-start;
   }
 
   .gestio-navbar__links {
-    width: 100%;
-  }
-
-  .gestio-navlist {
-    gap: 0.75rem;
-  }
-
-  .gestio-navlist .nav-link,
-  .gestio-navlist .dropdown-toggle {
-    width: 100%;
-    justify-content: center;
+    justify-content: flex-start;
+    padding-inline: 0.25rem;
   }
 
   .gestio-navbar__actions {
-    align-items: stretch;
+    gap: 0.6rem;
+  }
+
+  .gestio-navbar__actions .nav-link {
+    font-size: 0.8rem;
+  }
+
+  .gestio-navbar__logout {
+    padding: 0.42rem 0.95rem;
+    font-size: 0.8rem;
   }
 
   .gestio-page.container {
@@ -808,6 +822,37 @@ footer.gestio-footer a {
   .gestio-main > .container {
     padding-left: 1.25rem;
     padding-right: 1.25rem;
+  }
+
+  .gestio-navbar__container {
+    gap: clamp(0.6rem, 4vw, 0.95rem);
+  }
+
+  .gestio-navbar__logo {
+    height: 36px;
+  }
+
+  .gestio-navbar__links {
+    gap: clamp(0.4rem, 2vw, 0.65rem);
+    padding-inline: 0.2rem;
+  }
+
+  .gestio-navbar .nav-link {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.7rem;
+  }
+
+  .gestio-navbar__actions {
+    gap: 0.5rem;
+  }
+
+  .gestio-navbar__actions .nav-link {
+    font-size: 0.76rem;
+  }
+
+  .gestio-navbar__logout {
+    padding: 0.38rem 0.85rem;
+    font-size: 0.76rem;
   }
 
   .gestio-page.container {
@@ -919,6 +964,32 @@ footer.gestio-footer a {
     padding-right: 0.75rem;
   }
 
+  .gestio-brand {
+    display: none;
+  }
+
+  .gestio-navbar__logo {
+    height: 32px;
+  }
+
+  .gestio-navbar__links {
+    gap: 0.45rem;
+  }
+
+  .gestio-navbar .nav-link {
+    font-size: 0.78rem;
+    padding: 0.38rem 0.65rem;
+  }
+
+  .gestio-navbar__actions {
+    gap: 0.45rem;
+  }
+
+  .gestio-navbar__logout {
+    padding: 0.34rem 0.75rem;
+    font-size: 0.74rem;
+  }
+
   .gestio-shell {
     padding: clamp(1.1rem, 5vw, 1.35rem);
     border-radius: var(--gestio-radius-md);
@@ -946,15 +1017,30 @@ footer.gestio-footer a {
     padding: 1rem;
   }
 
-  .gestio-navbar .navbar-brand img {
-    height: 48px;
-  }
 }
 
 @media (max-width: 420px) {
   .gestio-page.container {
     padding-left: clamp(0.65rem, 7vw, 0.85rem);
     padding-right: clamp(0.65rem, 7vw, 0.85rem);
+  }
+
+  .gestio-navbar__container {
+    gap: 0.5rem;
+  }
+
+  .gestio-navbar__logo {
+    height: 28px;
+  }
+
+  .gestio-navbar .nav-link {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
+  }
+
+  .gestio-navbar__logout {
+    padding: 0.32rem 0.65rem;
+    font-size: 0.72rem;
   }
 
   .gestio-page__header,
