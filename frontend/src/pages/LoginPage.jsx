@@ -71,29 +71,27 @@ function LoginPage({ onAuthChange }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-card__brand">
-          <img src={GestioLogo} alt="Gestio" className="auth-card__brand-logo" />
-          <h2 className="auth-card__brand-title">
+      <div className="auth-layout">
+        <section className="auth-intro" aria-label="Descripción de GestioApp">
+          <img src={GestioLogo} alt="Gestio" className="auth-intro__logo" />
+          <h1 className="auth-intro__brand">
             <span className="gestio-brand" aria-label="GestioApp">
               <span className="gestio-brand__strong">GESTIO</span>
               <span className="gestio-brand__light">APP</span>
             </span>
-          </h2>
-          <p className="auth-card__brand-subtitle">
-            Organiza turnos, pacientes y finanzas desde un único panel moderno y confiable.
-          </p>
-          <ul className="auth-card__highlights">
-            <li>Agenda inteligente con recordatorios automáticos</li>
-            <li>Historias clínicas y datos siempre sincronizados</li>
-            <li>Facturación y cobranzas sin complejidad</li>
+          </h1>
+          <p className="auth-intro__tagline">Plataforma profesional para ordenar tu práctica de salud.</p>
+          <ul className="auth-intro__list">
+            <li>Agenda sincronizada con recordatorios inteligentes.</li>
+            <li>Historias clínicas accesibles y seguras.</li>
+            <li>Indicadores financieros claros en tiempo real.</li>
           </ul>
-        </div>
-        <div className="auth-card__form">
-          <header>
-            <h1 className="auth-card__form-title">Inicia sesión</h1>
-            <p className="auth-card__form-description">
-              Ingresa para coordinar tu consultorio en segundos y continuar donde lo dejaste.
+        </section>
+        <div className="auth-card">
+          <header className="auth-card__header">
+            <h2 className="auth-card__title">Inicia sesión</h2>
+            <p className="auth-card__subtitle">
+              Accede con tus credenciales para continuar gestionando tu consultorio.
             </p>
           </header>
           {error && <div className="auth-alert">{error}</div>}

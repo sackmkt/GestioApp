@@ -100,30 +100,26 @@ function RegisterPage({ onAuthChange }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-card__brand">
-          <img src={GestioLogo} alt="Gestio" className="auth-card__brand-logo" />
-          <h2 className="auth-card__brand-title">
+      <div className="auth-layout">
+        <section className="auth-intro" aria-label="Descripción de GestioApp">
+          <img src={GestioLogo} alt="Gestio" className="auth-intro__logo" />
+          <h1 className="auth-intro__brand">
             <span className="gestio-brand" aria-label="GestioApp">
               <span className="gestio-brand__strong">GESTIO</span>
               <span className="gestio-brand__light">APP</span>
             </span>
-          </h2>
-          <p className="auth-card__brand-subtitle">
-            Sumá tu equipo a una plataforma clara para administrar pacientes, turnos y facturación en minutos.
-          </p>
-          <ul className="auth-card__highlights">
-            <li>Registros clínicos seguros y siempre disponibles</li>
-            <li>Onboarding guiado para tu consultorio</li>
-            <li>Integración con recordatorios y cobranzas</li>
+          </h1>
+          <p className="auth-intro__tagline">Todo lo que tu consultorio necesita, sin ruido.</p>
+          <ul className="auth-intro__list">
+            <li>Automatiza la recepción con recordatorios por correo.</li>
+            <li>Comparte seguimientos y documentos en un clic.</li>
+            <li>Controla tus números con reportes dinámicos.</li>
           </ul>
-        </div>
-        <div className="auth-card__form">
-          <header>
-            <h1 className="auth-card__form-title">Crea tu cuenta</h1>
-            <p className="auth-card__form-description">
-              Crea tu usuario para comenzar a trabajar con GestioApp y completar tu perfil profesional.
-            </p>
+        </section>
+        <div className="auth-card">
+          <header className="auth-card__header">
+            <h2 className="auth-card__title">Crea tu cuenta</h2>
+            <p className="auth-card__subtitle">Completá tus datos para comenzar a utilizar GestioApp.</p>
           </header>
           {error && <div className="auth-alert">{error}</div>}
           <form className="auth-form" onSubmit={handleSubmit}>

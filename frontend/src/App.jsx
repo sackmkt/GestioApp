@@ -373,7 +373,7 @@ function App() {
             <span className="navbar-toggler-icon"></span>
           </button>
           <div className={`collapse navbar-collapse ${isMenuOpen ? 'show' : ''}`} id="navbarNav">
-            <ul className="navbar-nav me-auto align-items-lg-center">
+            <ul className="navbar-nav me-auto align-items-lg-center gestio-navlist">
               {isAuthenticated
                 ? NAVIGATION_ITEMS.map((item) => {
                     if (item.children && item.children.length > 0) {
@@ -419,7 +419,7 @@ function App() {
                   })
                 : null}
             </ul>
-            <ul className="navbar-nav ms-auto align-items-lg-center gap-lg-3">
+            <ul className="navbar-nav ms-auto align-items-lg-center gestio-navlist">
               {isAuthenticated ? (
                 <>
                   <li className="nav-item">
@@ -560,7 +560,7 @@ function App() {
               </p>
             </header>
           )}
-          <div className="gestio-content">
+          <section className="gestio-shell" aria-live="polite">
             <Suspense fallback={SuspenseFallback}>
               <Routes>
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -611,7 +611,7 @@ function App() {
                 )}
               </Routes>
             </Suspense>
-          </div>
+          </section>
         </div>
       </main>
       <footer className="gestio-footer py-4 mt-auto">
