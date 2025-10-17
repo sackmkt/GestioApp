@@ -6,6 +6,7 @@ import Navbar from './components/Navbar.jsx';
 import authService from './services/authService';
 import userService from './services/UserService';
 import { useFeedback } from './context/FeedbackContext.jsx';
+import { clearAllConversations } from './utils/aiConversationStorage.js';
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'v1.0.0';
 const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
@@ -145,6 +146,7 @@ function App() {
       } catch (error) {
         console.warn('No se pudo limpiar la sesión almacenada.', error);
       }
+      clearAllConversations();
       setCurrentUser(null);
     }
   }, []);
@@ -205,6 +207,12 @@ function App() {
     window.addEventListener('storage', syncUserFromStorage);
     return () => window.removeEventListener('storage', syncUserFromStorage);
   }, [navigate]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      clearAllConversations();
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     const handleUserUpdated = (event) => {
