@@ -5,7 +5,17 @@ const Turno = require('../models/Turno');
 const ObraSocial = require('../models/ObraSocial');
 const CentroSalud = require('../models/CentroSalud');
 
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+let GoogleGenerativeAI;
+let GoogleGenerativeAIFetchError;
+
+try {
+  ({ GoogleGenerativeAI, GoogleGenerativeAIFetchError } = require('@google/genai'));
+} catch (error) {
+  GoogleGenerativeAI = null;
+  GoogleGenerativeAIFetchError = null;
+}
+
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const DEFAULT_TEMPERATURE = 0.3;
 const MAX_OUTPUT_TOKENS = 1024;
 
@@ -392,23 +402,86 @@ const callGemini = async ({ contents, systemInstruction, temperature }) => {
     throw error;
   }
 
-  const model = DEFAULT_MODEL;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`;
+  const modelName = DEFAULT_MODEL;
+  const systemPayload = systemInstruction
+    ? {
+        role: 'system',
+        parts: [{ text: systemInstruction }],
+      }
+    : undefined;
+  const generationConfig = {
+    temperature: typeof temperature === 'number' ? Math.min(Math.max(temperature, 0), 1) : DEFAULT_TEMPERATURE,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+  };
+
+  if (GoogleGenerativeAI) {
+    try {
+      const client = new GoogleGenerativeAI({ apiKey });
+      const model = client.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemPayload,
+      });
+
+      const result = await model.generateContent({
+        contents,
+        generationConfig,
+      });
+
+      const response = result?.response;
+      const textFromMethod = typeof response?.text === 'function' ? response.text().trim() : '';
+      const candidate = response?.candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+      const textFromParts = parts
+        .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+        .join('')
+        .trim();
+
+      const text = textFromMethod || textFromParts;
+
+      return {
+        text: text || 'No se obtuvo una respuesta del modelo.',
+        usage: response?.usageMetadata || result?.usageMetadata || null,
+      };
+    } catch (error) {
+      if (GoogleGenerativeAIFetchError && error instanceof GoogleGenerativeAIFetchError) {
+        let message = error.message || 'No se pudo obtener una respuesta del asistente.';
+        let statusCode = error.status ?? error.response?.status ?? 502;
+
+        if (error.response) {
+          try {
+            const data = await error.response.json();
+            message = data?.error?.message || message;
+          } catch (parseError) {
+            try {
+              message = (await error.response.text()) || message;
+            } catch (_) {
+              // ignore secondary parsing failures
+            }
+          }
+        }
+
+        const wrapped = new Error(message);
+        wrapped.statusCode = statusCode;
+        throw wrapped;
+      }
+
+      throw error;
+    }
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(modelName)}:generateContent?key=${apiKey}`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
 
   try {
     const payload = {
       contents,
-      systemInstruction: {
-        role: 'system',
-        parts: [{ text: systemInstruction }],
-      },
-      generationConfig: {
-        temperature: typeof temperature === 'number' ? Math.min(Math.max(temperature, 0), 1) : DEFAULT_TEMPERATURE,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
-      },
+      generationConfig,
     };
+
+    if (systemPayload) {
+      payload.system_instruction = systemPayload;
+    }
 
     const response = await fetch(url, {
       method: 'POST',
