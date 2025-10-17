@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import { FaPaperPlane, FaRobot, FaUser, FaInfoCircle, FaLightbulb } from 'react-icons/fa';
 import aiAssistantService from '../services/AIAssistantService';
 import { useFeedback } from '../context/FeedbackContext.jsx';
+import { loadConversation, saveConversation } from '../utils/aiConversationStorage.js';
 import '../styles/ai-assistant.css';
 
 const SUGGESTED_QUESTIONS = [
@@ -26,6 +27,14 @@ const createMessage = (role, content, extra = {}) => ({
   createdAt: new Date().toISOString(),
   ...extra,
 });
+
+const buildWelcomeConversation = () => [
+  createMessage(
+    'assistant',
+    '¡Hola! Soy GestioBot. Pregúntame por pacientes, turnos, facturación u obras sociales y te compartiré datos claros para seguir.',
+    { isWelcome: true },
+  ),
+];
 
 const formatDateTime = (value) => {
   if (!value) {
@@ -77,13 +86,14 @@ const renderMessageContent = (text) => {
 
 function AIAssistantPage({ currentUser }) {
   const { showError } = useFeedback();
-  const [messages, setMessages] = useState(() => [
-    createMessage(
-      'assistant',
-      '¡Hola! Soy GestioBot. Pregúntame por pacientes, turnos, facturación u obras sociales y te compartiré datos claros para seguir.',
-      { isWelcome: true },
-    ),
-  ]);
+  const userId = currentUser?._id || null;
+  const [messages, setMessages] = useState(() => {
+    const stored = loadConversation(userId);
+    if (stored && stored.length > 0) {
+      return stored;
+    }
+    return buildWelcomeConversation();
+  });
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef(null);
@@ -97,6 +107,26 @@ function AIAssistantPage({ currentUser }) {
     }
     return currentUser.username || null;
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!userId) {
+      setMessages(buildWelcomeConversation());
+      return;
+    }
+
+    const stored = loadConversation(userId);
+    if (stored && stored.length > 0) {
+      setMessages(stored);
+    } else {
+      setMessages(buildWelcomeConversation());
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (userId) {
+      saveConversation(userId, messages);
+    }
+  }, [messages, userId]);
 
   useEffect(() => {
     if (messagesEndRef.current) {
