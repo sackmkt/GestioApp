@@ -476,6 +476,7 @@ const callGemini = async ({ contents, systemInstruction, temperature }) => {
   try {
     const payload = {
       contents,
+      systemInstruction: systemPayload,
       generationConfig,
     };
 
