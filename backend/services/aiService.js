@@ -5,14 +5,14 @@ const Turno = require('../models/Turno');
 const ObraSocial = require('../models/ObraSocial');
 const CentroSalud = require('../models/CentroSalud');
 
-let GoogleGenerativeAI;
-let GoogleGenerativeAIFetchError;
+let GoogleGenAI;
+let GoogleGenAIFetchError;
 
 try {
-  ({ GoogleGenerativeAI, GoogleGenerativeAIFetchError } = require('@google/genai'));
+  ({ GoogleGenAI, GoogleGenAIFetchError } = require('@google/genai'));
 } catch (error) {
-  GoogleGenerativeAI = null;
-  GoogleGenerativeAIFetchError = null;
+  GoogleGenAI = null;
+  GoogleGenAIFetchError = null;
 }
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
@@ -403,47 +403,41 @@ const callGemini = async ({ contents, systemInstruction, temperature }) => {
   }
 
   const modelName = DEFAULT_MODEL;
-  const systemPayload = systemInstruction
-    ? {
-        role: 'system',
-        parts: [{ text: systemInstruction }],
-      }
-    : undefined;
   const generationConfig = {
     temperature: typeof temperature === 'number' ? Math.min(Math.max(temperature, 0), 1) : DEFAULT_TEMPERATURE,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
   };
 
-  if (GoogleGenerativeAI) {
+  // ====== SDK NUEVO (@google/genai) ======
+  if (GoogleGenAI) {
     try {
-      const client = new GoogleGenerativeAI({ apiKey });
-      const model = client.getGenerativeModel({
-        model: modelName,
-        systemInstruction: systemPayload,
+      const client = new GoogleGenAI({
+        apiKey,
+        vertexai: false, // usamos AI Studio; si migrás a Vertex, cambiás esto + project/location
       });
 
-      const result = await model.generateContent({
-        contents,
-        generationConfig,
+      const result = await client.models.generateContent({
+        model: modelName,      // p.ej. "gemini-2.5-flash"
+        contents,              // [{role:"user", parts:[{text:"..."}]}, ...]
+        config: {
+          // acá va el system prompt (string está bien; también acepta {parts:[{text:...}]})
+          systemInstruction,
+          temperature: generationConfig.temperature,
+          maxOutputTokens: generationConfig.maxOutputTokens,
+        },
       });
 
-      const response = result?.response;
-      const textFromMethod = typeof response?.text === 'function' ? response.text().trim() : '';
-      const candidate = response?.candidates?.[0];
-      const parts = candidate?.content?.parts || [];
-      const textFromParts = parts
-        .map((part) => (typeof part?.text === 'string' ? part.text : ''))
-        .join('')
-        .trim();
-
-      const text = textFromMethod || textFromParts;
+      const text =
+        (typeof result?.text === 'string' && result.text) ||
+        (typeof result?.response?.text === 'function' ? result.response.text() : '') ||
+        '';
 
       return {
-        text: text || 'No se obtuvo una respuesta del modelo.',
-        usage: response?.usageMetadata || result?.usageMetadata || null,
+        text: text.trim() || 'No se obtuvo una respuesta del modelo.',
+        usage: result?.usageMetadata || result?.response?.usageMetadata || null,
       };
     } catch (error) {
-      if (GoogleGenerativeAIFetchError && error instanceof GoogleGenerativeAIFetchError) {
+      if (GoogleGenAIFetchError && error instanceof GoogleGenAIFetchError) {
         let message = error.message || 'No se pudo obtener una respuesta del asistente.';
         let statusCode = error.status ?? error.response?.status ?? 502;
 
@@ -451,12 +445,10 @@ const callGemini = async ({ contents, systemInstruction, temperature }) => {
           try {
             const data = await error.response.json();
             message = data?.error?.message || message;
-          } catch (parseError) {
+          } catch {
             try {
               message = (await error.response.text()) || message;
-            } catch (_) {
-              // ignore secondary parsing failures
-            }
+            } catch {}
           }
         }
 
@@ -464,31 +456,34 @@ const callGemini = async ({ contents, systemInstruction, temperature }) => {
         wrapped.statusCode = statusCode;
         throw wrapped;
       }
-
       throw error;
     }
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(modelName)}:generateContent?key=${apiKey}`;
+  // ====== FALLBACK REST: usar v1beta y camelCase ======
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    modelName
+  )}:generateContent?key=${apiKey}`;
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
 
   try {
     const payload = {
       contents,
-      systemInstruction: systemPayload,
-      generationConfig,
+      // En REST v1beta el campo es camelCase y el valor es un objeto con parts[].text
+      systemInstruction: systemInstruction
+        ? { parts: [{ text: systemInstruction }] }
+        : undefined,
+      generationConfig: {
+        temperature: generationConfig.temperature,
+        maxOutputTokens: generationConfig.maxOutputTokens,
+      },
     };
-
-    if (systemPayload) {
-      payload.system_instruction = systemPayload;
-    }
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
@@ -504,10 +499,7 @@ const callGemini = async ({ contents, systemInstruction, temperature }) => {
     const data = await response.json();
     const candidate = data?.candidates?.[0];
     const parts = candidate?.content?.parts || [];
-    const text = parts
-      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
-      .join('')
-      .trim();
+    const text = parts.map(p => (typeof p?.text === 'string' ? p.text : '')).join('').trim();
 
     return {
       text: text || 'No se obtuvo una respuesta del modelo.',
