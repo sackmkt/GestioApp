@@ -480,6 +480,10 @@ const callGemini = async ({ contents, systemInstruction, temperature }) => {
       generationConfig,
     };
 
+    if (systemPayload) {
+      payload.system_instruction = systemPayload;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
