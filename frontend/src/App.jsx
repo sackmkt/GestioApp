@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { FaRobot } from 'react-icons/fa';
 import GestioLogo from './assets/GestioLogo.png';
 import Navbar from './components/Navbar.jsx';
 import authService from './services/authService';
@@ -119,7 +118,6 @@ const NAVIGATION_ITEMS = [
     to: '/asistente-ia',
     label: 'Asistente IA',
     ariaLabel: 'Consultar con el asistente virtual',
-    icon: FaRobot,
   },
 ];
 

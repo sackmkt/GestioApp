@@ -18,6 +18,27 @@ try {
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const DEFAULT_TEMPERATURE = 0.3;
 const MAX_OUTPUT_TOKENS = 1024;
+const APP_TIMEZONE = process.env.APP_TIMEZONE || 'America/Argentina/Buenos_Aires';
+
+const buildDateTimeFormatter = () =>
+  new Intl.DateTimeFormat('es-AR', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+
+let dateTimeFormatter;
+
+const getDateTimeFormatter = () => {
+  if (!dateTimeFormatter) {
+    dateTimeFormatter = buildDateTimeFormatter();
+  }
+  return dateTimeFormatter;
+};
 
 const roundNumber = (value) => {
   if (!Number.isFinite(value)) {
@@ -34,7 +55,22 @@ const formatDate = (value) => {
   if (Number.isNaN(date.getTime())) {
     return null;
   }
-  return date.toISOString();
+
+  const formatter = getDateTimeFormatter();
+  const parts = formatter.formatToParts(date);
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || '';
+
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  const hour = getPart('hour');
+  const minute = getPart('minute');
+
+  if (!year || !month || !day || !hour || !minute) {
+    return formatter.format(date);
+  }
+
+  return `${year}-${month}-${day} ${hour}:${minute}`;
 };
 
 const formatPaciente = (paciente) => {
@@ -322,7 +358,7 @@ const buildKnowledgeSnapshot = async ({ user }) => {
   const deudaTotal = resumenPorEstado.reduce((total, item) => total + (item.saldoPendiente || 0), 0);
 
   return {
-    generadoEn: new Date().toISOString(),
+    generadoEn: formatDate(new Date()),
     totales: {
       pacientes: pacientesTotal,
       obrasSociales: obrasTotal,
@@ -383,7 +419,8 @@ const buildSystemInstruction = ({ user, snapshot }) => {
   return [
     'Eres GestioBot, un asistente virtual especializado en la plataforma GestioApp.',
     'Tu misión es ayudar a profesionales de la salud a consultar datos administrativos, de pacientes, turnos y facturación.',
-    'Responde de forma clara, estructurada y accionable. Usa tablas o listas cuando mejoren la comprensión.',
+    'Responde de forma clara, estructurada y accionable.',
+    'Evita las tablas y organiza la información en listas con viñetas o párrafos breves para facilitar la lectura.',
     'Nunca inventes datos: utiliza exclusivamente la información incluida en el snapshot o proporcionada por el usuario. Si algo no figura, aclara cómo obtenerlo desde GestioApp.',
     'Toda tu asistencia debe basarse únicamente en los datos registrados en GestioApp y en los detalles que comparta el usuario. Aprovecha toda la información disponible para ofrecer respuestas completas.',
     'Si te piden información o ayuda sobre temas que no estén relacionados con GestioApp, sus funcionalidades o los datos que gestiona, indica con amabilidad que solo puedes asistir con cuestiones de la plataforma.',
