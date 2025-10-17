@@ -41,16 +41,46 @@ const formatDateTime = (value) => {
   }).format(date);
 };
 
-const renderMessageContent = (text) => (
-  <div style={{ whiteSpace: 'pre-wrap' }}>{text}</div>
-);
+const renderMessageContent = (text) => {
+  if (!text) {
+    return null;
+  }
+
+  return (
+    <div className="ai-message__paragraphs">
+      {text
+        .split(/\n{2,}/)
+        .map((block, blockIndex) => {
+          const fragments = block.split(/(\*\*[^*]+\*\*)/g);
+          return (
+            <p key={`block-${blockIndex}`}>
+              {fragments.map((fragment, fragmentIndex) => {
+                if (fragment.startsWith('**') && fragment.endsWith('**')) {
+                  return (
+                    <strong key={`fragment-${fragmentIndex}`}>
+                      {fragment.slice(2, -2).replace(/\n+/g, ' ')}
+                    </strong>
+                  );
+                }
+                return (
+                  <React.Fragment key={`fragment-${fragmentIndex}`}>
+                    {fragment.replace(/\n+/g, ' ')}
+                  </React.Fragment>
+                );
+              })}
+            </p>
+          );
+        })}
+    </div>
+  );
+};
 
 function AIAssistantPage({ currentUser }) {
   const { showError } = useFeedback();
   const [messages, setMessages] = useState(() => [
     createMessage(
       'assistant',
-      '¡Hola! Soy GestioBot. Puedo ayudarte a consultar pacientes, turnos, facturación y obras sociales de tu cuenta. Pregúntame lo que necesites y te guiaré con datos y próximos pasos.',
+      '¡Hola! Soy GestioBot. Pregúntame por pacientes, turnos, facturación u obras sociales y te compartiré datos claros para seguir.',
       { isWelcome: true },
     ),
   ]);
@@ -179,6 +209,48 @@ function AIAssistantPage({ currentUser }) {
             {professionalName ? ` ¡Vamos, ${professionalName}!` : ''}
           </p>
         </section>
+        <div className="ai-chat" role="region" aria-live="polite" aria-label="Conversación con GestioBot">
+          <div className="ai-chat__messages">
+            {messages.map((message) => {
+              const isUser = message.role === 'user';
+              return (
+                <article
+                  key={message.id}
+                  className={`ai-message ${isUser ? 'ai-message--user' : 'ai-message--assistant'}`}
+                >
+                  <div className="ai-message__avatar" aria-hidden="true">
+                    {isUser ? <FaUser /> : <FaRobot />}
+                  </div>
+                  <div className="ai-message__bubble">
+                    <div className="ai-message__meta">
+                      <span>{isUser ? 'Tú' : 'GestioBot'}</span>
+                      <span>{formatDateTime(message.createdAt)}</span>
+                    </div>
+                    <div className="ai-message__content">{renderMessageContent(message.content)}</div>
+                  </div>
+                </article>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
+          <form onSubmit={handleSubmit} className="ai-chat__composer">
+            <textarea
+              id="aiMessage"
+              className="ai-chat__input"
+              rows="2"
+              placeholder="Escribe tu consulta..."
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isSending}
+              aria-label="Consulta para el asistente de GestioApp"
+            ></textarea>
+            <button type="submit" className="ai-chat__send" disabled={isSending || !input.trim()}>
+              <FaPaperPlane aria-hidden="true" />
+              <span>{isSending ? 'Enviando…' : 'Enviar consulta'}</span>
+            </button>
+          </form>
+        </div>
         <section className="ai-assistant-suggestions" aria-label="Preguntas sugeridas">
           <div className="ai-assistant-suggestions__title">
             <FaLightbulb aria-hidden="true" />
@@ -198,58 +270,6 @@ function AIAssistantPage({ currentUser }) {
             ))}
           </div>
         </section>
-        <div className="ai-chat" role="region" aria-live="polite" aria-label="Conversación con GestioBot">
-          <div className="ai-chat__messages">
-            {messages.map((message) => {
-              const isUser = message.role === 'user';
-              return (
-                <article
-                  key={message.id}
-                  className={`ai-message ${isUser ? 'ai-message--user' : 'ai-message--assistant'}`}
-                >
-                  <div className="ai-message__avatar" aria-hidden="true">
-                    {isUser ? <FaUser /> : <FaRobot />}
-                  </div>
-                  <div className="ai-message__bubble">
-                    <div className="ai-message__meta">
-                      <span>{isUser ? 'Tú' : 'GestioBot'}</span>
-                      <span>{formatDateTime(message.createdAt)}</span>
-                    </div>
-                    <div className="ai-message__content">{renderMessageContent(message.content)}</div>
-                    {!isUser && message.snapshotGeneratedAt ? (
-                      <div className="ai-message__note">
-                        Datos actualizados: {formatDateTime(message.snapshotGeneratedAt)}
-                      </div>
-                    ) : null}
-                    {!isUser && message.usage ? (
-                      <div className="ai-message__note">
-                        Tokens — entrada: {message.usage.promptTokenCount ?? '—'}, salida: {message.usage.candidatesTokenCount ?? '—'}
-                      </div>
-                    ) : null}
-                  </div>
-                </article>
-              );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
-          <form onSubmit={handleSubmit} className="ai-chat__composer">
-            <textarea
-              id="aiMessage"
-              className="ai-chat__input"
-              rows="3"
-              placeholder="Escribe tu consulta..."
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isSending}
-              aria-label="Consulta para el asistente de GestioApp"
-            ></textarea>
-            <button type="submit" className="ai-chat__send" disabled={isSending || !input.trim()}>
-              <FaPaperPlane aria-hidden="true" />
-              <span>{isSending ? 'Enviando…' : 'Enviar consulta'}</span>
-            </button>
-          </form>
-        </div>
       </div>
     </div>
   );
