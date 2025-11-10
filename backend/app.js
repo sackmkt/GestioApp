@@ -8,6 +8,8 @@ const { protect } = require('./middleware/authMiddleware');
 const securityHeaders = require('./middleware/securityHeaders');
 const sanitizeRequest = require('./middleware/sanitizeRequest');
 const rateLimiter = require('./middleware/rateLimiter');
+const performanceMonitor = require('./middleware/performanceMonitor');
+const requestMetrics = require('./utils/requestMetrics');
 
 const pacientesRoutes = require('./Routes/pacientes');
 const obrasSocialesRoutes = require('./Routes/obrasSociales');
@@ -22,6 +24,10 @@ dotenv.config();
 const app = express();
 
 app.disable('x-powered-by');
+
+app.locals.requestMetrics = requestMetrics;
+
+app.use(performanceMonitor);
 
 const resolveAllowedOrigins = () => {
   const envValue = process.env.ALLOWED_ORIGINS;
@@ -105,6 +111,10 @@ if (process.env.NODE_ENV === 'test') {
 
   testRouter.get('/protected', protect, (req, res) => {
     res.json({ message: 'ok' });
+  });
+
+  testRouter.get('/metrics', (req, res) => {
+    res.json(requestMetrics.getSnapshot());
   });
 
   app.use('/__test__', testRouter);
