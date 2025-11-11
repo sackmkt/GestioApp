@@ -117,6 +117,22 @@ if (process.env.NODE_ENV === 'test') {
     res.json(requestMetrics.getSnapshot());
   });
 
+  testRouter.get('/delayed', (req, res) => {
+    const delayParam = Number.parseInt(req.query.delayMs, 10);
+    const delayMs = Number.isFinite(delayParam) ? Math.min(Math.max(delayParam, 0), 10000) : 500;
+
+    const timer = setTimeout(() => {
+      if (res.writableEnded || res.headersSent || res.destroyed) {
+        return;
+      }
+      res.json({ delayMs });
+    }, delayMs);
+
+    res.on('close', () => {
+      clearTimeout(timer);
+    });
+  });
+
   app.use('/__test__', testRouter);
 }
 

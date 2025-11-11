@@ -22,6 +22,7 @@ class RequestMetrics {
     this.slowRequests = 0;
     this.activeRequests = 0;
     this.peakActiveRequests = 0;
+    this.abortedRequests = 0;
     this.statusCounts = {
       '2xx': 0,
       '3xx': 0,
@@ -39,15 +40,17 @@ class RequestMetrics {
 
     return {
       startTime: performance.now(),
+      released: false,
     };
   }
 
   finishRequest(context, res) {
-    if (!context || typeof context.startTime !== 'number') {
+    if (!context || typeof context.startTime !== 'number' || context.released) {
       return 0;
     }
 
     const durationMs = performance.now() - context.startTime;
+    context.released = true;
     this.completedRequests += 1;
     this.totalResponseTimeMs += durationMs;
     this.longestRequestMs = Math.max(this.longestRequestMs, durationMs);
@@ -68,6 +71,16 @@ class RequestMetrics {
     return durationMs;
   }
 
+  abandonRequest(context) {
+    if (!context || context.released) {
+      return;
+    }
+
+    context.released = true;
+    this.activeRequests = Math.max(0, this.activeRequests - 1);
+    this.abortedRequests += 1;
+  }
+
   getSnapshot() {
     const averageResponseTimeMs =
       this.completedRequests === 0 ? 0 : this.totalResponseTimeMs / this.completedRequests;
@@ -82,6 +95,7 @@ class RequestMetrics {
       averageResponseTimeMs,
       longestRequestMs: this.longestRequestMs,
       slowRequests: this.slowRequests,
+      abortedRequests: this.abortedRequests,
       statusCounts: { ...this.statusCounts },
     };
   }

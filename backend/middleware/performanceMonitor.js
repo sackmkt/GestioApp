@@ -19,5 +19,9 @@ module.exports = (req, res, next) => {
     }
   });
 
+  res.on('close', () => {
+    requestMetrics.abandonRequest(context);
+  });
+
   next();
 };

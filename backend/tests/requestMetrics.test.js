@@ -28,6 +28,11 @@ const stopServer = async () => {
   });
 };
 
+const sleep = (ms) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
 const fetchJson = async (url) => {
   const response = await fetch(url);
   const data = await response.json();
@@ -74,4 +79,31 @@ test('tracks request metrics and exposes request identifiers', async () => {
   if (after.completedRequests > 0) {
     assert.ok(after.averageResponseTimeMs >= 0);
   }
+});
+
+test('aborted requests release active counts', async () => {
+  const before = await getMetricsSnapshot();
+
+  const controller = new AbortController();
+  const delayedRequest = fetch(`${baseUrl}/__test__/delayed?delayMs=200`, {
+    signal: controller.signal,
+  });
+
+  setTimeout(() => controller.abort(), 30);
+
+  await assert.rejects(delayedRequest, (error) => error?.name === 'AbortError');
+
+  await sleep(50);
+
+  const after = await getMetricsSnapshot();
+
+  assert.ok(
+    after.abortedRequests >= (before.abortedRequests ?? 0) + 1,
+    'aborted requests should be tracked',
+  );
+
+  assert.ok(
+    after.activeRequests <= 1,
+    'active request count should not remain inflated after an abort',
+  );
 });
